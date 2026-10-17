@@ -23,7 +23,18 @@ type logger struct {
 	done          chan struct{}
 }
 
-var l *logger
+// l 是当前实例。lMu 只保护这个指针本身的读/替换，实例内部的并发由 logger.mu
+// 负责。两者分开是为了让 write 的热路径只付一次读锁，而不是把日志写入串行化。
+var (
+	l   *logger
+	lMu sync.RWMutex
+)
+
+func currentLogger() *logger {
+	lMu.RLock()
+	defer lMu.RUnlock()
+	return l
+}
 
 // retentionFunc, when set, is called by the cleanup goroutine to obtain the
 // current retention-days value at runtime (e.g. from the sysconfig table).
@@ -52,13 +63,16 @@ func Init(logDir string, retentionDays int, mirrorToConsole bool) error {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
 
-	l = &logger{
+	inst := &logger{
 		logDir:        logDir,
 		retentionDays: retentionDays,
 		console:       mirrorToConsole,
 		files:         make(map[string]*os.File),
 		done:          make(chan struct{}),
 	}
+	lMu.Lock()
+	l = inst
+	lMu.Unlock()
 
 	// Run initial cleanup if retention is configured.
 	if days := currentRetention(retentionDays); days > 0 {
@@ -67,6 +81,10 @@ func Init(logDir string, retentionDays int, mirrorToConsole bool) error {
 
 	// Always start the ticker so that a later admin change from 0 → N
 	// takes effect without a restart.
+	//
+	// 必须捕获当前实例而不是在循环里读全局 l：Close() 会把 l 置为 nil，
+	// goroutine 若在 select 时重新求值 `l.done` 就会空指针 panic。这个窗口
+	// 取决于调度时机，表现为偶发崩溃（CI 上曾以 flaky 形式暴露）。
 	go func() {
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -76,7 +94,7 @@ func Init(logDir string, retentionDays int, mirrorToConsole bool) error {
 				if days := currentRetention(retentionDays); days > 0 {
 					cleanOldLogs(logDir, days)
 				}
-			case <-l.done:
+			case <-inst.done:
 				return
 			}
 		}
@@ -86,17 +104,24 @@ func Init(logDir string, retentionDays int, mirrorToConsole bool) error {
 }
 
 // Close flushes and closes open log files. Safe to call when uninitialized.
+//
+// 先在锁内摘除全局引用再关闭实例：并发的 write 要么看到旧实例（仍可写，
+// 只是随后可能写到已关闭的文件并拿到错误），要么看到 nil 回退到 stderr，
+// 不会读到半关闭的实例；两次并发 Close 也只有一个能拿到非 nil。
 func Close() {
-	if l == nil {
+	lMu.Lock()
+	inst := l
+	l = nil
+	lMu.Unlock()
+	if inst == nil {
 		return
 	}
-	close(l.done)
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	for _, f := range l.files {
+	close(inst.done)
+	inst.mu.Lock()
+	defer inst.mu.Unlock()
+	for _, f := range inst.files {
 		f.Close()
 	}
-	l = nil
 }
 
 func Info(format string, args ...interface{})  { write("INFO", format, args...) }
@@ -133,19 +158,20 @@ func write(level, format string, args ...interface{}) {
 	ts := time.Now().Format("2006-01-02 15:04:05")
 	msg := fmt.Sprintf("%s [%s] %s\n", ts, level, fmt.Sprintf(format, args...))
 
-	if l == nil {
+	inst := currentLogger()
+	if inst == nil {
 		// Init has not run yet, so a file destination is unavailable. Startup
 		// failures should still be visible to the invoking terminal.
 		fmt.Fprint(os.Stderr, msg)
 		return
 	}
 
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	if f := l.getFile(level); f != nil {
+	inst.mu.Lock()
+	defer inst.mu.Unlock()
+	if f := inst.getFile(level); f != nil {
 		f.WriteString(msg)
 	}
-	if l.console {
+	if inst.console {
 		fmt.Fprint(os.Stdout, msg)
 	}
 }

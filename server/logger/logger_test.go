@@ -10,7 +10,7 @@ import (
 
 func setupTestLogger(t *testing.T) string {
 	t.Helper()
-	if l != nil {
+	if currentLogger() != nil {
 		t.Fatal("test logger must start uninitialised")
 	}
 	dir := t.TempDir()
@@ -24,7 +24,7 @@ func setupTestLogger(t *testing.T) string {
 func TestLoggerWritesToFileWithoutConsoleMirror(t *testing.T) {
 	dir := setupTestLogger(t)
 	Info("file-only message")
-	if l.console {
+	if inst := currentLogger(); inst == nil || inst.console {
 		t.Fatal("console mirroring should be disabled")
 	}
 
