@@ -471,7 +471,7 @@ async function toggleComplete(item: ReminderItem) {
     showToast(item.completed_at ? '已恢复提醒' : item.repeat_rule !== 'none' ? '已完成，下一次提醒已安排' : '做得好，已完成')
   } catch (err: any) { showToast(err.response?.data?.message || '操作失败', 'error') }
 }
-// 删除确认走应用内浮层（见 ConfirmDialog）：原生 confirm 在飞牛 App 的网页
+// 删除确认走应用内浮层（见 ConfirmDialog）：原生 confirm 在移动端内嵌网页
 // 视图里是系统级弹窗，与应用样式割裂，手机端也容易被当成浏览器提示忽略。
 const removeVisible = ref(false)
 const removeTarget = ref<ReminderItem | null>(null)

@@ -37,7 +37,7 @@ import (
 type Request struct {
 	AppName    string `json:"app_name"`
 	Version    string `json:"version"`
-	DeviceType string `json:"device_type"` // fnos|docker|（裸二进制为空）
+	DeviceType string `json:"device_type"` // docker|（裸二进制为空）
 	DeviceID   string `json:"device_id"`   // 32 位 md5 哈希，永远不含原文
 	OS         string `json:"os"`
 	Arch       string `json:"arch"`

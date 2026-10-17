@@ -1,6 +1,6 @@
 APP_NAME := reminder
 DOCKER_IMAGE := kid941005/reminders
-PACKAGE_TARGET ?= fnos
+PACKAGE_TARGET ?= apps
 PORT ?= 8906
 DEV_DATA_DIR ?= ./data
 VERSION := $(shell cat VERSION | tr -d '\n')
@@ -8,7 +8,7 @@ BUILD_TIME := $(shell date +%Y-%m-%dT%H:%M:%S)
 GIT_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 LDFLAGS := -X smallgo/server/version.Version=$(VERSION) -X smallgo/server/version.BuildTime=$(BUILD_TIME) -X smallgo/server/version.GitCommit=$(GIT_COMMIT) -X smallgo/server/version.AppName=提醒事项
 
-.PHONY: help dev start build frontend-deps build-frontend build-backend build-linux build-docker build-docker-multi build-all package package-fnos fnpack clean
+.PHONY: help dev start build frontend-deps build-frontend build-backend build-linux build-docker build-docker-multi build-all package clean
 
 help:
 	@echo "Usage: make [target]"
@@ -24,9 +24,7 @@ help:
 	@echo "  build-docker    Build an offline local image for this Docker architecture"
 	@echo "  build-docker-multi  Build an amd64/arm64 OCI image archive (requires local multiarch base images)"
 	@echo "  build-all       Build for all platforms"
-	@echo "  package         Package one target; default is fnOS (PACKAGE_TARGET=fnos|apps|docker)"
-	@echo "  package-fnos    Build fnOS packages only; does not build a Docker image"
-	@echo "  fnpack          Alias for package-fnos"
+	@echo "  package         Package one target (PACKAGE_TARGET=apps|docker; default apps)"
 	@echo "  clean           Clean build artifacts"
 
 dev: build
@@ -77,16 +75,10 @@ build-all:
 
 package:
 	@case "$(PACKAGE_TARGET)" in \
-		fnos) $(MAKE) --no-print-directory package-fnos ;; \
 		apps) $(MAKE) --no-print-directory build-all ;; \
 		docker) $(MAKE) --no-print-directory build-docker ;; \
-		*) echo "Unsupported PACKAGE_TARGET: $(PACKAGE_TARGET) (use fnos, apps, or docker)"; exit 2 ;; \
+		*) echo "Unsupported PACKAGE_TARGET: $(PACKAGE_TARGET) (use apps or docker)"; exit 2 ;; \
 	esac
-
-package-fnos:
-	bash scripts/build-fnpack.sh
-
-fnpack: package-fnos
 
 clean:
 	rm -f server/$(APP_NAME) server/$(APP_NAME)-*

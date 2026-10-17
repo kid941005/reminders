@@ -49,7 +49,7 @@
 </template>
 
 <script setup lang="ts">
-// 应用内确认框：替代原生 window.confirm / alert。原生弹窗在飞牛 App 的网页
+// 应用内确认框：替代原生 window.confirm / alert。原生弹窗在移动端内嵌网页
 // 视图里样式与系统不一致（还会带上网页地址），在手机端也容易被当成浏览器提示
 // 而忽略；这里统一用应用自己的浮层，危险操作红色按钮 + 二次确认。
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'

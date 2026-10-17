@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"time"
 	"unicode/utf8"
 
 	"smallgo/server/auth"
@@ -25,17 +24,7 @@ var (
 	ErrPasswordTooLong  = errors.New("密码长度不能超过72字节")
 	ErrLastAdmin        = errors.New("不能降级、禁用或删除最后一个管理员")
 	ErrUserNotFound     = errors.New("用户不存在")
-	ErrFnOSNotBound     = errors.New("此飞牛 NAS 账号尚未绑定应用账号")
-	ErrFnOSAlreadyBound = errors.New("此飞牛 NAS 账号已绑定其他应用账号")
 )
-
-// FnOSIdentity is the trusted identity context added by the fnOS unified
-// gateway. Gateway tokens are deliberately neither persisted nor exposed.
-type FnOSIdentity struct {
-	UserID   uint
-	Username string
-	IsAdmin  bool
-}
 
 func validatePassword(password string) error {
 	if utf8.RuneCountInString(password) < 6 {
@@ -171,12 +160,6 @@ func Login(db *gorm.DB, username string, password string, passwordMd5 string, jw
 	if err != nil {
 		return nil, err
 	}
-	// 输账号密码登录同样是显式登录：解除网关隐式登录的抑制，让网关域上的
-	// 后续刷新继续靠网关注入身份维持会话。
-	if err := ClearFnOSSessionSuppression(db, user.ID); err != nil {
-		return nil, err
-	}
-
 	return map[string]interface{}{
 		"token": token,
 		"user": map[string]interface{}{
@@ -187,175 +170,11 @@ func Login(db *gorm.DB, username string, password string, passwordMd5 string, jw
 	}, nil
 }
 
-// LogoutApplicationSession 记录「用户在应用里主动退出登录」。
-//
-// 直连端口上的会话本来就是应用自己的 JWT，清掉即登出，这里没有额外语义；
-// 网关域上则必须落一条持久化标记，否则服务端下一次请求又能从 X-Trim-Userid
-// 把登录态认回来——那种「退不掉」才是用户报的 bug。标记只抑制**隐式**登录，
-// 用户随后显式点「使用飞牛 NAS 登录」或输账号密码仍然可以正常进来。
+// LogoutApplicationSession 目前只做占位：JWT 是无状态的，登出由客户端丢弃
+// 令牌完成，服务端无需落任何状态。保留该函数是为了让 handler 的调用点不必
+// 因鉴权方式变化而改动，同时给未来「令牌黑名单」留出入口。
 func LogoutApplicationSession(db *gorm.DB, userID uint) error {
-	if userID == 0 {
-		return nil
-	}
-	now := time.Now()
-	return db.Save(&database.UserSession{
-		UserID:       userID,
-		Suppressed:   true,
-		SuppressedAt: now,
-		UpdatedAt:    now,
-	}).Error
-}
-
-// FnOSSessionSuppressed 报告该应用账号是否处于「已主动登出」状态。网关隐式
-// 认人前必须查它，这是「飞牛授权登录也能退出应用」的关键。查询出错时按未抑制
-// 处理：故障不该把所有人锁在登录页外。
-func FnOSSessionSuppressed(db *gorm.DB, userID uint) bool {
-	if userID == 0 {
-		return false
-	}
-	var session database.UserSession
-	if err := db.Where("user_id = ?", userID).First(&session).Error; err != nil {
-		return false
-	}
-	return session.Suppressed
-}
-
-// ClearFnOSSessionSuppression 在用户显式登录成功后解除抑制：从这一刻起，只要
-// 飞牛那侧还登录着，网关身份就可以继续隐式维持应用登录态（刷新不掉线）。
-func ClearFnOSSessionSuppression(db *gorm.DB, userID uint) error {
-	if userID == 0 {
-		return nil
-	}
-	return db.Model(&database.UserSession{}).
-		Where("user_id = ?", userID).
-		Updates(map[string]interface{}{"suppressed": false, "updated_at": time.Now()}).Error
-}
-
-// LoginWithFnOS signs in the application account bound to the gateway's
-// NAS-local UID. The identity must only come from the fnOS Unix-socket gateway.
-func LoginWithFnOS(db *gorm.DB, identity FnOSIdentity, jwtSecret string) (map[string]interface{}, error) {
-	var user database.User
-	if err := db.Where("fn_os_user_id = ?", identity.UserID).First(&user).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ErrFnOSNotBound
-		}
-		return nil, err
-	}
-	if user.Status != 1 {
-		return nil, fmt.Errorf("账号已停用")
-	}
-	if user.AuthVersion == 0 {
-		user.AuthVersion = 1
-		if err := db.Model(&user).Update("auth_version", user.AuthVersion).Error; err != nil {
-			return nil, err
-		}
-	}
-	if user.FnOSUsername != identity.Username {
-		if err := db.Model(&user).Update("fn_os_username", identity.Username).Error; err != nil {
-			return nil, err
-		}
-	}
-	// 显式登录成功 = 用户重新要回应用登录态，解除之前的主动登出抑制。
-	if err := ClearFnOSSessionSuppression(db, user.ID); err != nil {
-		return nil, err
-	}
-	return loginResult(user, jwtSecret)
-}
-
-// BindFnOSAccount either creates a new application account or verifies an
-// existing account, then atomically binds it to the current fnOS UID.
-func BindFnOSAccount(db *gorm.DB, identity FnOSIdentity, username, password, mode, jwtSecret string) (map[string]interface{}, error) {
-	if identity.UserID == 0 || identity.Username == "" {
-		return nil, fmt.Errorf("飞牛登录信息无效")
-	}
-
-	var result map[string]interface{}
-	err := db.Transaction(func(tx *gorm.DB) error {
-		var linked database.User
-		if err := tx.Where("fn_os_user_id = ?", identity.UserID).First(&linked).Error; err == nil {
-			return ErrFnOSAlreadyBound
-		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return err
-		}
-
-		var user database.User
-		switch mode {
-		case "register":
-			var userCount int64
-			if err := tx.Model(&database.User{}).Count(&userCount).Error; err != nil {
-				return err
-			}
-			if userCount > 0 {
-				allowRegister, err := sysconfig.GetConfig(tx, "allow_register", 0)
-				if err != nil {
-					return err
-				}
-				if allowRegister != "true" {
-					return ErrRegisterDisabled
-				}
-			}
-			if err := validatePassword(password); err != nil {
-				return err
-			}
-			if err := tx.Where("username = ?", username).First(&user).Error; err == nil {
-				return ErrUserExists
-			} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-				return err
-			}
-			hashedPassword, err := auth.HashPassword(password)
-			if err != nil {
-				return err
-			}
-			role := "user"
-			if userCount == 0 {
-				role = "admin"
-			}
-			user = database.User{Username: username, Password: hashedPassword, Role: role, Status: 1, APIKey: auth.GenerateAPIKey(), AuthVersion: 1}
-			if err := tx.Create(&user).Error; err != nil {
-				return err
-			}
-		case "bind":
-			if err := tx.Where("username = ?", username).First(&user).Error; err != nil || user.Status != 1 {
-				return fmt.Errorf("用户名或密码错误")
-			}
-			verified, needsRehash := verifyStoredPassword(user.Password, password, "")
-			if !verified {
-				return fmt.Errorf("用户名或密码错误")
-			}
-			if needsRehash {
-				hashedPassword, err := auth.HashPassword(password)
-				if err != nil {
-					return err
-				}
-				if err := tx.Model(&user).Update("password", hashedPassword).Error; err != nil {
-					return err
-				}
-			}
-		default:
-			return fmt.Errorf("无效的绑定方式")
-		}
-
-		if user.FnOSUserID != nil && *user.FnOSUserID != identity.UserID {
-			return fmt.Errorf("该应用账号已绑定其他飞牛 NAS 账号")
-		}
-		updates := map[string]interface{}{
-			"fn_os_user_id":  identity.UserID,
-			"fn_os_username": identity.Username,
-		}
-		if user.AuthVersion == 0 {
-			user.AuthVersion = 1
-			updates["auth_version"] = user.AuthVersion
-		}
-		if err := tx.Model(&user).Updates(updates).Error; err != nil {
-			return err
-		}
-		user.FnOSUserID = &identity.UserID
-		user.FnOSUsername = identity.Username
-		var err error
-		result, err = loginResult(user, jwtSecret)
-		return err
-	})
-	return result, err
+	return nil
 }
 
 func loginResult(user database.User, jwtSecret string) (map[string]interface{}, error) {

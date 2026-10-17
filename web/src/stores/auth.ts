@@ -8,10 +8,9 @@ import { useThemeStore } from './theme'
 import { withTimeout } from '../utils/async'
 import { setBootHint } from '../utils/boot'
 import { SK } from '../utils/storage-keys'
-import { onFnOSGatewayOrigin } from '../utils/gateway'
 
 // 启动阶段单次请求的上限：超过就按默认值继续渲染，绝不无限等。取 4 秒是为
-// 了容忍低端 NAS 首帧较慢，又不至于让弱网下一直停在首屏骨架上——启动骨架
+// 了容忍低端设备首帧较慢，又不至于让弱网下一直停在首屏骨架上——启动骨架
 // 已经替掉了白屏，用户对「稍等」的容忍度远高于对「一片空白」的。
 const STARTUP_TIMEOUT_MS = 4000
 // 服务可能还在初始化（监听已就绪、建库迁移未完成时返回 503 + Retry-After），
@@ -30,26 +29,6 @@ export const useAuthStore = defineStore('auth', () => {
   const allowRegister = ref(true)
   const setupRequired = ref(false)
   const siteTitle = ref('提醒事项')
-  // 飞牛部署下授权登录要用的两个信息，随启动引导一起取回，登录/注册页不再
-  // 单独查一次版本信息（弱网下这一次往返就够用户点两次按钮了）。
-  const servicePort = ref('')
-  const fnosGatewayEntry = ref('')
-  // 后端是否真以飞牛应用模式（-fnos-app）运行，随启动引导取回。编译期
-  // VITE_FNOS_APP 只作为引导返回前的兜底默认：同一套飞牛版前端产物也会被
-  // 裸二进制 / Docker 直接跑起来，那种部署下「使用飞牛 NAS 登录」点了只会
-  // 得到「请先从飞牛桌面打开本应用」的死路，必须以服务端运行形态为准藏掉。
-  const fnosApp = ref(import.meta.env.VITE_FNOS_APP === 'true')
-  // 当前登录态从哪来，由服务端在 bootstrap 里判定（只有服务端知道这次请求是
-  // 不是走网关 socket、以及有没有应用自己的凭证）：
-  //   gateway —— 仅凭网关注入的 NAS 身份成立，会话实际归 NAS 所有，NAS 那侧
-  //              退出后应用必须跟着退出（服务端会拒绝，此时自动登出并回登录页）；
-  //   app     —— 应用自己签发的会话（显式登录或直连端口），可以独立退出，
-  //              也完全不需要跟随 NAS。
-  // 关键：两种来源都必须能点「退出登录」。飞牛授权只是身份来源，和 QQ/微信
-  // 登录第三方应用一样，授权方还登录着不代表应用会话不能结束——把两者绑成
-  // 一个东西正是 2026-09-17 用户报的「飞牛登录的应用退不出去」。
-  const sessionSource = ref<'app' | 'gateway'>('app')
-  const followsFnOSSession = computed(() => onFnOSGatewayOrigin() && sessionSource.value === 'gateway')
   watch(siteTitle, (t) => { document.title = t }, { immediate: true })
   const hasSecurityQuestions = ref(true)
   const DISMISS_KEY = SK.securityPromptDismissed
@@ -62,9 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
   let initialized = false
   let initPromise: Promise<void> | null = null
 
-  // 网关域上的登录态来自网关注入的 X-Trim-* 身份（服务端解析成已绑定的应用
-  // 账号），此时本地没有也不需要有 JWT；直连端口仍然靠 token。所以判断登录态只
-  // 看有没有用户，token 只决定「要不要往请求里带」。
+  // 登录态只看有没有用户：token 只决定「要不要往请求里带」。
   const isAuthenticated = computed(() => !!user.value)
   const isAdmin = computed(() => user.value?.role === 'admin')
 
@@ -80,18 +57,6 @@ export const useAuthStore = defineStore('auth', () => {
     requireLogin.value = configs.require_login !== 'false'
     allowRegister.value = configs.allow_register !== 'false'
     if (configs.site_title) siteTitle.value = configs.site_title
-    if (data.service_port) servicePort.value = data.service_port
-    // 服务端运行形态是按钮显隐的唯一权威；字段缺席（旧后端）时保留编译期
-    // 兜底默认，不做无据降级。
-    if (typeof data.fnos_app === 'boolean') fnosApp.value = data.fnos_app
-    // 服务端只在本应用确实靠网关注入身份登录时才回 gateway；其余情况（直连
-    // 端口、应用自己的令牌）都算应用会话，绝不跟随 NAS 退出。
-    sessionSource.value = data.session_source === 'gateway' ? 'gateway' : 'app'
-    const entry = data.fnos_gateway_entry
-    if (typeof entry === 'string' && entry.includes(import.meta.env.BASE_URL)) {
-      fnosGatewayEntry.value = entry
-      try { localStorage.setItem(SK.fnosGatewayUrl, entry) } catch {}
-    }
   }
 
   async function init() {
@@ -120,9 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
           clearSession()
           return
         }
-        // 网关域没有本地令牌也要继续：启动引导会带回「网关注入身份对应的应用
-        // 账号」，刷新后正是靠它保住登录态（见 utils/gateway.ts）。
-        if (!token.value && !onFnOSGatewayOrigin()) return
+        if (!token.value) return
         const auth = data.auth
         if (auth?.authenticated && auth.user) {
           user.value = auth.user
@@ -134,9 +97,8 @@ export const useAuthStore = defineStore('auth', () => {
         return
       }
 
-      // 引导请求全部失败（服务未就绪、网关不通）：按默认值继续渲染，至少
-      // 页面能出来。已持有令牌时仍单独确认一次，避免网络抖动把已登录用户
-      // 请到登录页。
+      // 引导请求全部失败（服务未就绪）：按默认值继续渲染，至少页面能出来。
+      // 已持有令牌时仍单独确认一次，避免网络抖动把已登录用户请到登录页。
       setBootHint('网络较慢，正在加载应用…')
       if (token.value) {
         const authRes = await withTimeout(checkAuth(), STARTUP_TIMEOUT_MS, null)
@@ -190,37 +152,27 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = newUser
   }
 
-  // 只清本地登录态。网关域上的退出不能只做这一步（服务端还能靠网关注入身份
-  // 认回来），所以对外一律用 endSession()，这个函数留作它的最后一步与
-  // 401 拦截器里的强制清理。
+  // 只清本地登录态。401 拦截器用它做强制清理，endSession 也以它收尾。
   function clearLocalSession() {
     token.value = ''
     user.value = null
     localStorage.removeItem(SK.token)
     localStorage.removeItem(DISMISS_KEY)
-    // 一次性飞牛票据不能跨会话残留：换 NAS 账号登录时必须重新取票。
-    sessionStorage.removeItem(SK.fnosTicket)
-    sessionStorage.removeItem(SK.fnosTicketUsername)
     securityPromptDismissed.value = false
   }
 
-  // 退出登录（用户点击）。必须先让服务端记下「这位用户主动登出了」，再清本地：
-  // 网关域上服务端每个请求都能从 X-Trim-Userid 认出应用账号，只清前端的话
-  // 下一个请求就把登录态认回来了，用户看到的正是「退不出去」。请求失败也要
-  // 继续本地登出——宁可本地先退出、下次刷新由服务端再纠正，也不能把用户卡在
-  // 已登录界面里。
+  // 退出登录（用户点击）：先通知服务端（审计日志），再清本地。请求失败也继续
+  // 本地登出——宁可本地先退出，也不能把用户卡在已登录界面里。
   async function endSession() {
     try {
       await apiLogout()
     } catch {}
     clearLocalSession()
-    sessionSource.value = 'app'
   }
 
   // 兼容旧调用点（401 拦截器等）：同步清本地，不等服务端。
   function logout() {
     clearLocalSession()
-    sessionSource.value = 'app'
   }
 
   async function checkSetupRequired() {
@@ -252,31 +204,5 @@ export const useAuthStore = defineStore('auth', () => {
       .catch(() => {})
   }
 
-  // 会话回收：网关域上如果这次登录态只是「网关注入的 NAS 身份」，会话实际归
-  // NAS 所有——用户在飞牛桌面或飞牛 App 退出后，应用也必须退出（应用每次请求
-  // 都会被服务端拒绝）。前端的 X-Trim-* 是网关加在同源请求上的，JS 读不到、
-  // 更监听不到退出登录，所以只能周期性问服务端「NAS 那侧还认我吗」。
-  //
-  // 只在 followsFnOSSession 成立时才问：应用自己的会话（显式登录换来、以及
-  // 直连端口）不该因为 NAS 退出而被踢下线，那正是用户要的「应用可以独立退出」。
-  // 返回 true 表示确实因为 NAS 会话结束而被登出。
-  async function dropIfFnOSSessionGone(): Promise<boolean> {
-    if (!followsFnOSSession.value || !user.value) return false
-    try {
-      const res = await getBootstrap()
-      const data = res.data?.code === 0 ? (res.data.data as BootstrapData) : null
-      if (!data) return false
-      if (data.auth?.authenticated) {
-        sessionSource.value = data.session_source === 'gateway' ? 'gateway' : 'app'
-        return false
-      }
-      clearLocalSession()
-      sessionSource.value = 'app'
-      return true
-    } catch {
-      return false
-    }
-  }
-
-  return { token, user, requireLogin, allowRegister, setupRequired, siteTitle, hasSecurityQuestions, securityPromptDismissed, servicePort, fnosGatewayEntry, fnosApp, sessionSource, followsFnOSSession, isAuthenticated, isAdmin, init, resetInit, setToken, setUser, endSession, logout, dropIfFnOSSessionGone, checkSetupRequired, dismissSecurityPrompt, refreshSecurityQuestions }
+  return { token, user, requireLogin, allowRegister, setupRequired, siteTitle, hasSecurityQuestions, securityPromptDismissed, isAuthenticated, isAdmin, init, resetInit, setToken, setUser, endSession, logout, checkSetupRequired, dismissSecurityPrompt, refreshSecurityQuestions }
 })

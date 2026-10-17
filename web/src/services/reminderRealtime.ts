@@ -1,4 +1,3 @@
-import { onFnOSGatewayOrigin } from '../utils/gateway'
 import { clientID } from '../utils/client-id'
 
 export interface RealtimeNotification {
@@ -39,10 +38,9 @@ export function connectReminderEvents(
     while (!stopped) {
       controller = new AbortController()
       try {
-        // 网关域不带应用自己的 Authorization（见 utils/gateway.ts）：那条路上
-        // 的登录态由服务端用网关注入的 X-Trim-* 身份解析。
+        // SSE 长连接需要自带 JWT：EventSource 无法设头，这里用 fetch 流式读取。
         const headers: Record<string, string> = { Accept: 'text/event-stream' }
-        if (token && !onFnOSGatewayOrigin()) headers.Authorization = `Bearer ${token}`
+        if (token) headers.Authorization = `Bearer ${token}`
         // client_id 让服务端广播数据变更时跳过本标签页（它已经在本地改过了）。
         const url = new URL('api/reminder/events', document.baseURI)
         const id = clientID()

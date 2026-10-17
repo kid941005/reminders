@@ -51,7 +51,7 @@ const router = createRouter({
       meta: { requiresAuth: false }
     },
     {
-      // 兜底路由：飞牛远程地址的入口可能落在不带末尾斜杠的网关前缀上
+      // 兜底路由：部署在子路径下时，入口可能落在不带末尾斜杠的前缀上
       //（如 /app/kid941005-reminders），vue-router 剥离 base 后得到的
       // 路径匹配不到任何路由，router-view 会渲染成一片空白（手机端白屏）。
       // 一律送回首页，未登录时由全局守卫转入登录页。
@@ -67,9 +67,7 @@ router.beforeEach(async (to, from, next) => {
   await authStore.init()
 
   if (authStore.setupRequired && to.name !== 'Register') {
-    // 首次安装默认走普通的用户名密码创建管理员流程，不做任何默认的飞牛
-    // 授权；只有用户主动点击「使用飞牛 NAS 登录」并确认后，才进入飞牛绑定
-    // 创建模式（注册页内会带上 fnos=bind 查询参数）。
+    // 首次安装强制走注册页创建管理员账号。
     next({ name: 'Register' })
     return
   }

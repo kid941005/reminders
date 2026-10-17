@@ -99,15 +99,13 @@
       <button @click="handleSetQuestions" :disabled="secLoading" class="btn-brand mt-3 sm:mt-4">{{ secLoading ? '保存中...' : (hasQuestions ? '修改安全问题' : '设置安全问题') }}</button>
     </section>
 
-    <!-- 退出登录：顶栏在手机端收起了退出按钮，这里提供统一入口。
-         飞牛授权的只是身份来源，不代表应用会话不能结束——网关域上同样可以退出，
-         退出后想回来再点一次登录页的「使用飞牛 NAS 登录」即可。 -->
+    <!-- 退出登录：顶栏在手机端收起了退出按钮，这里提供统一入口。 -->
     <section class="surface rounded-2xl p-4 sm:p-7">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 class="text-base sm:text-lg font-bold text-foreground">退出登录</h2>
           <p class="mt-0.5 sm:mt-1 text-[13px] sm:text-sm text-muted-foreground">
-            {{ gatewaySession ? '退出后需要重新登录才能访问你的提醒。飞牛账号不会退出，下次点「使用飞牛 NAS 登录」即可回来。' : '退出后需要重新输入账号密码才能访问你的提醒。' }}
+            退出后需要重新输入账号密码才能访问你的提醒。
           </p>
         </div>
         <button class="btn-ghost shrink-0 !text-rose-600 dark:!text-rose-400" @click="handleLogout">退出登录</button>
@@ -135,14 +133,10 @@ import { changePassword, regenerateAPIKey } from '../api/auth'
 import { getSecurityQuestions, setSecurityQuestions } from '../api/security'
 import { passwordValidationError } from '../utils/password'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
-import { onFnOSGatewayOrigin } from '../utils/gateway'
 
 const authStore = useAuthStore()
 const router = useRouter()
 const userInitial = computed(() => (authStore.user?.username || 'U').charAt(0).toUpperCase())
-// 网关域：文案要说清楚「退出的是本应用，不是飞牛账号」，但退出按钮一样要有——
-// 飞牛授权只是身份来源，和第三方登录一样不应该替用户决定应用会话的生死。
-const gatewaySession = onFnOSGatewayOrigin()
 
 // 退出确认走应用内浮层（见 ConfirmDialog），不再用原生 confirm。
 const logoutVisible = ref(false)

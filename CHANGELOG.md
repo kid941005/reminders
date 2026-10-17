@@ -2,6 +2,35 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.5.0（2026-10-17）
+
+本版本移除飞牛 fnOS 集成，部署形态收敛为仅 Docker。
+
+### 移除
+
+- 删除飞牛统一网关集成：`-fnos-app` / `-gateway-socket` / `-gateway-prefix` 三个启动参数、
+  双监听器（TCP + Unix socket）、网关身份隐式登录（`X-Trim-Userid`）、一次性登录票据、
+  登录跳板页 `fnos-entry.html`、网关入口登记与探测接口。
+- 删除飞牛相关接口：`/api/auth/fnos/{ticket,identity,probe,login,bind,entry}` 全部下线。
+- 删除 `UserSession` 表与 `User` 表的 `FnOSUserID` / `FnOSUsername` 字段。
+- 删除 `fnpack/` 应用打包目录与 `scripts/build-fnpack.sh`，`make package` 不再支持 `PACKAGE_TARGET=fnos`。
+- 删除前端 `utils/fnos-auth.ts`、`utils/gateway.ts`、`public/fnos-entry.html`；
+  登录页与注册页重写为纯账号密码版本，不再有「使用飞牛 NAS 登录」入口。
+
+### 变更
+
+- 登录方式只剩用户名密码；首个注册用户仍自动成为管理员。
+- 限流统一按客户端 IP 分桶（原网关流量按 NAS 用户分桶的逻辑随之移除）。
+- `/api/version` 与 `/api/bootstrap` 不再返回 `fnosApp`、`servicePort`、`fnos_gateway_entry`、`session_source` 字段。
+- `-device-type` 的取值只剩 `docker`。
+
+### 升级注意
+
+- **飞牛用户无法直接升级**：本版本不再产出 `.fpk`，也不能在飞牛应用中心安装。
+  如需保留数据，请把原部署的 `<data-dir>/db/reminder.db` 复制到 Docker 数据卷，
+  并用原应用账号密码登录（飞牛账号绑定关系已随功能移除）。
+- Docker 用户直接换镜像即可，数据卷与端口不变。
+
 ## v0.4.0（2026-10-17）
 
 本版本是本仓库独立发行的首个版本，功能基线等同于上游 v0.3.0，主要变更是发行标识与隐私默认值。

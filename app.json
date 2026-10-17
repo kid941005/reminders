@@ -1,7 +1,7 @@
 {
   "appname": "kid941005-reminders",
   "display_name": "提醒事项",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "desc": "简洁可靠的多渠道提醒应用",
   "author": "kid941005",
   "website": "https://github.com/kid941005/reminders",
@@ -10,12 +10,5 @@
     "image": "kid941005/reminders",
     "container": "kid941005-reminders",
     "tag_prefix": "kid941005-reminders"
-  },
-  "fnos": {
-    "os_min_version": "1.0.0",
-    "service_port": 8906,
-    "ctl_stop": true,
-    "checkport": false,
-    "disable_authorization_path": false
   }
 }

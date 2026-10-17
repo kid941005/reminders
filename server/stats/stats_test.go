@@ -103,7 +103,7 @@ func TestDonateSupport(t *testing.T) {
 		defer fake.Close()
 		t.Setenv("STATS_ENDPOINT", fake.URL)
 
-		Init("testapp", "v1.0.0", "fnos", t.TempDir())
+		Init("testapp", "v1.0.0", "docker", t.TempDir())
 		r := newRouter(t, db)
 
 		resp := httptest.NewRecorder()

@@ -48,7 +48,7 @@ func decodeGzip(t *testing.T, body []byte) []byte {
 	return decoded
 }
 
-// 首屏的入口包与样式都是纯文本，弱网（手机端经飞牛网关）下体积就是等待时间：
+// 首屏的入口包与样式都是纯文本，弱网（手机端移动网络）下体积就是等待时间：
 // 这个测试锁住「文本响应确实被压缩、且解压后内容完全一致」。
 func TestCompressGzipsJSONBody(t *testing.T) {
 	payload := map[string]string{"site_title": strings.Repeat("提醒事项", 200)}

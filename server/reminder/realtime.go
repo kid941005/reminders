@@ -124,7 +124,7 @@ func publishNotification(notification Notification) {
 
 // publishDataChanged 广播一次数据变更并推进修订号。
 //
-// 修订号是跨设备同步的兜底：SSE 长连接要穿过飞牛统一网关那层代理，万一被缓冲，
+// 修订号是跨设备同步的兜底：SSE 长连接要穿过反向代理，万一被缓冲，
 // 事件就迟迟到不了前端。前端定时问一次修订号，发现变了就重新拉数据——不依赖长
 // 连接一定通畅，也能做到「另一台设备改过了，这边自动跟上」。
 func publishDataChanged(userID uint, scope, action string, targetID uint, originClientID string) {

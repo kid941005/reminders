@@ -75,7 +75,7 @@ func isBootstrapRead(c *gin.Context) bool {
 		return false
 	}
 	path := c.Request.URL.Path
-	// 网关前缀（/app/<包名>）随部署变化，按后缀匹配真实路由。
+	// 按后缀匹配，避免部署在子路径下时匹配不到。
 	for suffix := range bootstrapReads {
 		if strings.HasSuffix(path, suffix) {
 			return true
@@ -86,20 +86,9 @@ func isBootstrapRead(c *gin.Context) bool {
 
 // rateLimitKey decides which bucket a request counts against.
 //
-// Requests arriving through the fnOS unified gateway come from the local unix
-// socket, so ClientIP() is empty for every one of them. Keying those by IP
-// collapses every NAS user on the box into a single bucket: one mobile page
-// load spends the whole per-minute allowance on public calls and the next load
-// gets 429s, which the SPA cannot distinguish from a dead server. The gateway
-// has already authenticated the NAS session and injects X-Trim-Userid, so
-// gateway traffic is keyed per NAS user instead.
+// 单机 Docker 部署下按客户端 IP 分桶即可。反向代理场景要拿到真实客户端 IP，
+// 需由前置代理设置 X-Forwarded-For，Gin 的 ClientIP() 会读取它。
 func rateLimitKey(c *gin.Context) string {
-	if OnFnOSGateway(c.Request.Context()) {
-		if uid := strings.TrimSpace(c.GetHeader("X-Trim-Userid")); uid != "" {
-			return "fnos:" + uid
-		}
-		return "fnos:anonymous"
-	}
 	if ip := strings.TrimSpace(c.ClientIP()); ip != "" {
 		return "ip:" + ip
 	}

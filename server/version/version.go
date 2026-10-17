@@ -18,11 +18,9 @@ var (
 // 使用稳定英文标识，不能随界面语言变化。
 const AppID = "reminders"
 
-// GetVersion 返回 /api/version 的版本信息。值为 interface{} 而非 string：
-// 调用方（server 路由）会往里并入非字符串字段（如 fnosApp 布尔），
-// 现有字段仍全是字符串，JSON 形状不变。
-func GetVersion() map[string]interface{} {
-	return map[string]interface{}{
+// GetVersion 返回 /api/version 的版本信息，全部字段均为字符串。
+func GetVersion() map[string]string {
+	return map[string]string{
 		"version":   Version,
 		"buildTime": BuildTime,
 		"gitCommit": GitCommit,

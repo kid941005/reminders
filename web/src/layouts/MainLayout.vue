@@ -211,7 +211,6 @@ import {
 } from '../api/reminder'
 import { getVersion } from '../api/config'
 import { connectReminderEvents, type RealtimeNotification, type ReminderRealtimeEvent } from '../services/reminderRealtime'
-import { onFnOSGatewayOrigin } from '../utils/gateway'
 
 const route = useRoute()
 const router = useRouter()
@@ -309,10 +308,6 @@ function logout() {
   router.push('/login')
 }
 
-// 飞牛授权只是身份来源，应用自己的登录态永远可以独立退出——网关域上也一样。
-// 唯一需要跟随 NAS 的情况是「用户没在本应用显式登录过、当前登录态完全由网关
-// 注入身份撑着」（authStore.followsFnOSSession），那时 NAS 一退出应用也就无法
-// 再被认证，页面会自动回到登录页。
 
 let stopRealtime: (() => void) | undefined
 let audioContext: AudioContext | undefined
@@ -465,7 +460,7 @@ function handleRealtimeEvent(event: ReminderRealtimeEvent) {
 }
 
 // 补弹错过的到点提醒。到点弹窗的唯一触发源本来是长连接推送的 notification.created
-// 事件，但那条路要穿过飞牛统一网关的代理，响应被缓冲、手机切后台连接被系统掐断、
+// 事件，但那条路要穿过反向代理，响应被缓冲、手机切后台连接被系统掐断、
 // 服务端重启，任何一种都会让事件丢掉——通知明明写进了通知中心，弹窗却永远不出现，
 // 这正是「到时间了没有提示」。所以在修订号变化（以及刚进入应用）时拉一遍通知，
 // 把还没处理的到点通知补进弹窗队列：弹窗上的三个操作（完成 / 稍后提醒 / 知道了）
@@ -493,7 +488,7 @@ async function recoverMissedAlerts() {
   }
 }
 
-// 修订号轮询兜底：SSE 长连接要穿过飞牛统一网关那层代理，万一响应被代理缓冲，
+// 修订号轮询兜底：SSE 长连接要穿过反向代理，万一响应被代理缓冲，
 // 事件就迟迟到不了前端。这里定时问一次「服务端的数据版本变了吗」，变了就重新
 // 拉一遍——不依赖长连接一定通畅，「另一台设备改过了这边自动跟上」都能成立。
 const REVISION_POLL_MS = 20000
@@ -522,24 +517,8 @@ function refreshWhenVisible() {
   if (document.visibilityState === 'visible') {
     refreshNavigation()
     window.dispatchEvent(new CustomEvent('reminder-realtime-resume'))
-    // 回到前台时立刻核一次：手机端常见路径是切到飞牛 App 退出登录再切回来，
-    // 等下一次轮询太慢，回来这一下就该已经回登录页了。
-    void checkFnOSSession()
     // 另一台设备在后台期间改过数据，回到前台要立刻跟上，不等下一次轮询。
     void pollRevision()
-  }
-}
-
-// NAS 侧退出登录后把应用一并登出（见 stores/auth.ts 的 dropIfFnOSSessionGone）。
-// 服务端拒绝一切请求是兜底，但用户停在已登录界面上会一直看着报错，所以主动
-// 定期核一次；只在会话确实归属 NAS 时才会真正发请求。
-const FNOS_SESSION_POLL_MS = 45000
-let fnosSessionTimer: number | undefined
-
-async function checkFnOSSession() {
-  if (await authStore.dropIfFnOSSessionGone()) {
-    stopRealtime?.()
-    router.push('/login')
   }
 }
 
@@ -560,9 +539,7 @@ onMounted(() => {
   document.addEventListener('pointerdown', unlockReminderSound, { once: true })
   document.addEventListener('keydown', unlockReminderSound, { once: true })
   document.addEventListener('visibilitychange', refreshWhenVisible)
-  // 网关域上没有本地 JWT 也要连：那条路的身份来自网关注入的 X-Trim-*。
-  if (authStore.token || onFnOSGatewayOrigin()) stopRealtime = connectReminderEvents(authStore.token, handleRealtimeEvent)
-  fnosSessionTimer = window.setInterval(() => { void checkFnOSSession() }, FNOS_SESSION_POLL_MS)
+  if (authStore.token) stopRealtime = connectReminderEvents(authStore.token, handleRealtimeEvent)
   // 先问一次当前修订号作为基准，之后只处理「变了」的情况（见 pollRevision）。
   void pollRevision()
   // 进门先补一遍：应用没开着的时候到点且还没处理的提醒，打开就该看到。
@@ -571,7 +548,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   stopRealtime?.()
-  if (fnosSessionTimer !== undefined) window.clearInterval(fnosSessionTimer)
   if (revisionTimer !== undefined) window.clearInterval(revisionTimer)
   audioContext?.close()
   window.visualViewport?.removeEventListener('resize', syncKeyboardState)

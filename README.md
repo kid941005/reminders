@@ -8,20 +8,37 @@
 > **关于本仓库**：这是 [TechFunWay/reminders](https://github.com/TechFunWay/reminders) 的独立发行分支，
 > 基于上游 v0.3.0（MIT 许可）。本分支自行维护发行标识、版本号与隐私默认值，
 > 功能层面的改动见 CHANGELOG。上游项目与其作者不对本分支的发行物负责。
+>
+> **部署形态：仅支持 Docker。** 本分支已移除飞牛 fnOS 集成（网关免登、应用包、安装向导），
+> 只保留标准的 TCP 监听与用户名密码登录。
 
 ## 下载与安装
 
 | 渠道 | 获取方式 |
 |---|---|
-| GitHub Releases | <https://github.com/kid941005/reminders/releases> —— 各平台压缩包、飞牛 `fpk` 安装包与 `docker-compose.yml` |
 | Docker 镜像 | `docker pull kid941005/reminders:latest`（amd64 / arm64 多平台） |
-| 飞牛 fnOS | 在飞牛应用中心手动安装 Releases 里的 `.fpk` 安装包（amd64 / arm64），应用 ID 为 `kid941005-reminders` |
+| GitHub Releases | <https://github.com/kid941005/reminders/releases> —— 各平台压缩包与 `docker-compose.yml` |
+
+快速启动：
+
+```bash
+docker run -d --name reminders -p 8906:8906 \
+  -v reminders-data:/app/data \
+  kid941005/reminders:latest
+```
+
+或使用仓库自带的 compose：
+
+```bash
+docker compose up -d
+```
 
 > 默认端口 `8906`；数据默认是挂载目录下的 SQLite 单文件，备份即拷贝，恢复支持上传本地备份文件。
+> 首次启动访问 `http://<主机>:8906`，注册的第一个账号自动成为管理员。
 >
-> **从上游版本迁移**：本分支的飞牛网关路径前缀是 `/app/kid941005-reminders`（上游为 `/app/techfunway-reminders`），
-> Docker 镜像名与数据卷名也已变更。升级后旧网关路径的桌面图标与书签会失效，需重新从应用中心打开；
-> Docker 用户请改用新镜像并把原数据目录挂载到新卷。SQLite 数据文件本身格式未变，可直接复用。
+> **从上游飞牛版本迁移**：本分支不再提供飞牛应用包，也无法在飞牛应用中心安装。
+> 原飞牛部署里的 SQLite 数据文件（`<data-dir>/db/reminder.db`）格式未变，可复制到 Docker 数据卷继续使用；
+> 飞牛账号绑定关系已随功能移除，迁移后需用原应用账号密码登录。
 
 ## 界面预览
 
@@ -125,7 +142,7 @@ REMINDER_DATA_KEY
   `DISABLE_STATS=0` 开启；上报内容仅为哈希后的设备标识、操作系统、架构、部署形态与版本号，
   不含用户名、主机名、提醒内容或 IP 明文。管理员也可在「系统配置」中用 `stats_enabled` 运行时开关。
 
-`DEVICE_TYPE`（`-device-type`）仅用于标识部署形态（`fnos`/`docker`），在未启用统计时不起作用。
+`DEVICE_TYPE`（`-device-type`）仅用于标识部署形态（`docker`），在未启用统计时不起作用。
 
 ### 钉钉个人提醒
 
@@ -159,18 +176,14 @@ make build
 ### 发布打包
 
 ```bash
-# 仅编译并打包飞牛 fnOS：生成 x86、ARM 两份 .fpk，不构建 Docker 镜像
-make package PACKAGE_TARGET=fnos
-
-# 所有桌面/服务器平台压缩包
+# 所有桌面/服务器平台压缩包（默认）
 make package PACKAGE_TARGET=apps
 
 # 仅构建本地 Docker 镜像（按需执行）
 make package PACKAGE_TARGET=docker
 ```
 
-`PACKAGE_TARGET=fnos` 会使用临时 Linux 编译容器生成 SQLite/CGO 二进制，但不会执行
-`docker build`、不会创建镜像标签，也不会推送镜像。
+打 tag 推送后，CI 会自动构建 amd64/arm64 多架构镜像并创建 Release，无需本地执行上述命令。
 
 开发约定、目录职责与提交规范见 [AGENTS.md](./AGENTS.md)。
 

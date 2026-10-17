@@ -18,9 +18,9 @@
 | 目录 | 职责 |
 |---|---|
 | `server/apps/` | 应用注册表。新功能模块通过 `init()` 注册，不往 `server.go` 里堆代码 |
-| `server/server/` | 进程启动、路由装配、中间件链、飞牛双监听器 |
+| `server/server/` | 进程启动、路由装配、中间件链、readyGate |
 | `server/reminder/` | 核心业务：清单、提醒、重复规则、投递调度、通知渠道 |
-| `server/user/` `server/auth/` | 账号、角色、JWT、密码与飞牛身份绑定 |
+| `server/user/` `server/auth/` | 账号、角色、JWT、密码与安全问答 |
 | `server/sysconfig/` | 配置中心（系统级 + 用户级），配置项通过 `RegisterConfig` 声明 |
 | `server/database/` | 建库、AutoMigrate、版本化数据迁移 |
 | `server/middleware/` | 日志、CORS、限流、gzip、静态缓存、认证中间件 |
@@ -28,7 +28,7 @@
 | `server/audit/` | 操作审计日志与导出 |
 | `web/src/api/` | 所有 HTTP 调用集中在此，页面不直接写 `axios` |
 | `web/src/stores/` | Pinia：`auth`、`theme`、`support` |
-| `web/src/utils/` | 网关判定、启动引导、存储键、密码规则等纯逻辑 |
+| `web/src/utils/` | 启动引导、存储键、密码规则等纯逻辑 |
 
 ## 3. 后端约定
 
@@ -101,17 +101,7 @@ func init() {
 
 ## 4. 前端约定
 
-### 4.1 网关 Authorization（关键）
-
-飞牛统一网关的接入层会把请求里的 `Authorization` 当成**它自己的**会话 token；
-应用自己的 `Bearer <jwt>` 会被判为 `invalid token` 直接返回 200 纯文本，请求到不了应用。
-
-→ **网关域上一律不带 `Authorization`**，用 `onFnOSGatewayOrigin()`（`utils/gateway.ts`）判断；
-直连端口照旧带 JWT。登录态由服务端用网关注入的 `X-Trim-Userid` 解析。
-
-违反这条的典型症状：飞牛登录后一刷新就回登录页。
-
-### 4.2 主题三态
+### 4.1 主题三态
 
 `useThemeStore().toggle()` 是唯一入口，循环顺序固定：
 
@@ -121,10 +111,10 @@ dark → light → system → dark
 
 组件不要自己写 `mode === 'dark' ? ... : ...` 的两态逻辑，否则三态会被压成两态。
 
-### 4.3 其他
+### 4.2 其他
 
 - HTTP 调用只写在 `src/api/*.ts`，页面通过 api 模块调用。
-- 浏览器存储键统一带应用前缀（`utils/storage-keys.ts`），避免飞牛网关同源下与兄弟应用互相覆盖。
+- 浏览器存储键统一带应用前缀（`utils/storage-keys.ts`），避免同域多应用互相覆盖。
 - 四个智能视图复用 `HomeView.vue`，靠路由 `meta.reminderView` 区分，不要复制页面。
 - 列表接口统一用 `SuccessPage` 的 `{ items, total, page, pageSize }` 形状。
 
@@ -152,19 +142,20 @@ dark → light → system → dark
 
 ## 7. 发版流程
 
-1. 同步三处版本号：`VERSION`（带 `v`）、`app.json`、`fnpack/manifest`（不带 `v`）。
-2. 在 `CHANGELOG.md` 顶部加版本小节；更新 `fnpack/manifest` 的 `changelog` 字段。
+1. 同步两处版本号：`VERSION`（带 `v`）与 `app.json`（不带 `v`）。
+2. 在 `CHANGELOG.md` 顶部加版本小节。
 3. `cd server && go test ./...` 全绿；`cd web && npm run build` 通过。
-4. `make package PACKAGE_TARGET=fnos|apps|docker` 产出对应包。
+4. `make package PACKAGE_TARGET=apps|docker` 产出对应包。
 5. 打 tag（`vX.Y.Z`）推送，CI 会构建并推送多架构镜像。
 
 **版本号只能升不能降**：库里记录的迁移版本高于二进制时会拒绝启动。
 
 ## 8. 本发行分支特有约束
 
-- 发行标识：`kid941005-reminders`，镜像 `kid941005/reminders`，网关前缀 `/app/kid941005-reminders`。
-  改这些要同步 `app.json`、`fnpack/manifest`、`fnpack/app/ui/config`、`fnpack/config/resource`、
-  `server/config/config.go` 的默认值，以及 `server_test.go` 里的硬编码路径。
+- 发行标识：`kid941005-reminders`，镜像 `kid941005/reminders`。
+  改这些要同步 `app.json`、`docker-compose.yml`、`Makefile`、`scripts/*.sh` 与 `server/version/version.go` 的 `AppID`。
+- **仅支持 Docker 部署**：飞牛 fnOS 集成（网关免登、`fnpack` 应用包、安装向导）已整体移除，
+  不要再引入 `-fnos-app` 之类的运行形态分支；登录只有用户名密码一种。
 - 统计上报默认关闭：`-disable-stats` 默认 `true`，且 `stats.Endpoint()` 不内置地址，
   未配置 `STATS_ENDPOINT` 时 `stats.Start` 直接返回。
 - 赞赏入口默认关闭：`web/src/stores/support.ts` 的 `SUPPORT_ENABLED = false`。

@@ -10,7 +10,6 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -72,38 +71,25 @@ func Start() {
 	}
 	defer logger.Close()
 
-	// 监听先行：首次安装时建库、迁移、种子数据可能耗时数秒，桌面端会先于
-	// 端口可用就提示“已打开”，连接被拒看起来就是“页面打不开”。先把端口
-	// （和网关 socket）占住，初始化期间到达的请求由 readyGate 挂起等待，
-	// 就绪后统一放行，浏览器只感到稍慢而不会收到连接拒绝或 502。
-	listeners, err := listen(cfg)
+	// 监听先行：首次安装时建库、迁移、种子数据可能耗时数秒，容器编排或
+	// 反代会先于端口可用就判定“已启动”，连接被拒看起来就是“页面打不开”。
+	// 先把端口占住，初始化期间到达的请求由 readyGate 挂起等待，就绪后统一
+	// 放行，浏览器只感到稍慢而不会收到连接拒绝。
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
 		fmt.Printf("Failed to listen: %v\n", err)
 		os.Exit(1)
 	}
-	for _, listener := range listeners {
-		defer listener.Listener.Close()
-	}
-	if cfg.FnOSApp {
-		defer os.Remove(cfg.GatewaySocket)
-	}
+	defer listener.Close()
 
-	readyGates := make([]*readyGate, 0, len(listeners))
-	servers := make([]*http.Server, 0, len(listeners))
-	for _, listener := range listeners {
-		// 启动阶段先挂 gate：就绪前请求在 gate 上等待，activate 后按监听器
-		// 类型切换为真实路由（网关）或带直连重定向的路由（TCP）。
-		gate := newReadyGate()
-		readyGates = append(readyGates, gate)
-		srv := newHTTPServer(gate, listener.IsFnOSGateway)
-		servers = append(servers, srv)
-		go func(srv *http.Server, listener net.Listener) {
-			if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
-				fmt.Printf("Server error: %v\n", err)
-				os.Exit(1)
-			}
-		}(srv, listener.Listener)
-	}
+	gate := newReadyGate()
+	srv := newHTTPServer(gate)
+	go func() {
+		if err := srv.Serve(listener); err != nil && err != http.ErrServerClosed {
+			fmt.Printf("Server error: %v\n", err)
+			os.Exit(1)
+		}
+	}()
 
 	db, err := database.InitDB(cfg.DBPath)
 	if err != nil {
@@ -170,24 +156,14 @@ func Start() {
 	logger.Info("  Database:    %s", cfg.DBPath)
 	logger.Info("  Web Dir:     %s", cfg.WebDir)
 	logger.Info("  Upload Dir:  %s", cfg.UploadDir)
-	if cfg.FnOSApp {
-		logger.Info("  Gateway:     %s", cfg.GatewayPrefix)
-		logger.Info("  Socket:      %s", cfg.GatewaySocket)
-	}
 	logger.Info("  Access URL:  http://localhost:%d", cfg.Port)
 	if cfg.RateLimit > 0 {
 		logger.Info("  Rate Limit:  %d req/min per IP", cfg.RateLimit)
 	}
 	logger.Info("========================================")
 
-	// 路由就绪：按监听器类型绑定最终处理器，并放行初始化期间挂起的请求。
-	for i, gate := range readyGates {
-		handler := http.Handler(r)
-		if !listeners[i].IsFnOSGateway {
-			handler = newDirectHandler(r, cfg)
-		}
-		gate.activate(handler)
-	}
+	// 路由就绪：绑定最终处理器，并放行初始化期间挂起的请求。
+	gate.activate(r)
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -198,10 +174,8 @@ func Start() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	for _, srv := range servers {
-		if err := srv.Shutdown(ctx); err != nil {
-			logger.Error("Server forced to shutdown: %v", err)
-		}
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error("Server forced to shutdown: %v", err)
 	}
 
 	apps.ShutdownAll()
@@ -267,27 +241,8 @@ func (g *readyGate) activate(final http.Handler) {
 	close(g.wait)
 }
 
-func newDirectHandler(handler http.Handler, cfg config.Config) http.Handler {
-	if !cfg.FnOSApp {
-		return handler
-	}
-	prefix := strings.TrimSuffix(cfg.GatewayPrefix, "/") + "/"
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/" {
-			http.Redirect(w, r, prefix, http.StatusTemporaryRedirect)
-			return
-		}
-		handler.ServeHTTP(w, r)
-	})
-}
-
-type listenerBinding struct {
-	Listener      net.Listener
-	IsFnOSGateway bool
-}
-
-func newHTTPServer(handler http.Handler, fnOSGateway bool) *http.Server {
-	srv := &http.Server{
+func newHTTPServer(handler http.Handler) *http.Server {
+	return &http.Server{
 		Handler:           handler,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -295,45 +250,6 @@ func newHTTPServer(handler http.Handler, fnOSGateway bool) *http.Server {
 		WriteTimeout: 0,
 		IdleTimeout:  60 * time.Second,
 	}
-	if fnOSGateway {
-		srv.ConnContext = func(ctx context.Context, _ net.Conn) context.Context {
-			return user.MarkFnOSGateway(ctx)
-		}
-	}
-	return srv
-}
-
-func listen(cfg config.Config) ([]listenerBinding, error) {
-	tcpListener, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
-	if err != nil {
-		return nil, err
-	}
-	listeners := []listenerBinding{{Listener: tcpListener}}
-	if !cfg.FnOSApp {
-		return listeners, nil
-	}
-	if cfg.GatewaySocket == "" {
-		tcpListener.Close()
-		return nil, fmt.Errorf("-fnos-app requires -gateway-socket")
-	}
-	if !strings.HasPrefix(cfg.GatewayPrefix, "/app/") {
-		tcpListener.Close()
-		return nil, fmt.Errorf("-gateway-prefix must begin with /app/")
-	}
-	if err := os.MkdirAll(filepath.Dir(cfg.GatewaySocket), 0755); err != nil {
-		tcpListener.Close()
-		return nil, fmt.Errorf("create gateway socket directory: %w", err)
-	}
-	if err := os.Remove(cfg.GatewaySocket); err != nil && !os.IsNotExist(err) {
-		tcpListener.Close()
-		return nil, fmt.Errorf("remove stale gateway socket: %w", err)
-	}
-	listener, err := net.Listen("unix", cfg.GatewaySocket)
-	if err != nil {
-		tcpListener.Close()
-		return nil, fmt.Errorf("listen on gateway socket: %w", err)
-	}
-	return append(listeners, listenerBinding{Listener: listener, IsFnOSGateway: true}), nil
 }
 
 // NewRouter builds the full API router (all middleware, routes and registered
@@ -351,24 +267,12 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 	r.Use(middleware.Compress())
 
 	appGroup := r.Group("")
-	if cfg.FnOSApp {
-		appGroup = r.Group(strings.TrimSuffix(cfg.GatewayPrefix, "/"))
-	}
 	api := appGroup.Group("/api")
 
-	// SPA 入口绝不缓存：升级后浏览器拿到旧版前端会按旧协议与新版跳板页
-	// 对话（如弹窗 postMessage），出现取票后整页跳走、登录后弹回等错位。
-	// History-mode 路由（/admin、/login…）命中 NoRoute；/ 命中注册的根
-	// 路由，二者都要禁缓存。带扩展名的路径（静态资源）仍返回 404，
-	// 避免把 index.html 当 JS/CSS 发出去。
-	//
-	// 入口 HTML 里把 __FNOS_GATEWAY_FLAG__ 替换成「这次文档请求是不是从飞牛网关
-	// socket 进来的」：只有服务端知道答案（两条监听器分别是网关 socket 与直连
-	// 端口），而前端必须知道——网关域上不能带应用自己的 Authorization，会被接入层
-	// 当成无效会话 token 直接拒掉（200 "invalid token"，请求到不了应用），见
-	// web/src/utils/gateway.ts 与 AGENTS.md。占位符只出现在字符串字面量里
-	// （window.__FNOS_GATEWAY__ = "__FNOS_GATEWAY_FLAG__" === "true"），
-	// 这样开发服务器不替换时它就是 false，也不会误伤属性名。
+	// SPA 入口绝不缓存：升级后浏览器拿到旧版前端会按旧协议与新版资源
+	// 对话，出现登录后弹回等错位。History-mode 路由（/admin、/login…）
+	// 命中 NoRoute；/ 命中注册的根路由，二者都要禁缓存。带扩展名的路径
+	// （静态资源）仍返回 404，避免把 index.html 当 JS/CSS 发出去。
 	serveSPA := func(c *gin.Context) {
 		if path.Ext(c.Request.URL.Path) != "" {
 			c.Status(http.StatusNotFound)
@@ -380,8 +284,7 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 			c.Status(http.StatusNotFound)
 			return
 		}
-		page := strings.ReplaceAll(string(data), "__FNOS_GATEWAY_FLAG__", strconv.FormatBool(middleware.OnFnOSGateway(c.Request.Context())))
-		c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(page))
+		c.Data(http.StatusOK, "text/html; charset=utf-8", data)
 	}
 	if cfg.WebDir != "" {
 		r.NoRoute(serveSPA)
@@ -389,23 +292,7 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 	}
 
 	api.GET("/version", func(c *gin.Context) {
-		info := version.GetVersion()
-		// 是否以飞牛应用模式（-fnos-app）运行：与 /api/bootstrap 的 fnos_app
-		// 同源，给跳过引导直接查版本的路径用（resolveFnOSGatewayEntry 兜底）。
-		// 前端据此显隐「使用飞牛 NAS 登录」，非飞牛部署不再摆一条点了必死的路。
-		info["fnosApp"] = cfg.FnOSApp
-		// 飞牛网关嵌入的入口需要真实服务端口：SPA 据此判断当前是否停留在
-		// 网关域名下（旧书签、隐藏登录入口打开的场景），才能正确推导跳板页
-		// 地址并完成授权交接。0 表示不适用（非飞牛模式）。
-		info["servicePort"] = strconv.Itoa(cfg.Port)
-		// 跳板页登记过的网关入口：手机端首次打开时 referrer 为空、localStorage
-		// 也为空，只有这里能给出「本机在网关下的入口」，避免拼出打不开的地址。
-		if cfg.FnOSApp {
-			if entry := user.GatewayEntry(); entry != "" {
-				info["fnosGatewayEntry"] = entry
-			}
-		}
-		response.Success(c, info)
+		response.Success(c, version.GetVersion())
 	})
 
 	// Liveness/readiness probe for Docker, NAS health checks, uptime monitors.
@@ -451,7 +338,7 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 	authGroup.POST("/upload", upload.HandleUpload(cfg.UploadDir))
 	appGroup.GET("/uploads/*filepath", upload.ServeUpload(cfg.UploadDir))
 
-	user.RegisterRoutes(publicGroup, optionalAuthGroup, authGroup, adminGroup, db, cfg.FnOSApp, strconv.Itoa(cfg.Port))
+	user.RegisterRoutes(publicGroup, optionalAuthGroup, authGroup, adminGroup, db)
 
 	// 赞赏支持计数：需要登录（前端入口仅对管理员显示），
 	// 复用匿名统计通道发送一次 donate_support 事件。
@@ -476,21 +363,6 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 		appGroup.GET("/manifest.webmanifest", func(c *gin.Context) {
 			c.Header("Content-Type", "application/manifest+json")
 			c.File(cfg.WebDir + "/manifest.webmanifest")
-		})
-		// Gateway trampoline: served on the gateway prefix with the real
-		// service port injected, it exchanges the fnOS gateway session for a
-		// one-time ticket and sends the browser to the plain TCP listener.
-		appGroup.GET("/fnos-entry.html", func(c *gin.Context) {
-			data, err := os.ReadFile(filepath.Join(cfg.WebDir, "fnos-entry.html"))
-			if err != nil {
-				c.String(http.StatusNotFound, "未找到飞牛登录跳板页")
-				return
-			}
-			page := strings.ReplaceAll(string(data), "__APP_PORT__", strconv.Itoa(cfg.Port))
-			// 跳板页协议随版本演进，绝不缓存：旧版缓存会按旧协议对话导致
-			// 授权卡死（v0.6.2 的教训）。
-			c.Header("Cache-Control", "no-store")
-			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(page))
 		})
 	}
 

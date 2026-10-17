@@ -26,13 +26,7 @@ type Config struct {
 	LogDir             string
 	LogRetentionDays   int
 	LogConsole         bool
-	// FnOSApp enables the fnOS unified-gateway integration. Ordinary binaries
-	// and Docker deployments keep their TCP listener and never trust fnOS
-	// gateway identity headers.
-	FnOSApp       bool
-	GatewaySocket string
-	GatewayPrefix string
-	// DeviceType 标识部署形态（fnos|docker|空），仅用于匿名统计上报的
+	// DeviceType 标识部署形态（docker|空），仅用于匿名统计上报的
 	// 平台分布；不参与任何业务逻辑。
 	DeviceType string
 	// DisableStats 关闭匿名使用统计上报（也可用环境变量 DISABLE_STATS=1）。
@@ -55,10 +49,7 @@ func Parse() Config {
 	flag.StringVar(&C.CORSOrigin, "cors-origin", "*", "允许的 CORS 来源，* 表示全部（环境变量 CORS_ORIGIN）")
 	flag.IntVar(&C.LogRetentionDays, "log-retention-days", 30, "日志文件保留天数，0 表示永久保留（环境变量 LOG_RETENTION_DAYS）")
 	flag.BoolVar(&C.LogConsole, "log-console", false, "同时将运行日志输出到终端（默认 false，环境变量 LOG_CONSOLE）")
-	flag.BoolVar(&C.FnOSApp, "fnos-app", false, "以飞牛 fnOS 统一网关应用模式运行")
-	flag.StringVar(&C.GatewaySocket, "gateway-socket", "", "飞牛统一网关 Unix Socket 路径（仅 -fnos-app）")
-	flag.StringVar(&C.GatewayPrefix, "gateway-prefix", "/app/kid941005-reminders", "飞牛统一网关路径前缀（仅 -fnos-app）")
-	flag.StringVar(&C.DeviceType, "device-type", "", "部署形态标识（fnos/docker，仅用于匿名统计的平台分布，环境变量 DEVICE_TYPE）")
+	flag.StringVar(&C.DeviceType, "device-type", "", "部署形态标识（docker，仅用于匿名统计的平台分布，环境变量 DEVICE_TYPE）")
 	flag.BoolVar(&C.DisableStats, "disable-stats", true, "禁用匿名使用统计上报（本发行版默认 true；可用 -disable-stats=false 或 DISABLE_STATS=0 开启）")
 	flag.Usage = PrintHelp
 	flag.Parse()
@@ -163,14 +154,8 @@ func PrintHelp() {
         日志文件保留天数，0 表示永久保留（默认 30，环境变量 LOG_RETENTION_DAYS）
   -log-console
         同时将运行日志输出到终端（默认 false，环境变量 LOG_CONSOLE）
-  -fnos-app
-        以飞牛 fnOS 统一网关应用模式运行（默认 false）
-  -gateway-socket string
-        飞牛统一网关 Unix Socket 路径（仅 -fnos-app）
-  -gateway-prefix string
-        飞牛统一网关路径前缀（默认 "/app/kid941005-reminders"，仅 -fnos-app）
   -device-type string
-        部署形态标识（fnos/docker，仅用于匿名统计的平台分布，环境变量 DEVICE_TYPE）
+        部署形态标识（docker，仅用于匿名统计的平台分布，环境变量 DEVICE_TYPE）
   -disable-stats
         禁用匿名使用统计上报（本发行版默认 true；可用 -disable-stats=false
         或 DISABLE_STATS=0 开启，且仍需配置 STATS_ENDPOINT）
