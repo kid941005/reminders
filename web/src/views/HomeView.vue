@@ -528,7 +528,7 @@ function formatDue(value: string | null | undefined) {
   const day = sameDay ? '今天' : d.toDateString() === tomorrow.toDateString() ? '明天' : new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(d)
   return `${day} ${d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })}`
 }
-function channelName(ch: ReminderChannel) { return ({ inapp: '站内', email: '邮件', sms: '短信', feishu: '飞书', qq: 'QQ', dingtalk: '钉钉' } as Record<string, string>)[ch] || ch }
+function channelName(ch: ReminderChannel) { return ({ inapp: '站内', email: '邮件', sms: '短信', feishu: '飞书', qq: 'QQ', dingtalk: '钉钉', bark: 'Bark' } as Record<string, string>)[ch] || ch }
 function ruleLabel(rule: string) { return ({ daily: '每天', weekly: '每周', monthly: '每月', yearly: '每年' } as Record<string, string>)[rule] || '循环' }
 function listColor(color: string) { return ({ blue: '#3182f6', violet: '#8b5cf6', rose: '#f43f5e', amber: '#f59e0b', emerald: '#10b981' } as Record<string, string>)[color] || '#3182f6' }
 function changed() { window.dispatchEvent(new CustomEvent('reminder-data-changed')) }

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
@@ -174,6 +175,9 @@ func handleBindChannel(db *gorm.DB) gin.HandlerFunc {
 		}
 		var in struct {
 			Target string `json:"target"`
+			// Secret 目前只被钉钉使用：加签模式下机器人要求每次请求附带签名，
+			// 密钥与 webhook 一起序列化进同一个加密字段，不单独建表。
+			Secret string `json:"secret"`
 		}
 		if err := c.ShouldBindJSON(&in); err != nil {
 			response.ErrorBadRequest(c, "绑定参数无效")
@@ -186,6 +190,20 @@ func handleBindChannel(db *gorm.DB) gin.HandlerFunc {
 		if err != nil {
 			response.ErrorBadRequest(c, err.Error())
 			return
+		}
+		if channel == ChannelDingTalk {
+			if secret := strings.TrimSpace(in.Secret); secret != "" {
+				if !strings.HasPrefix(secret, "SEC") || len(secret) > 128 {
+					response.ErrorBadRequest(c, "钉钉加签密钥格式无效（应为 SEC 开头的一串字符）")
+					return
+				}
+				payload, marshalErr := json.Marshal(dingTalkTarget{Webhook: target, Secret: secret})
+				if marshalErr != nil {
+					response.ErrorInternal(c, "保存绑定失败")
+					return
+				}
+				target = string(payload)
+			}
 		}
 		// Email allows several receiving mailboxes per user; every other
 		// channel keeps the single-binding replace semantics below.
@@ -366,7 +384,8 @@ func channelStatuses(db *gorm.DB, userID uint) []ChannelStatus {
 		{Channel: ChannelSMS, Label: "手机短信", Configured: smsConfigured(db), Description: "无需打开应用即可收到"},
 		{Channel: ChannelFeishu, Label: "飞书机器人", Configured: feishuConfigured(db), Description: "由企业自建应用机器人单聊提醒"},
 		{Channel: ChannelQQ, Label: "QQ 机器人", Configured: qqConfigured(db), Description: "通过 QQ 机器人主动单聊提醒"},
-		{Channel: ChannelDingTalk, Label: "钉钉群机器人", Configured: true, Description: "个人群自定义机器人，无需创建钉钉应用"},
+		{Channel: ChannelDingTalk, Label: "钉钉群机器人", Configured: true, Description: "个人群自定义机器人，支持关键词或加签，无需创建钉钉应用"},
+		{Channel: ChannelBark, Label: "Bark", Configured: true, Description: "推送到 iPhone 的 Bark 客户端，支持官方服务与自建服务器"},
 	}
 	for i := range defs {
 		if defs[i].Channel == ChannelQQ {
@@ -427,6 +446,8 @@ func normalizeTarget(channel, raw string) (string, error) {
 		}
 	case ChannelDingTalk:
 		return normalizeDingTalkWebhook(target)
+	case ChannelBark:
+		return normalizeBarkURL(target)
 	default:
 		return "", errors.New("不支持的通知渠道")
 	}
@@ -452,6 +473,17 @@ func maskTarget(channel, target string) string {
 		}
 	case ChannelDingTalk:
 		return "钉钉机器人 Webhook（已加密）"
+	case ChannelBark:
+		// 只露服务器与设备 key 的尾部，方便用户分辨是哪台设备，不泄漏完整 key。
+		endpoint, err := url.Parse(target)
+		if err != nil || endpoint.Host == "" {
+			return "Bark 设备（已加密）"
+		}
+		key := strings.Trim(endpoint.Path, "/")
+		if len(key) > 4 {
+			key = "…" + key[len(key)-4:]
+		}
+		return endpoint.Host + "/" + key
 	default:
 		if len(target) > 10 {
 			return target[:5] + "…" + target[len(target)-4:]
@@ -479,6 +511,61 @@ func normalizeDingTalkWebhook(raw string) (string, error) {
 	endpoint.Host = "oapi.dingtalk.com"
 	endpoint.RawQuery = url.Values{"access_token": []string{tokens[0]}}.Encode()
 	return endpoint.String(), nil
+}
+
+// dingTalkTarget 是钉钉渠道在 ChannelBinding.Target 里保存的明文结构。
+//
+// 早期版本只存一个 webhook 字符串（只支持「自定义关键词」安全设置）。加签模式
+// 需要额外保存密钥，于是改为 JSON；读取时解析失败就按纯 URL 处理，老绑定无需
+// 迁移即可继续工作。
+type dingTalkTarget struct {
+	Webhook string `json:"webhook"`
+	Secret  string `json:"secret,omitempty"`
+}
+
+func parseDingTalkTarget(raw string) (webhook, secret string) {
+	var parsed dingTalkTarget
+	if err := json.Unmarshal([]byte(raw), &parsed); err == nil && parsed.Webhook != "" {
+		return parsed.Webhook, parsed.Secret
+	}
+	return raw, ""
+}
+
+// signDingTalkWebhook 按钉钉自定义机器人「加签」规则追加 timestamp 与 sign：
+// 以密钥为 HMAC-SHA256 的 key，对 "<毫秒时间戳>\n<密钥>" 签名后 base64 + URL 编码。
+func signDingTalkWebhook(webhook, secret string) string {
+	timestamp := strconv.FormatInt(time.Now().UnixMilli(), 10)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(timestamp + "\n" + secret))
+	sign := url.QueryEscape(base64.StdEncoding.EncodeToString(mac.Sum(nil)))
+	separator := "?"
+	if strings.Contains(webhook, "?") {
+		separator = "&"
+	}
+	return webhook + separator + "timestamp=" + timestamp + "&sign=" + sign
+}
+
+// normalizeBarkURL accepts a Bark push endpoint: either the official
+// api.day.app/{device_key} or a self-hosted server with the same shape.
+//
+// 与钉钉不同，Bark 的服务器地址由用户自建、没有固定域名，所以 host 不能写死。
+// 代价是这个绑定本身就是「让服务器向用户指定的地址发一次请求」的能力——与短信
+// webhook 属于同一类权衡：目标由用户自己填写、只用于推送，服务端不会把响应体
+// 回显给调用方。这里仍然限制协议、拒绝带 query 的地址，避免把参数拼进推送内容。
+func normalizeBarkURL(raw string) (string, error) {
+	endpoint, err := url.ParseRequestURI(strings.TrimSpace(raw))
+	if err != nil || (endpoint.Scheme != "http" && endpoint.Scheme != "https") ||
+		endpoint.Host == "" || endpoint.User != nil || endpoint.Fragment != "" {
+		return "", errors.New("请输入有效的 Bark 地址，例如 https://api.day.app/你的设备Key")
+	}
+	if endpoint.RawQuery != "" {
+		return "", errors.New("Bark 地址请只填到设备 Key 为止，不要带查询参数")
+	}
+	path := strings.Trim(endpoint.Path, "/")
+	if path == "" || len(path) > 200 {
+		return "", errors.New("Bark 地址里缺少设备 Key")
+	}
+	return endpoint.Scheme + "://" + endpoint.Host + "/" + path, nil
 }
 
 func encryptionKey(db *gorm.DB) ([]byte, error) {
@@ -592,6 +679,8 @@ func sendChannel(ctx context.Context, db *gorm.DB, channel string, userID uint, 
 		return sendQQ(ctx, db, target, item, idempotencyKey)
 	case ChannelDingTalk:
 		return sendDingTalk(ctx, db, target, item)
+	case ChannelBark:
+		return sendBark(ctx, db, target, item)
 	default:
 		return sendResult{}, &deliveryError{Code: "CHANNEL_UNSUPPORTED", Message: "不支持的通知渠道", Permanent: true}
 	}
@@ -766,7 +855,11 @@ func sendSMSWebhook(ctx context.Context, db *gorm.DB, target string, item Remind
 // sendDingTalk delivers to a user-owned custom group robot. The user creates
 // that robot in DingTalk and pastes only its official webhook; no app ID,
 // OAuth callback, or organisation-wide administrator configuration is needed.
-func sendDingTalk(ctx context.Context, db *gorm.DB, webhook string, item Reminder) (sendResult, error) {
+func sendDingTalk(ctx context.Context, db *gorm.DB, target string, item Reminder) (sendResult, error) {
+	webhook, secret := parseDingTalkTarget(target)
+	if secret != "" {
+		webhook = signDingTalkWebhook(webhook, secret)
+	}
 	var result struct {
 		ErrCode *int   `json:"errcode"`
 		ErrMsg  string `json:"errmsg"`
@@ -784,7 +877,47 @@ func sendDingTalk(ctx context.Context, db *gorm.DB, webhook string, item Reminde
 		}
 		return sendResult{}, &deliveryError{
 			Code:      "DINGTALK_SEND_FAILED",
-			Message:   "钉钉机器人拒绝了消息，请检查机器人仍在群内、Webhook 是否完整，并确认安全关键词为“提醒”（错误码：" + code + "）",
+			Message:   "钉钉机器人拒绝了消息，请检查机器人仍在群内、Webhook 是否完整，并确认安全设置与这里填写的一致（关键词“提醒”或加签密钥；错误码：" + code + "）",
+			Permanent: true,
+		}
+	}
+	return sendResult{}, nil
+}
+
+// sendBark pushes to an iPhone Bark client. The classic endpoint is
+// GET {server}/{device_key}/{title}/{body}; the device key is already part of
+// the stored base URL, so only title and body need escaping.
+//
+// 用 GET 而不是 POST：这是 Bark 唯一在官方服务与各版本自建服务上都成立的
+// 推送格式。正文因此必须控制长度——提醒标题与通知正文本来就短，这里再截断
+// 一次，避免中文经 URL 编码后把地址撑到服务器拒绝的长度。
+func sendBark(ctx context.Context, db *gorm.DB, base string, item Reminder) (sendResult, error) {
+	title := notificationBrand(db)
+	body := truncateRunes(item.Title, 100)
+	if detail := notificationBody(item); detail != "" {
+		body += "\n" + detail
+	}
+	if item.Notes != "" {
+		body += "\n" + truncateRunes(item.Notes, 200)
+	}
+	query := url.Values{}
+	query.Set("group", "提醒事项")
+	query.Set("isArchive", "1")
+	endpoint := strings.TrimSuffix(base, "/") + "/" +
+		url.PathEscape(title) + "/" + url.PathEscape(body) + "?" + query.Encode()
+
+	var result struct {
+		Code    *int   `json:"code"`
+		Message string `json:"message"`
+	}
+	if err := getJSON(ctx, endpoint, &result); err != nil {
+		return sendResult{}, err
+	}
+	// Bark 用 200 表示成功；缺 code 字段时按成功处理（部分自建版本只回 message）。
+	if result.Code != nil && *result.Code != 200 {
+		return sendResult{}, &deliveryError{
+			Code:      "BARK_SEND_FAILED",
+			Message:   "Bark 拒绝了推送，请检查设备 Key 是否正确、Bark App 是否允许通知（返回：" + truncateRunes(result.Message, 80) + "）",
 			Permanent: true,
 		}
 	}
@@ -1046,15 +1179,30 @@ func sendQQMessage(ctx context.Context, token string, values map[string]string, 
 }
 
 func postJSON(ctx context.Context, endpoint, token string, payload, out interface{}) error {
-	body, err := json.Marshal(payload)
+	return doJSON(ctx, http.MethodPost, endpoint, token, payload, out)
+}
+
+// getJSON 用于只接受 GET 的推送接口（Bark 的 /{key}/{title}/{body} 就是这种）。
+func getJSON(ctx context.Context, endpoint string, out interface{}) error {
+	return doJSON(ctx, http.MethodGet, endpoint, "", nil, out)
+}
+
+func doJSON(ctx context.Context, method, endpoint, token string, payload, out interface{}) error {
+	var bodyReader io.Reader
+	if payload != nil {
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return err
+		}
+		bodyReader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, endpoint, bodyReader)
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
-	if err != nil {
-		return err
+	if payload != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
-	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		if strings.Contains(token, " ") {
 			req.Header.Set("Authorization", token)

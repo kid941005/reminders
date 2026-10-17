@@ -9,11 +9,12 @@ const (
 	ChannelFeishu   = "feishu"
 	ChannelQQ       = "qq"
 	ChannelDingTalk = "dingtalk"
+	ChannelBark     = "bark"
 )
 
 var supportedChannels = map[string]bool{
 	ChannelInApp: true, ChannelEmail: true, ChannelSMS: true,
-	ChannelFeishu: true, ChannelQQ: true, ChannelDingTalk: true,
+	ChannelFeishu: true, ChannelQQ: true, ChannelDingTalk: true, ChannelBark: true,
 }
 
 type List struct {

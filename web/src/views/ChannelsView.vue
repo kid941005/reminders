@@ -168,16 +168,22 @@
             <li>在电脑端钉钉新建一个专用提醒群，或打开现有群。</li>
             <li>不希望他人看到提醒时，请只保留自己在群内：可新建个人群，或将其他成员移出。</li>
             <li>打开群设置，进入“群机器人 / 机器人”，添加“自定义机器人”。</li>
-            <li>安全设置选择“自定义关键词”，填写 <strong class="text-foreground">提醒</strong>，复制 Webhook 地址。</li>
-            <li>粘贴到下方并发送测试；地址仅加密保存，不会显示在页面或日志中。</li>
+            <li>安全设置二选一：选「自定义关键词」填 <strong class="text-foreground">提醒</strong>；或选「加签」并复制密钥（以 SEC 开头）。</li>
+            <li>复制 Webhook 地址，粘贴到下方；选了加签的，把密钥一并填入。</li>
+            <li>发送测试确认能收到；地址与密钥仅加密保存，不会显示在页面或日志中。</li>
           </ol>
           <p class="mt-3 text-[11px] leading-5 text-sky-700 dark:text-sky-200">提醒会发送给该群的所有当前成员；群内只有你一人时，只有你能收到。</p>
-          <form class="mt-4" @submit.prevent="bind(channel)">
-            <label class="text-[11px] font-bold text-muted-foreground">钉钉机器人 Webhook 地址</label>
-            <div class="mt-2 flex gap-2">
-              <input v-model.trim="targets[channel.channel]" class="bind-input" type="url" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." autocomplete="off" />
-              <button class="bind-button" :disabled="busy === channel.channel || !targets[channel.channel]?.trim()">{{ busy === channel.channel ? '绑定中' : '绑定' }}</button>
+          <form class="mt-4 space-y-3" @submit.prevent="bind(channel)">
+            <div>
+              <label class="text-[11px] font-bold text-muted-foreground">钉钉机器人 Webhook 地址</label>
+              <input v-model.trim="targets[channel.channel]" class="bind-input mt-2 w-full" type="url" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." autocomplete="off" />
             </div>
+            <div>
+              <label class="text-[11px] font-bold text-muted-foreground">加签密钥 <small class="font-normal">可选</small></label>
+              <input v-model.trim="secrets[channel.channel]" class="bind-input mt-2 w-full" type="password" placeholder="安全设置选「加签」时填写，以 SEC 开头" autocomplete="new-password" />
+              <p class="mt-1 text-[10px] leading-4 text-muted-foreground">留空则按「自定义关键词」模式发送，消息里已固定包含“提醒”二字。</p>
+            </div>
+            <button class="bind-button w-full" :disabled="busy === channel.channel || !targets[channel.channel]?.trim()">{{ busy === channel.channel ? '绑定中' : '绑定' }}</button>
           </form>
         </div>
 
@@ -189,6 +195,7 @@
           </div>
           <p v-if="channel.channel === 'email'" class="mt-2 text-[10px] leading-4 text-muted-foreground">填写提醒实际送达的接收邮箱。它可以与发件邮箱相同，也可以不同；绑定后还可以继续添加多个。</p>
           <p v-else-if="channel.channel === 'feishu'" class="mt-2 text-[10px] leading-4 text-muted-foreground">填写你在飞书中要接收提醒消息的工作邮箱或手机号。</p>
+          <p v-else-if="channel.channel === 'bark'" class="mt-2 text-[10px] leading-4 text-muted-foreground">在 Bark App 首页复制带设备 Key 的完整推送地址粘贴到这里；自建服务器填你自己的域名，例如 https://bark.example.com/你的Key。</p>
         </form>
 
         <p v-if="channel.last_error_code" class="mt-3 text-xs text-rose-500">{{ channel.last_error_code }}</p>
@@ -213,6 +220,8 @@ import {
 
 const channels = ref<(ChannelStatus & { last_error_code?: string })[]>([])
 const targets = reactive<Record<string, string>>({})
+// 钉钉加签密钥：仅该渠道使用，绑定成功后清空，不留在前端内存里。
+const secrets = reactive<Record<string, string>>({})
 const feishuConfig = reactive({ app_id: '', app_secret: '' })
 const qqBindCode = ref('')
 const notificationBrand = ref('提醒事项')
@@ -269,8 +278,9 @@ async function saveBrand() {
 async function bind(channel: ChannelStatus) {
   busy.value = channel.channel
   try {
-    await bindChannel(channel.channel, targets[channel.channel] || '')
+    await bindChannel(channel.channel, targets[channel.channel] || '', secrets[channel.channel])
     targets[channel.channel] = ''
+    secrets[channel.channel] = ''
     await load()
     show(channel.channel === 'email' ? '接收邮箱已添加' : `${channel.label}已绑定`)
   } catch (err: any) { show(err.response?.data?.message || '绑定失败', 'error') }
@@ -384,8 +394,8 @@ function statusClass(channel: ChannelStatus) {
   if (!channel.configured) return 'warning'
   return 'muted'
 }
-function inputLabel(channel: ReminderChannel) { return ({ email: '接收邮箱（提醒送达）', sms: '中国大陆手机号', feishu: '接收提醒的飞书账号', qq: 'QQ 用户 OpenID', dingtalk: '钉钉机器人 Webhook 地址' } as Record<string, string>)[channel] || '接收目标' }
-function placeholder(channel: ReminderChannel) { return ({ email: '请输入提醒接收邮箱', sms: '13800138000', feishu: '接收提醒的工作邮箱或手机号', qq: '机器人单聊事件中的 user_openid', dingtalk: 'https://oapi.dingtalk.com/robot/send?access_token=...' } as Record<string, string>)[channel] || '' }
+function inputLabel(channel: ReminderChannel) { return ({ email: '接收邮箱（提醒送达）', sms: '中国大陆手机号', feishu: '接收提醒的飞书账号', qq: 'QQ 用户 OpenID', dingtalk: '钉钉机器人 Webhook 地址', bark: 'Bark 推送地址（含设备 Key）' } as Record<string, string>)[channel] || '接收目标' }
+function placeholder(channel: ReminderChannel) { return ({ email: '请输入提醒接收邮箱', sms: '13800138000', feishu: '接收提醒的工作邮箱或手机号', qq: '机器人单聊事件中的 user_openid', dingtalk: 'https://oapi.dingtalk.com/robot/send?access_token=...', bark: 'https://api.day.app/你的设备Key' } as Record<string, string>)[channel] || '' }
 function icon(channel: ReminderChannel) {
   const icons: Record<string, string> = {
     inapp: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke-width="1.8" stroke-linecap="round"/></svg>',
@@ -394,6 +404,7 @@ function icon(channel: ReminderChannel) {
 	    feishu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 5.5 12 3l5 2.5v5L12 13 7 10.5v-5ZM7 13.5l5 2.5 5-2.5v5L12 21l-5-2.5v-5Z" stroke-width="1.7" stroke-linejoin="round"/></svg>',
 	    qq: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 9c0-4 1.8-6 4-6s4 2 4 6c0 1.5.5 3 1.5 4.5.8 1.2 1.2 2.4.5 3.5-.4.6-1 .8-1.8.7-.7 2-2.2 3.3-4.2 3.3s-3.5-1.3-4.2-3.3c-.8.1-1.4-.1-1.8-.7-.7-1.1-.3-2.3.5-3.5C7.5 12 8 10.5 8 9Z" stroke-width="1.7"/></svg>',
 	    dingtalk: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M5 5h14v10H9l-4 4V5Z" stroke-width="1.8" stroke-linejoin="round"/><path d="M8 9h8M8 12h5" stroke-width="1.8" stroke-linecap="round"/></svg>',
+	    bark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="7" y="3" width="10" height="18" rx="2.5" stroke-width="1.8"/><path d="M11 18h2" stroke-width="1.8" stroke-linecap="round"/><path d="M12 7v5M12 7l2 2M12 9.5 10 7.5" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   }
   return icons[channel] || icons.inapp
 }
@@ -406,7 +417,7 @@ onBeforeUnmount(() => { if (qqRefreshTimer) window.clearInterval(qqRefreshTimer)
 .channel-card { @apply rounded-[24px] border border-border/70 bg-surface/85 p-4 shadow-[0_16px_44px_-34px_rgba(15,23,42,.55)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-brand-500/15 sm:p-5; }
 .channel-icon { @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl; }
 .channel-icon :deep(svg) { @apply h-5 w-5 sm:h-6 sm:w-6; }
-.channel-icon.inapp { @apply bg-blue-500/10 text-blue-500; }.channel-icon.email { @apply bg-violet-500/10 text-violet-500; }.channel-icon.sms { @apply bg-amber-500/10 text-amber-500; }.channel-icon.feishu { @apply bg-cyan-500/10 text-cyan-500; }.channel-icon.qq { @apply bg-rose-500/10 text-rose-500; }.channel-icon.dingtalk { @apply bg-sky-500/10 text-sky-500; }
+.channel-icon.inapp { @apply bg-blue-500/10 text-blue-500; }.channel-icon.email { @apply bg-violet-500/10 text-violet-500; }.channel-icon.sms { @apply bg-amber-500/10 text-amber-500; }.channel-icon.feishu { @apply bg-cyan-500/10 text-cyan-500; }.channel-icon.qq { @apply bg-rose-500/10 text-rose-500; }.channel-icon.dingtalk { @apply bg-sky-500/10 text-sky-500; }.channel-icon.bark { @apply bg-emerald-500/10 text-emerald-500; }
 .status-pill { @apply rounded-full px-2 py-0.5 text-[9px] font-extrabold; }.status-pill.success { @apply bg-emerald-500/10 text-emerald-500; }.status-pill.warning { @apply bg-amber-500/10 text-amber-500; }.status-pill.muted { @apply bg-muted text-muted-foreground; }
 .toggle { @apply relative h-7 w-12 shrink-0 rounded-full bg-muted transition; }.toggle span { @apply absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition; }.toggle.on { @apply bg-emerald-500; }.toggle.on span { transform: translateX(20px); }
 .bind-input { @apply h-10 min-w-0 flex-1 rounded-xl border border-border bg-surface px-3.5 text-sm outline-none focus:border-brand-500/40 focus:ring-4 focus:ring-brand-500/10 sm:h-11 sm:rounded-2xl; }

@@ -1,6 +1,6 @@
 import request from './request'
 
-export type ReminderChannel = 'inapp' | 'email' | 'sms' | 'feishu' | 'qq' | 'dingtalk'
+export type ReminderChannel = 'inapp' | 'email' | 'sms' | 'feishu' | 'qq' | 'dingtalk' | 'bark'
 
 export interface ReminderList {
   id: number
@@ -134,8 +134,9 @@ export const markAllNotificationsRead = () => request.post('/api/reminder/notifi
 export const getRevision = () => request.get('/api/reminder/revision')
 
 export const getChannelStatuses = () => request.get('/api/reminder/channels')
-export const bindChannel = (channel: ReminderChannel, target: string) =>
-  request.put(`/api/reminder/channels/${channel}`, { target })
+// secret 目前只被钉钉加签使用：留空表示沿用「自定义关键词」安全设置。
+export const bindChannel = (channel: ReminderChannel, target: string, secret?: string) =>
+  request.put(`/api/reminder/channels/${channel}`, secret ? { target, secret } : { target })
 export const toggleChannel = (channel: ReminderChannel, enabled: boolean) =>
   request.patch(`/api/reminder/channels/${channel}`, { enabled })
 export const unbindChannel = (channel: ReminderChannel) =>
