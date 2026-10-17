@@ -239,6 +239,7 @@ import {
   restoreReminder, snoozeReminder, updateReminder,
   type ChannelStatus, type ReminderChannel, type ReminderItem, type ReminderList, type SaveReminderInput
 } from '../api/reminder'
+import { getUserConfigMeta } from '../api/config'
 
 const route = useRoute()
 const router = useRouter()
@@ -263,6 +264,20 @@ const blankInput = (): SaveReminderInput => ({
 const quick = reactive<SaveReminderInput>(blankInput())
 const editing = reactive<SaveReminderInput & { id?: number }>(blankInput())
 let quickChannelsTouched = false
+// 用户在设置页配置的默认渠道（reminder_default_channels），随 loadData 刷新。
+// 单独存一份是为了提交后能立即重新应用，而不必再发一次请求。
+const defaultChannels = ref<string[]>([])
+
+// 把「配置的默认渠道 ∩ 当前可用渠道」写进新建表单。只保留已绑定且启用的
+// 渠道：配置里写了但没绑定的必须丢掉，否则新建的提醒会带上一个永远发不出去
+// 的渠道；交集为空时回退站内，与后端该项的默认值一致。
+function applyDefaultChannels() {
+  const picked = selectableChannels.value
+    .filter(channel => channel.channel === 'inapp' || (channel.bound && channel.status === 'active'))
+    .map(channel => channel.channel)
+    .filter(channel => defaultChannels.value.includes(channel))
+  quick.channels = picked.length ? picked : ['inapp']
+}
 
 const view = computed(() => String(route.meta.reminderView || 'today'))
 const selectedListID = computed(() => route.name === 'ReminderList' ? Number(route.params.id) : undefined)
@@ -319,14 +334,18 @@ watch(() => route.fullPath, loadRouteData)
 async function loadData() {
   loading.value = true
   try {
-    const [listRes, channelRes] = await Promise.all([getLists(), getChannelStatuses()])
+    const [listRes, channelRes, configRes] = await Promise.all([
+      getLists(), getChannelStatuses(), getUserConfigMeta().catch(() => null),
+    ])
     lists.value = listRes.data.data || []
     selectableChannels.value = channelRes.data.data || []
     if (!quickChannelsTouched) {
-      quick.channels = selectableChannels.value
-        .filter(channel => channel.channel === 'inapp' || (channel.bound && channel.status === 'active'))
-        .map(channel => channel.channel)
-      if (!quick.channels.length) quick.channels = ['inapp']
+      // 默认渠道取自用户级配置 reminder_default_channels（逗号分隔），
+      // 与当前可用渠道取交集后写进表单（见 applyDefaultChannels）。
+      defaultChannels.value = String(
+        (configRes?.data?.data || []).find((item: any) => item.key === 'reminder_default_channels')?.value ?? ''
+      ).split(',').map(value => value.trim()).filter(Boolean)
+      applyDefaultChannels()
     }
     if (!quick.list_id) quick.list_id = selectedListID.value || lists.value.find(x => x.is_default)?.id || lists.value[0]?.id || 0
     await loadItems()
@@ -365,6 +384,7 @@ async function submitQuick() {
     await createReminder({ ...quick, title: quick.title.trim() })
     quickChannelsTouched = false
     Object.assign(quick, blankInput(), { list_id: selectedListID.value || lists.value.find(x => x.is_default)?.id || lists.value[0]?.id || 0 })
+    applyDefaultChannels()
     preset.value = ''
     quickExpanded.value = false
     quickFocused.value = false

@@ -53,7 +53,7 @@ func init() {
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
 		Key: "reminder_default_channels", Scope: sysconfig.ScopeUser, Type: sysconfig.TypeString,
 		Default: "inapp", Group: "notification", Label: "默认提醒渠道",
-		Description: "新提醒默认使用的渠道，多个渠道以英文逗号分隔",
+		Description: "新建提醒时默认勾选的通知方式；未绑定的渠道会自动跳过，站内消息始终保留",
 	})
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
 		Key: "reminder_all_day_time", Scope: sysconfig.ScopeUser, Type: sysconfig.TypeString,

@@ -83,6 +83,31 @@
               class="input-field !py-2 flex-1"
             />
 
+            <!-- reminder_default_channels: 渠道多选，底层仍是逗号分隔字符串 -->
+            <div
+              v-else-if="item.key === 'reminder_default_channels'"
+              class="flex flex-wrap gap-1.5 flex-1"
+            >
+              <button
+                v-for="opt in defaultChannelOptions"
+                :key="opt.value"
+                type="button"
+                :disabled="getSaving(item) || opt.locked"
+                :title="opt.locked ? '站内消息是所有提醒的兜底通道，不能取消' : ''"
+                @click="toggleDefaultChannel(item, opt.value)"
+                :class="[
+                  'rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors',
+                  isDefaultChannelOn(item, opt.value)
+                    ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300'
+                    : 'border-border text-muted-foreground hover:bg-muted',
+                  opt.locked ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer',
+                  getSaving(item) ? 'opacity-60' : '',
+                ]"
+              >
+                {{ opt.label }}
+              </button>
+            </div>
+
             <!-- string: text input -->
             <input
               v-else
@@ -130,6 +155,7 @@ const groupTitleMap: Record<string, string> = {
   general: '站点设置',
   access: '访问控制',
   appearance: '外观',
+  notification: '提醒通知',
   system: '系统维护',
 }
 
@@ -139,6 +165,37 @@ const selectOptionLabelMap: Record<string, Record<string, string>> = {
     light: '浅色',
     dark: '深色',
   },
+}
+
+// 默认提醒渠道的可选项。顺序即保存后的书写顺序，站内固定在最前。
+// inapp 不需要绑定、也不消耗外部配额，是所有提醒的兜底通道，因此不可取消。
+const defaultChannelOptions = [
+  { value: 'inapp', label: '站内', locked: true },
+  { value: 'email', label: '邮件', locked: false },
+  { value: 'sms', label: '短信', locked: false },
+  { value: 'feishu', label: '飞书', locked: false },
+  { value: 'qq', label: 'QQ', locked: false },
+  { value: 'dingtalk', label: '钉钉', locked: false },
+  { value: 'bark', label: 'Bark', locked: false },
+]
+
+function parseChannelList(raw: string): string[] {
+  return raw.split(',').map(value => value.trim()).filter(Boolean)
+}
+
+function isDefaultChannelOn(item: ConfigMeta, value: string): boolean {
+  return parseChannelList(getEditValue(item)).includes(value)
+}
+
+// 切换一个渠道后重新拼成逗号分隔字符串。始终保留站内并把它排在最前，
+// 避免用户取消全部渠道后新建的提醒一条通知都没有。
+function toggleDefaultChannel(item: ConfigMeta, value: string) {
+  const current = parseChannelList(getEditValue(item))
+  if (value === 'inapp') return
+  const next = current.includes(value)
+    ? current.filter(entry => entry !== value)
+    : [...current, value]
+  setEditValue(item, ['inapp', ...next.filter(entry => entry !== 'inapp')].join(','))
 }
 
 function groupTitle(key: string): string {
