@@ -19,7 +19,6 @@ import (
 	"smallgo/server/database"
 	_ "smallgo/server/qrcode"
 	"smallgo/server/sysconfig"
-	"smallgo/server/user"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
