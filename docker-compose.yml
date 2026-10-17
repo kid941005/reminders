@@ -1,7 +1,7 @@
 services:
   kid941005-reminders:
     # Tracks the newest published image.
-    image: kid941005/reminders:latest
+    image: ghcr.io/kid941005/reminders:latest
     container_name: kid941005-reminders
     ports:
       - "8906:8906"

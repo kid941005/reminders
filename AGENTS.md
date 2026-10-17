@@ -152,7 +152,7 @@ dark → light → system → dark
 
 ## 8. 本发行分支特有约束
 
-- 发行标识：`kid941005-reminders`，镜像 `kid941005/reminders`。
+- 发行标识：`kid941005-reminders`，镜像 `ghcr.io/kid941005/reminders`。
   改这些要同步 `app.json`、`docker-compose.yml`、`Makefile`、`scripts/*.sh` 与 `server/version/version.go` 的 `AppID`。
 - **仅支持 Docker 部署**：飞牛 fnOS 集成（网关免登、`fnpack` 应用包、安装向导）已整体移除，
   不要再引入 `-fnos-app` 之类的运行形态分支；登录只有用户名密码一种。

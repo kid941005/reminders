@@ -125,7 +125,7 @@ fi
 # 上游脚本原本读取 deploy/docker-compose.yml，但仓库里从未提交 deploy/ 目录，
 # 导致 PACKAGE_TARGET=apps 在最后一步失败。根目录的 docker-compose.yml 内容
 # 等价（镜像指向 :latest），直接用它派生，不再依赖额外目录。
-sed "s|kid941005/reminders:latest|kid941005/reminders:${VERSION}|" docker-compose.yml > "${BUILD_DIR}/docker-compose.yml"
+sed "s|ghcr.io/kid941005/reminders:latest|ghcr.io/kid941005/reminders:${VERSION}|" docker-compose.yml > "${BUILD_DIR}/docker-compose.yml"
 cp docker-compose.yml "${BUILD_DIR}/docker-compose.latest.yml"
 echo "Copied docker-compose.yml and docker-compose.latest.yml"
 

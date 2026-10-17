@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-IMAGE="kid941005/reminders"
+IMAGE="ghcr.io/kid941005/reminders"
 BUILDER="kid941005-reminders-multiarch"
 VERSION="$(cat VERSION | tr -d '\n')"
 BUILD_TIME="$(date +%Y-%m-%dT%H:%M:%S)"

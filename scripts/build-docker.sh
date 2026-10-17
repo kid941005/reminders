@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-IMAGE="kid941005/reminders"
+IMAGE="ghcr.io/kid941005/reminders"
 VERSION="$(cat VERSION | tr -d '\n')"
 DOCKER_ARCH="$(docker version --format '{{.Server.Arch}}')"
 case "$DOCKER_ARCH" in

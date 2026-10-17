@@ -1,5 +1,5 @@
 APP_NAME := reminder
-DOCKER_IMAGE := kid941005/reminders
+DOCKER_IMAGE := ghcr.io/kid941005/reminders
 PACKAGE_TARGET ?= apps
 PORT ?= 8906
 DEV_DATA_DIR ?= ./data

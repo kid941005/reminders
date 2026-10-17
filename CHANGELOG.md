@@ -2,6 +2,23 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.5.2（2026-10-17）
+
+### 变更
+
+- **镜像发布改到 GitHub Container Registry**：镜像地址由 `kid941005/reminders` 改为
+  `ghcr.io/kid941005/reminders`。原因是 Docker Hub 需要在仓库里额外配置用户名与访问令牌，
+  而 ghcr.io 用 CI 自带的 `GITHUB_TOKEN` 即可推送，发布流程不再依赖人工配置。
+- CI 的镜像 job 现在默认推 ghcr.io；如果同时配置了 `DOCKERHUB_USERNAME` /
+  `DOCKERHUB_TOKEN`，会复用同一份构建缓存额外推一份到 Docker Hub。
+- `docker-compose.yml`、`Makefile`、打包脚本与 README 中的镜像地址同步更新。
+
+### 注意
+
+- ghcr.io 的包首次推送后**默认是私有的**，需到 Packages → Package settings 手动改为
+  Public，匿名拉取才能成功。
+- 之前从 Docker Hub 拉取的用户需要改用新地址，数据卷与端口不变。
+
 ## v0.5.1（2026-10-17）
 
 ### 新增

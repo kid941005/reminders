@@ -16,15 +16,20 @@
 
 | 渠道 | 获取方式 |
 |---|---|
-| Docker 镜像 | `docker pull kid941005/reminders:latest`（amd64 / arm64 多平台） |
+| Docker 镜像 | `docker pull ghcr.io/kid941005/reminders:latest`（amd64 / arm64 多平台） |
 | GitHub Releases | <https://github.com/kid941005/reminders/releases> —— 各平台压缩包与 `docker-compose.yml` |
+
+> 镜像托管在 GitHub Container Registry。**首次发布后包默认是私有的**，需要到
+> 仓库右侧 Packages → `reminders` → Package settings 里把可见性改为 Public，
+> 匿名用户才能拉取；私有状态下需先 `docker login ghcr.io` 并用自己的 GitHub
+> token 认证。镜像由 tag 触发的 CI 自动构建，支持 `linux/amd64` 与 `linux/arm64`。
 
 快速启动：
 
 ```bash
 docker run -d --name reminders -p 8906:8906 \
   -v reminders-data:/app/data \
-  kid941005/reminders:latest
+  ghcr.io/kid941005/reminders:latest
 ```
 
 或使用仓库自带的 compose：
