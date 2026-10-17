@@ -1,7 +1,7 @@
 #!/bin/bash
 # 全平台编译打包——产物格式对齐 brick-game 项目 release/<VERSION>/ 发行目录规范：
-#   techfunway-reminders-<VERSION>-{linux,darwin}-{amd64,arm64}.tar.gz
-#   techfunway-reminders-<VERSION>-windows-amd64.zip
+#   kid941005-reminders-<VERSION>-{linux,darwin}-{amd64,arm64}.tar.gz
+#   kid941005-reminders-<VERSION>-windows-amd64.zip
 #   docker-compose.yml（镜像 tag 钉死为当前版本）/ docker-compose.latest.yml
 #   CHANGELOG.md / screenshots/ + screenshots-<VERSION>.zip
 # 发行包必备文件清单见 AGENTS.md「打包与发行」一节，两个打包脚本共同保证。
@@ -18,7 +18,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 APP_NAME="reminder"
-PACKAGE_PREFIX="techfunway-reminders"
+PACKAGE_PREFIX="kid941005-reminders"
 VERSION=$(cat VERSION | tr -d '\n')
 BUILD_TIME=$(date +%Y-%m-%dT%H:%M:%S)
 GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -121,8 +121,12 @@ fi
 
 # 部署 compose 文件随发行产物分发；版本文件中的镜像 tag 替换为当前版本，
 # 拷贝到目标主机后 docker compose up -d 即可运行；latest 文件原样分发。
-sed "s|techfunways/reminders:latest|techfunways/reminders:${VERSION}|" deploy/docker-compose.yml > "${BUILD_DIR}/docker-compose.yml"
-cp deploy/docker-compose.latest.yml "${BUILD_DIR}/docker-compose.latest.yml"
+#
+# 上游脚本原本读取 deploy/docker-compose.yml，但仓库里从未提交 deploy/ 目录，
+# 导致 PACKAGE_TARGET=apps 在最后一步失败。根目录的 docker-compose.yml 内容
+# 等价（镜像指向 :latest），直接用它派生，不再依赖额外目录。
+sed "s|kid941005/reminders:latest|kid941005/reminders:${VERSION}|" docker-compose.yml > "${BUILD_DIR}/docker-compose.yml"
+cp docker-compose.yml "${BUILD_DIR}/docker-compose.latest.yml"
 echo "Copied docker-compose.yml and docker-compose.latest.yml"
 
 echo "All builds completed in ${BUILD_DIR}/"

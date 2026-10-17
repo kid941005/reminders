@@ -17,8 +17,8 @@
       @save="handleSave"
     />
 
-    <!-- 支持作者（仅管理员可见，赞赏完全自愿） -->
-    <div v-if="authStore.isAdmin" class="surface rounded-2xl p-4 sm:p-6">
+    <!-- 支持作者（仅管理员可见，赞赏完全自愿）；本发行版默认关闭，见 stores/support.ts -->
+    <div v-if="authStore.isAdmin && supportStore.enabled" class="surface rounded-2xl p-4 sm:p-6">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-start gap-3">
           <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-amber-500">

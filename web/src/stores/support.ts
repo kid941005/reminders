@@ -29,6 +29,19 @@ const KEY_SUPPORTED_VERSION = 'donate_supported_version'
 const KEY_DISMISSED_START = 'donate_dismissed_start'
 const KEY_DISMISSED_VERSION = 'donate_dismissed_version'
 
+/**
+ * 赞赏入口总开关。
+ *
+ * 本仓库是独立发行版，`src/assets/donate-wechat.png` 是上游作者的微信收款码，
+ * 直接保留入口会让用户的钱进入原作者账户，因此默认关闭全部赞赏入口
+ * （启动弹窗、顶部横幅、偏好设置卡片）。
+ *
+ * 要为自己的发行版启用：把 `assets/donate-wechat.png` 换成你自己的收款码，
+ * 再把这里改成 `true`，并确认后端 `/api/donate/support` 可用
+ * （它依赖 `STATS_ENDPOINT` 指向的统计服务）。
+ */
+const SUPPORT_ENABLED = false
+
 function lsGet(key: string): string | null {
   try {
     return localStorage.getItem(key)
@@ -55,6 +68,8 @@ export const useSupportStore = defineStore('support', () => {
   const show = ref(false)
   const sending = ref(false)
   const errorText = ref('')
+  // 对外暴露开关，模板据此决定是否渲染赞赏入口（设置页卡片等）。
+  const enabled = SUPPORT_ENABLED
 
   // 服务端运行标识：版本号与本次运行时间
   const appVersion = ref('')
@@ -72,7 +87,7 @@ export const useSupportStore = defineStore('support', () => {
   /** 登录后调用：确定版本/运行标识并调度提示（仅管理员）。
    *  已拿到 /api/version 结果的调用方可以直接传入，避免重复请求。 */
   async function init(isAdmin: boolean, info?: { version?: string; startedAt?: string }) {
-    if (!isAdmin) return
+    if (!SUPPORT_ENABLED || !isAdmin) return
     if (info) {
       appVersion.value = info.version || ''
       serverStartedAt.value = info.startedAt || ''
@@ -165,11 +180,13 @@ export const useSupportStore = defineStore('support', () => {
 
   /** 设置页卡片入口：手动打开弹窗。 */
   function open() {
+    if (!SUPPORT_ENABLED) return
     errorText.value = ''
     show.value = true
   }
 
   return {
+    enabled,
     show,
     sending,
     errorText,

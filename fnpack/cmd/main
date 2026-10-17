@@ -43,7 +43,7 @@ start_process() {
         -port "${PORT}" \
         -device-type fnos \
         -fnos-app \
-        -gateway-prefix "/app/techfunway-reminders" \
+        -gateway-prefix "/app/kid941005-reminders" \
         -gateway-socket "${APP_DIR}/app.sock" \
         -logmode release "${extra_args[@]}" >> /dev/null 2>&1 &
 

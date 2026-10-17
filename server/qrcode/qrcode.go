@@ -41,7 +41,7 @@ func init() {
 				return nil
 			}
 			return db.Create(&QRCodeStat{
-				Content:   "https://techfunway.wycto.cn",
+				Content:   "https://github.com/kid941005/reminders",
 				Size:      256,
 				CreatedAt: time.Now(),
 			}).Error

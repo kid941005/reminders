@@ -152,8 +152,8 @@ func Start() {
 
 	r := NewRouter(cfg, db, jwtSecret)
 
-	// 匿名使用统计心跳：-disable-stats / DISABLE_STATS=1 可完全退出，
-	// 运行时也可由管理员通过 stats_enabled 配置关闭。
+	// 匿名使用统计心跳：本发行版默认关闭（DisableStats 默认 true），且
+	// stats.Start 在未配置 STATS_ENDPOINT 时直接返回，不会外发任何请求。
 	if !cfg.DisableStats {
 		stats.Start(version.AppID, version.Version, cfg.DeviceType, cfg.DataDir)
 		defer stats.Stop()

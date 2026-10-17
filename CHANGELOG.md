@@ -2,6 +2,29 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.4.0（2026-10-17）
+
+本版本是本仓库独立发行的首个版本，功能基线等同于上游 v0.3.0，主要变更是发行标识与隐私默认值。
+
+### 发行变更
+
+- 应用标识由 `techfunway-reminders` 改为 `kid941005-reminders`：涉及 Docker 镜像名（`kid941005/reminders`）、
+  容器名、飞牛网关路径前缀（`/app/kid941005-reminders`）、飞牛数据共享目录与桌面启动项。
+  **从上游版本升级的用户注意**：飞牛网关路径前缀已变化，旧的 `/app/techfunway-reminders` 书签与桌面图标会失效，
+  需重新从应用中心打开；Docker 用户需改用新镜像名，数据卷名称也已变更（见 `docker-compose.yml`）。
+- 匿名使用统计默认关闭：本发行版不内置任何上报端点，未显式配置 `STATS_ENDPOINT` 时不会外发任何网络请求；
+  `-disable-stats` 默认值改为 `true`，可用 `-disable-stats=false` 或 `DISABLE_STATS=0` 显式开启（仍需配置端点）。
+- 赞赏入口默认关闭：上游版本内置的收款码属于原作者，本发行版不再展示启动弹窗、顶部横幅与偏好设置卡片。
+  要为自己的发行版启用，请替换 `web/src/assets/donate-wechat.png` 并把 `web/src/stores/support.ts`
+  中的 `SUPPORT_ENABLED` 改为 `true`。
+- 版本号自 `v0.3.0` 提升至 `v0.4.0`，使上游预埋的 `0.3.2` 数据迁移（`yearly_lunar` 规则归一化）得以执行。
+
+### 文档与工程
+
+- README 移除失效的 `docs/README.md`、`API.md` 引用，下载入口改为本仓库。
+- 新增 `AGENTS.md`，补回代码注释中引用但仓库缺失的开发约定。
+- 新增 GitHub Actions：提交与 PR 跑后端测试与前端构建，打 tag 时构建多架构镜像。
+
 ## v0.3.0（2026-09-19）
 
 本版本包含自 v0.2.0 以来的全部功能与体验更新。

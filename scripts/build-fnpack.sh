@@ -27,19 +27,19 @@ import json
 with open("fnpack/app/ui/config", encoding="utf-8") as source:
     config = json.load(source)
 entries = config[".url"]
-main = entries.get("techfunway-reminders.main")
-login = entries.get("techfunway-reminders.FnOSLogin")
+main = entries.get("kid941005-reminders.main")
+login = entries.get("kid941005-reminders.FnOSLogin")
 if not main or main.get("type") != "url":
     raise SystemExit("fnOS desktop entry must use type=url")
-if main.get("protocol") != "" or main.get("gatewayPrefix") != "/app/techfunway-reminders" or main.get("gatewaySocket") != "app.sock":
+if main.get("protocol") != "" or main.get("gatewayPrefix") != "/app/kid941005-reminders" or main.get("gatewaySocket") != "app.sock":
     raise SystemExit("fnOS main entry must stay on the unified gateway (protocol=\"\" + gatewayPrefix + gatewaySocket)")
-if main.get("url") != "/app/techfunway-reminders":
-    raise SystemExit("fnOS main entry must open /app/techfunway-reminders")
+if main.get("url") != "/app/kid941005-reminders":
+    raise SystemExit("fnOS main entry must open /app/kid941005-reminders")
 if "port" in main:
     raise SystemExit("fnOS main entry must not point at the app's own TCP port (the fnOS App blocks that jump)")
-if not login or login.get("gatewayPrefix") != "/app/techfunway-reminders" or login.get("gatewaySocket") != "app.sock":
+if not login or login.get("gatewayPrefix") != "/app/kid941005-reminders" or login.get("gatewaySocket") != "app.sock":
     raise SystemExit("fnOS hidden entry must use the reminders unified gateway")
-if not login.get("noDisplay") or login.get("url") != "/app/techfunway-reminders/fnos-entry.html":
+if not login.get("noDisplay") or login.get("url") != "/app/kid941005-reminders/fnos-entry.html":
     raise SystemExit("fnOS hidden entry must point to the login trampoline and stay hidden")
 PY
 
@@ -147,7 +147,7 @@ if [ -d images/screenshots ]; then
   (cd "${BUILD_DIR}" && zip -qr "screenshots-${VERSION}.zip" screenshots)
 fi
 [ -f CHANGELOG.md ] && cp CHANGELOG.md "${BUILD_DIR}/CHANGELOG.md"
-sed "s|techfunways/reminders:latest|techfunways/reminders:${VERSION}|" deploy/docker-compose.yml > "${BUILD_DIR}/docker-compose.yml"
+sed "s|kid941005/reminders:latest|kid941005/reminders:${VERSION}|" deploy/docker-compose.yml > "${BUILD_DIR}/docker-compose.yml"
 cp deploy/docker-compose.latest.yml "${BUILD_DIR}/docker-compose.latest.yml"
 
 # fnpack 构建用的是网关前缀版前端（VITE_BASE_PATH=/app/<包名>/），打完后恢复

@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -56,9 +57,9 @@ func Parse() Config {
 	flag.BoolVar(&C.LogConsole, "log-console", false, "同时将运行日志输出到终端（默认 false，环境变量 LOG_CONSOLE）")
 	flag.BoolVar(&C.FnOSApp, "fnos-app", false, "以飞牛 fnOS 统一网关应用模式运行")
 	flag.StringVar(&C.GatewaySocket, "gateway-socket", "", "飞牛统一网关 Unix Socket 路径（仅 -fnos-app）")
-	flag.StringVar(&C.GatewayPrefix, "gateway-prefix", "/app/techfunway-reminders", "飞牛统一网关路径前缀（仅 -fnos-app）")
+	flag.StringVar(&C.GatewayPrefix, "gateway-prefix", "/app/kid941005-reminders", "飞牛统一网关路径前缀（仅 -fnos-app）")
 	flag.StringVar(&C.DeviceType, "device-type", "", "部署形态标识（fnos/docker，仅用于匿名统计的平台分布，环境变量 DEVICE_TYPE）")
-	flag.BoolVar(&C.DisableStats, "disable-stats", false, "禁用匿名使用统计上报（也可设置环境变量 DISABLE_STATS=1）")
+	flag.BoolVar(&C.DisableStats, "disable-stats", true, "禁用匿名使用统计上报（本发行版默认 true；可用 -disable-stats=false 或 DISABLE_STATS=0 开启）")
 	flag.Usage = PrintHelp
 	flag.Parse()
 
@@ -107,8 +108,11 @@ func Parse() Config {
 	if v := os.Getenv("DEVICE_TYPE"); v != "" {
 		C.DeviceType = v
 	}
-	if os.Getenv("DISABLE_STATS") == "1" || os.Getenv("DISABLE_STATS") == "true" {
-		C.DisableStats = true
+	// 统计上报默认关闭（独立发行版不内置上报端点）。这里允许环境变量双向
+	// 覆盖：DISABLE_STATS=1 保持关闭，DISABLE_STATS=0 显式开启——否则默认值
+	// 改成 true 之后，环境变量将没有任何办法把它打开。
+	if v := strings.ToLower(strings.TrimSpace(os.Getenv("DISABLE_STATS"))); v != "" {
+		C.DisableStats = v == "1" || v == "true"
 	}
 
 	if C.UploadDir == "" {
@@ -164,11 +168,12 @@ func PrintHelp() {
   -gateway-socket string
         飞牛统一网关 Unix Socket 路径（仅 -fnos-app）
   -gateway-prefix string
-        飞牛统一网关路径前缀（默认 "/app/techfunway-reminders"，仅 -fnos-app）
+        飞牛统一网关路径前缀（默认 "/app/kid941005-reminders"，仅 -fnos-app）
   -device-type string
         部署形态标识（fnos/docker，仅用于匿名统计的平台分布，环境变量 DEVICE_TYPE）
   -disable-stats
-        禁用匿名使用统计上报（默认 false，也可设置环境变量 DISABLE_STATS=1）
+        禁用匿名使用统计上报（本发行版默认 true；可用 -disable-stats=false
+        或 DISABLE_STATS=0 开启，且仍需配置 STATS_ENDPOINT）
   -reset-admin-password
         将管理员密码重置为 admin123 后退出
   -version

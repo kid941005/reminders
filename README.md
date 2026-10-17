@@ -1,23 +1,27 @@
-# Reminder
+# Reminder（提醒事项）
 
 面向中国大陆用户的轻量多渠道提醒应用。界面借鉴移动端提醒工具的低学习成本，支持清单、
 今天/计划/全部/已完成视图、重复提醒、稍后提醒，以及站内、邮件、短信、飞书、QQ 和钉钉通知。
 
 版本功能与修复记录见 [CHANGELOG.md](./CHANGELOG.md)。
 
-如果这个项目对你有帮助，欢迎[支持作者](#支持作者)，微信收款码见文末。
+> **关于本仓库**：这是 [TechFunWay/reminders](https://github.com/TechFunWay/reminders) 的独立发行分支，
+> 基于上游 v0.3.0（MIT 许可）。本分支自行维护发行标识、版本号与隐私默认值，
+> 功能层面的改动见 CHANGELOG。上游项目与其作者不对本分支的发行物负责。
 
 ## 下载与安装
 
 | 渠道 | 获取方式 |
 |---|---|
-| GitHub Releases | <https://github.com/TechFunWay/reminders/releases> —— 各平台压缩包、飞牛 `fpk` 安装包与 `docker-compose.yml` |
-| Gitee 镜像 | <https://gitee.com/TechFunWay/reminders> —— 代码自动同步自 GitHub，发行版待补 |
-| Docker 镜像 | `docker pull techfunways/reminders:latest`（amd64 / arm64 多平台） |
-| 飞牛 fnOS | 在飞牛应用中心手动安装 Releases 里的 `.fpk` 安装包（amd64 / arm64） |
-| 官网介绍页 | <https://techfunway.wycto.cn/fnapp/reminders> |
+| GitHub Releases | <https://github.com/kid941005/reminders/releases> —— 各平台压缩包、飞牛 `fpk` 安装包与 `docker-compose.yml` |
+| Docker 镜像 | `docker pull kid941005/reminders:latest`（amd64 / arm64 多平台） |
+| 飞牛 fnOS | 在飞牛应用中心手动安装 Releases 里的 `.fpk` 安装包（amd64 / arm64），应用 ID 为 `kid941005-reminders` |
 
 > 默认端口 `8906`；数据默认是挂载目录下的 SQLite 单文件，备份即拷贝，恢复支持上传本地备份文件。
+>
+> **从上游版本迁移**：本分支的飞牛网关路径前缀是 `/app/kid941005-reminders`（上游为 `/app/techfunway-reminders`），
+> Docker 镜像名与数据卷名也已变更。升级后旧网关路径的桌面图标与书签会失效，需重新从应用中心打开；
+> Docker 用户请改用新镜像并把原数据目录挂载到新卷。SQLite 数据文件本身格式未变，可直接复用。
 
 ## 界面预览
 
@@ -107,28 +111,21 @@ REMINDER_DATA_KEY
 渠道接收目标在数据库中使用 AES-GCM 加密。未设置 `REMINDER_DATA_KEY` 时，会从安装实例的
 内部 JWT 密钥派生独立加密密钥。
 
-## 在线统计与赞赏支持
+## 匿名统计与赞赏
 
-应用内置与家族其他应用一致的「匿名使用统计 + 赞赏支持」能力（上报地址
-`https://techfunway.wycto.cn/api/apps.online/refresh`）：
+本发行版**默认不向任何服务器上报数据**，也不展示赞赏入口。
 
-- **匿名透明**：每 60 分钟一次心跳，只上报设备级信息——哈希后的设备标识
-  （`data/device.id`，卸载重装应用不变、重装系统才变）、操作系统、架构、部署形态
-  与应用版本。不含用户名、主机名、提醒内容或 IP 明文。
-- **赞赏完全自愿**：管理员在控制台的弹窗、顶部横幅与「偏好设置」卡片可看到赞赏入口；
-  点击「已支持」后在弹窗内填写金额（可选，仅接收端统计用、不做支付核验），随后向统计
-  端点发送一次匿名 `donate_support` 计数（携带 `amount` 金额字段）；**不支付不影响任何功能**。
-  支持记录按版本号记忆，应用升级到新版本后会再次提示。
-- **可退出**：以下任一方式可完全关闭统计上报：
-  - 启动参数 `-disable-stats`；
-  - 环境变量 `DISABLE_STATS=1`；
-  - 管理员在「系统配置」中关闭 `stats_enabled`（运行时生效）。
+- **统计默认关闭**：`-disable-stats` 默认值为 `true`，且代码内不内置上报端点。
+  只有同时满足「显式开启统计」与「配置 `STATS_ENDPOINT`」两个条件才会发出请求，
+  否则 `stats.Start` 直接返回，进程不产生任何对外连接。
+- **赞赏入口默认关闭**：上游版本内置的微信收款码属于原作者，本发行版不再显示启动弹窗、
+  顶部横幅与偏好设置卡片（开关在 `web/src/stores/support.ts` 的 `SUPPORT_ENABLED`）。
+  要为自己的发行版启用，需替换 `web/src/assets/donate-wechat.png` 并准备好接收端。
+- **如需自行接入统计**：设置 `STATS_ENDPOINT`，并用 `-disable-stats=false` 或
+  `DISABLE_STATS=0` 开启；上报内容仅为哈希后的设备标识、操作系统、架构、部署形态与版本号，
+  不含用户名、主机名、提醒内容或 IP 明文。管理员也可在「系统配置」中用 `stats_enabled` 运行时开关。
 
-`DEVICE_TYPE`（`-device-type`）用于标识部署形态（`fnos`/`docker`），仅参与统计的平台
-分布；`STATS_ENDPOINT` 环境变量可覆盖上报地址（本地测试用）。
-
-如果应用帮到了你，欢迎微信扫码请作者喝杯咖啡——金额随意，1 元也是心意，收款码见文末
-[支持作者](#支持作者)。
+`DEVICE_TYPE`（`-device-type`）仅用于标识部署形态（`fnos`/`docker`），在未启用统计时不起作用。
 
 ### 钉钉个人提醒
 
@@ -175,14 +172,11 @@ make package PACKAGE_TARGET=docker
 `PACKAGE_TARGET=fnos` 会使用临时 Linux 编译容器生成 SQLite/CGO 二进制，但不会执行
 `docker build`、不会创建镜像标签，也不会推送镜像。
 
-完整产品与技术设计见 [docs/README.md](./docs/README.md)，接口见 [API.md](./API.md)。
+开发约定、目录职责与提交规范见 [AGENTS.md](./AGENTS.md)。
 
-## 支持作者
+## 致谢与许可
 
-如果 Reminder 帮到了你，欢迎微信扫码请作者喝杯咖啡——金额随意，1 元也是心意：
+本项目基于 [TechFunWay/reminders](https://github.com/TechFunWay/reminders)（MIT 许可）二次发行，
+原始版权归其作者所有。本分支的改动与发行物由本仓库维护者负责，与上游项目无关。
 
-<p align="center">
-  <img src="web/src/assets/donate-wechat.png" alt="微信赞赏收款码" width="240" />
-</p>
-
-收款码也可以在应用内「弹窗、顶部横幅或偏好设置的赞赏入口」查看；支持完全自愿，不影响任何功能。
+完整许可条款见 [LICENSE](./LICENSE)。

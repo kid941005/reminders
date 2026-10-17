@@ -31,6 +31,11 @@ func setupDB(t *testing.T) *gorm.DB {
 	if err := sysconfig.InitDefaultConfigs(db); err != nil {
 		t.Fatalf("init configs: %v", err)
 	}
+	// 本发行版把 stats_enabled 默认设为 false（默认不上报）。这里的用例测的是
+	// 上报逻辑本身，所以基线显式打开；「管理员关闭」由单独的子测试覆盖。
+	if err := sysconfig.UpdateConfig(db, "stats_enabled", "true", 0); err != nil {
+		t.Fatalf("enable stats for test: %v", err)
+	}
 	t.Cleanup(func() { database.CloseDB(db) })
 	return db
 }
@@ -41,7 +46,8 @@ func TestEndpointEnvOverride(t *testing.T) {
 		t.Fatalf("Endpoint() = %q, want env override", got)
 	}
 	os.Unsetenv("STATS_ENDPOINT")
-	if got := Endpoint(); got != "https://techfunway.wycto.cn/api/apps.online/refresh" {
+	// 独立发行版不内置上报端点：未显式配置时为空，Start/赞赏计数据此判定未启用。
+	if got := Endpoint(); got != "" {
 		t.Fatalf("Endpoint() default = %q", got)
 	}
 }

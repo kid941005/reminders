@@ -72,7 +72,7 @@ func setupFnOSTestRouter(t *testing.T) (*gin.Engine, *gorm.DB) {
 	if err != nil || secret == "" {
 		t.Fatalf("jwt secret: %v", err)
 	}
-	cfg := config.Config{CORSOrigin: "*", RateLimit: 0, FnOSApp: true, GatewayPrefix: "/app/techfunway-reminders"}
+	cfg := config.Config{CORSOrigin: "*", RateLimit: 0, FnOSApp: true, GatewayPrefix: "/app/kid941005-reminders"}
 	return NewRouter(cfg, db, secret), db
 }
 
@@ -181,7 +181,7 @@ func TestHealthAndVersion(t *testing.T) {
 // trampoline URL from the current origin.
 func TestFnOSVersionExposesServicePort(t *testing.T) {
 	r, _ := setupFnOSTestRouter(t)
-	w := doJSON(r, "GET", "/app/techfunway-reminders/api/version", "", nil)
+	w := doJSON(r, "GET", "/app/kid941005-reminders/api/version", "", nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("fnos version status %d", w.Code)
 	}
@@ -254,7 +254,7 @@ func TestBootstrapReturnsStartupState(t *testing.T) {
 // 一起下发，否则手机端「打开就点」还会再等一次版本查询。
 func TestFnOSBootstrapCarriesGatewayEntry(t *testing.T) {
 	r, _ := setupFnOSTestRouter(t)
-	w := doJSON(r, "GET", "/app/techfunway-reminders/api/bootstrap", "", nil)
+	w := doJSON(r, "GET", "/app/kid941005-reminders/api/bootstrap", "", nil)
 	if w.Code != http.StatusOK {
 		t.Fatalf("fnos bootstrap status %d", w.Code)
 	}
@@ -292,7 +292,7 @@ func TestFirstUserBecomesAdminAndLogin(t *testing.T) {
 
 func TestFnOSOneClickLoginAndBinding(t *testing.T) {
 	r, db := setupFnOSTestRouter(t)
-	const base = "/app/techfunway-reminders/api/auth/fnos"
+	const base = "/app/kid941005-reminders/api/auth/fnos"
 
 	w := doFnOSJSON(r, http.MethodGet, base+"/identity", "1000", "nas-admin", nil)
 	if w.Code != http.StatusOK {
@@ -341,7 +341,7 @@ func TestFnOSOneClickLoginAndBinding(t *testing.T) {
 	// If the NAS username already exists as an application account, guide the
 	// user to bind that account instead of accidentally creating a second data
 	// silo with empty reminders and channel bindings.
-	w = doJSON(r, http.MethodPost, "/app/techfunway-reminders/api/auth/register", "", map[string]string{"username": "same-name", "password": "secret123"})
+	w = doJSON(r, http.MethodPost, "/app/kid941005-reminders/api/auth/register", "", map[string]string{"username": "same-name", "password": "secret123"})
 	if w.Code != http.StatusOK {
 		t.Fatalf("create matching account: status %d body %s", w.Code, w.Body.String())
 	}
@@ -365,7 +365,7 @@ func TestFnOSOneClickLoginAndBinding(t *testing.T) {
 		t.Fatalf("existing accounts should require login and bind: %#v", data)
 	}
 
-	w = doJSON(r, http.MethodPost, "/app/techfunway-reminders/api/auth/register", "", map[string]string{"username": "existing-user", "password": "secret123"})
+	w = doJSON(r, http.MethodPost, "/app/kid941005-reminders/api/auth/register", "", map[string]string{"username": "existing-user", "password": "secret123"})
 	if w.Code != http.StatusOK {
 		t.Fatalf("create existing account: status %d body %s", w.Code, w.Body.String())
 	}
@@ -389,8 +389,8 @@ func TestFnOSAuthIsUnavailableOutsideGatewayMode(t *testing.T) {
 
 func TestFnOSBindingRequiresGatewayIdentity(t *testing.T) {
 	r, _ := setupFnOSTestRouter(t)
-	const loginPath = "/app/techfunway-reminders/api/auth/fnos/login"
-	if got := doFnOSJSON(r, http.MethodPost, "/app/techfunway-reminders/api/auth/fnos/bind", "", "", map[string]string{
+	const loginPath = "/app/kid941005-reminders/api/auth/fnos/login"
+	if got := doFnOSJSON(r, http.MethodPost, "/app/kid941005-reminders/api/auth/fnos/bind", "", "", map[string]string{
 		"mode": "register", "username": "admin", "password": "secret123",
 	}).Code; got != http.StatusUnauthorized {
 		t.Fatalf("missing gateway identity status %d, want 401", got)
@@ -411,7 +411,7 @@ func TestFnOSBindingRequiresGatewayIdentity(t *testing.T) {
 // 表现就是「飞牛登录的应用退不出去」）。重新显式登录后再恢复隐式维持。
 func TestFnOSGatewayLogoutIsNotUndoneByGatewayIdentity(t *testing.T) {
 	r, db := setupFnOSTestRouter(t)
-	const base = "/app/techfunway-reminders/api"
+	const base = "/app/kid941005-reminders/api"
 
 	// 建号并绑定 NAS 用户 1000。
 	if w := doFnOSJSON(r, http.MethodPost, base+"/auth/fnos/bind", "1000", "nas-admin", map[string]string{
@@ -502,7 +502,7 @@ func TestFnOSListensOnPortAndGatewaySocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	listeners, err := listen(config.Config{
-		Port: 0, FnOSApp: true, GatewaySocket: socket, GatewayPrefix: "/app/techfunway-reminders",
+		Port: 0, FnOSApp: true, GatewaySocket: socket, GatewayPrefix: "/app/kid941005-reminders",
 	})
 	if err != nil {
 		t.Fatalf("listen fnos: %v", err)
@@ -520,10 +520,10 @@ func TestFnOSListensOnPortAndGatewaySocket(t *testing.T) {
 
 func TestFnOSDirectPortRedirectsToGatewayPrefix(t *testing.T) {
 	r, _ := setupFnOSTestRouter(t)
-	handler := newDirectHandler(r, config.Config{FnOSApp: true, GatewayPrefix: "/app/techfunway-reminders"})
+	handler := newDirectHandler(r, config.Config{FnOSApp: true, GatewayPrefix: "/app/kid941005-reminders"})
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/", nil))
-	if w.Code != http.StatusTemporaryRedirect || w.Header().Get("Location") != "/app/techfunway-reminders/" {
+	if w.Code != http.StatusTemporaryRedirect || w.Header().Get("Location") != "/app/kid941005-reminders/" {
 		t.Fatalf("direct fnos entry = status %d location %q", w.Code, w.Header().Get("Location"))
 	}
 }
@@ -550,11 +550,11 @@ func TestFnOSEntryTrampolineNotCached(t *testing.T) {
 	if err != nil || secret == "" {
 		t.Fatalf("jwt secret: %v", err)
 	}
-	cfg := config.Config{CORSOrigin: "*", FnOSApp: true, GatewayPrefix: "/app/techfunway-reminders", WebDir: dir}
+	cfg := config.Config{CORSOrigin: "*", FnOSApp: true, GatewayPrefix: "/app/kid941005-reminders", WebDir: dir}
 	r := NewRouter(cfg, db, secret)
 
 	w := httptest.NewRecorder()
-	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/app/techfunway-reminders/fnos-entry.html", nil))
+	r.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/app/kid941005-reminders/fnos-entry.html", nil))
 	if w.Code != http.StatusOK {
 		t.Fatalf("trampoline status %d body %s", w.Code, w.Body.String())
 	}
@@ -967,20 +967,20 @@ func TestFnOSGatewayTrafficIsNotSharedAcrossIP(t *testing.T) {
 		CORSOrigin:    "*",
 		RateLimit:     1,
 		FnOSApp:       true,
-		GatewayPrefix: "/app/techfunway-reminders",
+		GatewayPrefix: "/app/kid941005-reminders",
 	}, db, secret)
 
 	// One NAS user spends the whole allowance on a limited public endpoint
 	// (the QR app route is public and is not a bootstrap read).
-	if got := doFnOSJSON(r, http.MethodGet, "/app/techfunway-reminders/api/qrcode?content=a", "1000", "nas-a", nil).Code; got != http.StatusOK {
+	if got := doFnOSJSON(r, http.MethodGet, "/app/kid941005-reminders/api/qrcode?content=a", "1000", "nas-a", nil).Code; got != http.StatusOK {
 		t.Fatalf("first gateway request returned %d", got)
 	}
-	if got := doFnOSJSON(r, http.MethodGet, "/app/techfunway-reminders/api/qrcode?content=a", "1000", "nas-a", nil).Code; got != http.StatusTooManyRequests {
+	if got := doFnOSJSON(r, http.MethodGet, "/app/kid941005-reminders/api/qrcode?content=a", "1000", "nas-a", nil).Code; got != http.StatusTooManyRequests {
 		t.Fatalf("second request from same NAS user returned %d, want 429", got)
 	}
 	// A different NAS user on the same box has its own bucket and must not be
 	// throttled by the first user's activity.
-	if got := doFnOSJSON(r, http.MethodGet, "/app/techfunway-reminders/api/qrcode?content=b", "2000", "nas-b", nil).Code; got != http.StatusOK {
+	if got := doFnOSJSON(r, http.MethodGet, "/app/kid941005-reminders/api/qrcode?content=b", "2000", "nas-b", nil).Code; got != http.StatusOK {
 		t.Fatalf("another NAS user was throttled: got %d, want 200", got)
 	}
 }

@@ -62,11 +62,11 @@ var (
 )
 
 // Endpoint 返回统计上报地址。STATS_ENDPOINT 环境变量可覆盖（测试用）。
+//
+// 本仓库是独立发行版，不内置任何上报端点：未显式设置 STATS_ENDPOINT 时
+// 返回空串，Start 与赞赏计数都据此判定为「未启用」，不会向空地址发请求。
 func Endpoint() string {
-	if e := os.Getenv("STATS_ENDPOINT"); e != "" {
-		return e
-	}
-	return "https://techfunway.wycto.cn/api/apps.online/refresh"
+	return os.Getenv("STATS_ENDPOINT")
 }
 
 // Init 组装本实例的公共上报字段。Start = Init + 心跳循环；
@@ -87,6 +87,10 @@ func Init(appName, ver, deviceType, dataDir string) {
 // Start 启动心跳上报：启动时立即报第一次，之后每 60 分钟一次。
 // 重复调用是安全的（只生效第一次）。
 func Start(appName, ver, deviceType, dataDir string) {
+	// 未配置上报端点时直接不启动：独立发行版默认不外发任何请求。
+	if Endpoint() == "" {
+		return
+	}
 	Init(appName, ver, deviceType, dataDir)
 
 	mu.Lock()
@@ -227,6 +231,10 @@ func enabled(db *gorm.DB) bool {
 // 只对管理员显示。
 func RegisterRoutes(auth *gin.RouterGroup, db *gorm.DB) {
 	auth.POST("/donate/support", func(c *gin.Context) {
+		if Endpoint() == "" {
+			response.ErrorForbidden(c, "本发行版未启用赞赏计数")
+			return
+		}
 		if !enabled(db) {
 			response.ErrorForbidden(c, "统计上报已被管理员禁用")
 			return
@@ -266,10 +274,10 @@ func init() {
 		Key:         "stats_enabled",
 		Scope:       sysconfig.ScopeSystem,
 		Type:        sysconfig.TypeBool,
-		Default:     "true",
+		Default:     "false",
 		Public:      false,
 		Group:       "stats",
 		Label:       "匿名使用统计",
-		Description: "仅上报设备级信息（哈希标识/系统/架构/版本），不含任何用户数据；关闭后心跳与赞赏计数均停止",
+		Description: "仅上报设备级信息（哈希标识/系统/架构/版本），不含任何用户数据；本发行版默认关闭，需同时配置 STATS_ENDPOINT 才会真正上报",
 	})
 }

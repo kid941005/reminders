@@ -1,19 +1,19 @@
 services:
-  techfunway-reminders:
+  kid941005-reminders:
     # Tracks the newest published image.
-    image: techfunways/reminders:latest
-    container_name: techfunway-reminders
+    image: kid941005/reminders:latest
+    container_name: kid941005-reminders
     ports:
       - "8906:8906"
     volumes:
       # 数据库、上传文件、日志和配置均持久化在此卷中。
-      - techfunway-reminders-data:/app/data
+      - kid941005-reminders-data:/app/data
     environment:
       - ENV=release
       - DATA_DIR=/app/data
-      # device-type=docker 仅用于匿名统计的平台分布；DISABLE_STATS=1 可完全关闭上报
+      # 匿名统计默认关闭；如需接入，额外设置 STATS_ENDPOINT 并加 -disable-stats=false
     command: ["-data-dir", "/app/data", "-web-dir", "./static/dist", "-device-type", "docker"]
     restart: unless-stopped
 
 volumes:
-  techfunway-reminders-data:
+  kid941005-reminders-data:

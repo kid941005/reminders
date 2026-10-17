@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-IMAGE="techfunways/reminders"
+IMAGE="kid941005/reminders"
 VERSION="$(cat VERSION | tr -d '\n')"
 DOCKER_ARCH="$(docker version --format '{{.Server.Arch}}')"
 case "$DOCKER_ARCH" in
@@ -13,7 +13,7 @@ case "$DOCKER_ARCH" in
   *) echo "Unsupported local Docker architecture: ${DOCKER_ARCH}"; exit 1 ;;
 esac
 
-BUNDLE="release/${VERSION}/techfunway-reminders-linux-${ARCH}.tar.gz"
+BUNDLE="release/${VERSION}/kid941005-reminders-linux-${ARCH}.tar.gz"
 CONTEXT_DIR="build/docker-local-context"
 
 if [ ! -f "$BUNDLE" ]; then
@@ -34,7 +34,7 @@ mkdir -p "$CONTEXT_DIR"
 trap 'rm -rf "$CONTEXT_DIR"' EXIT
 
 tar xzf "$BUNDLE" --strip-components=1 -C "$CONTEXT_DIR"
-mv "$CONTEXT_DIR/techfunway-reminders-linux-${ARCH}" "$CONTEXT_DIR/reminder"
+mv "$CONTEXT_DIR/kid941005-reminders-linux-${ARCH}" "$CONTEXT_DIR/reminder"
 chmod +x "$CONTEXT_DIR/reminder"
 cp /etc/ssl/cert.pem "$CONTEXT_DIR/ca-certificates.crt"
 
