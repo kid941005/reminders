@@ -231,11 +231,15 @@ const icons = {
   planned: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9" stroke-width="1.8"/><path d="M12 7v5l3.2 2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   all: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01" stroke-width="2" stroke-linecap="round"/></svg>',
   completed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9" stroke-width="1.8"/><path d="m8 12 2.7 2.7L16.5 9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  week: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="15" rx="3" stroke-width="1.8"/><path d="M8 3v4m8-4v4M4 10h16" stroke-width="1.8" stroke-linecap="round"/><path d="M9.5 13.5v3.5M14.5 13.5v3.5" stroke-width="1.6" stroke-linecap="round"/></svg>',
+  month: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="15" rx="3" stroke-width="1.8"/><path d="M8 3v4m8-4v4M4 10h16" stroke-width="1.8" stroke-linecap="round"/><path d="M8.7 13.6h.01M12 13.6h.01M15.3 13.6h.01M8.7 16.8h.01M12 16.8h.01" stroke-width="1.8" stroke-linecap="round"/></svg>',
 }
 
 const smartNav = [
   { to: '/admin', label: '今天', key: 'today', tone: 'bg-blue-500/12 text-blue-500', icon: icons.today },
   { to: '/admin/planned', label: '计划', key: 'planned', tone: 'bg-amber-500/12 text-amber-500', icon: icons.planned },
+  { to: '/admin/week', label: '本周', key: 'week', tone: 'bg-teal-500/12 text-teal-500', icon: icons.week },
+  { to: '/admin/month', label: '本月', key: 'month', tone: 'bg-indigo-500/12 text-indigo-500', icon: icons.month },
   { to: '/admin/all', label: '全部', key: 'all', tone: 'bg-violet-500/12 text-violet-500', icon: icons.all },
   { to: '/admin/completed', label: '已完成', key: 'completed', tone: 'bg-emerald-500/12 text-emerald-500', icon: icons.completed },
 ]

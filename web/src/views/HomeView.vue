@@ -282,14 +282,43 @@ function applyDefaultChannels() {
 const view = computed(() => String(route.meta.reminderView || 'today'))
 const selectedListID = computed(() => route.name === 'ReminderList' ? Number(route.params.id) : undefined)
 const selectedList = computed(() => lists.value.find(x => x.id === selectedListID.value))
-const pageTitle = computed(() => selectedList.value?.name || String(route.meta.title || '今天'))
-const eyebrow = computed(() => selectedList.value ? '我的清单' : view.value === 'today' ? '此刻最重要' : '提醒事项')
+// 日视图（/admin/day/:date）由日历点击进入：复用同一套列表与编辑能力，
+// 只是把取数范围限定在那一天。日期一律按 YYYY-MM-DD 处理，避免时区偏移。
+const dayKey = computed(() => view.value === 'day' ? String(route.params.date || '') : '')
+
+function dayDate(key: string): Date {
+  const [y, m, d] = key.split('-').map(Number)
+  return new Date(Date.UTC(y, m - 1, d))
+}
+
+function nextDayKey(key: string): string {
+  return new Date(dayDate(key).getTime() + 86400000).toISOString().slice(0, 10)
+}
+
+// 日视图里新建提醒时，默认落在当天 09:00，省掉再选一次日期。
+function dayDefaultDue(): string {
+  return `${dayKey.value}T09:00:00+08:00`
+}
+
+const pageTitle = computed(() => selectedList.value?.name
+  || (dayKey.value
+    ? new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', timeZone: 'UTC' }).format(dayDate(dayKey.value))
+    : String(route.meta.title || '今天')))
+const eyebrow = computed(() => {
+  if (selectedList.value) return '我的清单'
+  if (dayKey.value) return '日视图'
+  return view.value === 'today' ? '此刻最重要' : '提醒事项'
+})
 const accentColor = computed(() => selectedList.value ? listColor(selectedList.value.color) : view.value === 'completed' ? '#10b981' : '#3182f6')
 const subtitle = computed(() => {
   if (selectedList.value) return `${selectedList.value.open_count || 0} 件事情正在等你`
   if (view.value === 'today') return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date())
   if (view.value === 'planned') return '按时间整理好接下来的安排'
   if (view.value === 'completed') return '每一个勾选，都是向前一步'
+  if (dayKey.value) {
+    const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long', timeZone: 'UTC' }).format(dayDate(dayKey.value))
+    return `${weekday} · ${items.value.length} 项提醒`
+  }
   return '所有未完成的提醒都在这里'
 })
 const overdueCount = computed(() => items.value.filter(isOverdue).length)
@@ -348,6 +377,7 @@ async function loadData() {
       applyDefaultChannels()
     }
     if (!quick.list_id) quick.list_id = selectedListID.value || lists.value.find(x => x.is_default)?.id || lists.value[0]?.id || 0
+    if (dayKey.value && !quick.due_at) quick.due_at = dayDefaultDue()
     await loadItems()
   } catch (err: any) {
     showToast(err.response?.data?.message || '读取提醒失败', 'error')
@@ -358,6 +388,8 @@ async function loadData() {
 async function loadRouteData() {
   loading.value = true
   try {
+    // 在日视图之间跳转时，新建表单的默认日期要跟着换到当前这一天。
+    if (dayKey.value && !quick.due_at) quick.due_at = dayDefaultDue()
     if (selectedListID.value && !lists.value.some(list => list.id === selectedListID.value)) {
       await loadData()
       return
@@ -370,7 +402,11 @@ async function loadRouteData() {
   }
 }
 async function loadItems() {
-  const res = await getReminders({ view: view.value, list_id: selectedListID.value, q: search.value || undefined })
+  // 日视图走 calendar 区间查询（含已完成项），其余视图沿用原来的语义过滤。
+  const params = dayKey.value
+    ? { view: 'calendar', from: dayKey.value, to: nextDayKey(dayKey.value), q: search.value || undefined }
+    : { view: view.value, list_id: selectedListID.value, q: search.value || undefined }
+  const res = await getReminders(params)
   items.value = res.data.data || []
 }
 async function submitQuick() {
@@ -385,6 +421,7 @@ async function submitQuick() {
     quickChannelsTouched = false
     Object.assign(quick, blankInput(), { list_id: selectedListID.value || lists.value.find(x => x.is_default)?.id || lists.value[0]?.id || 0 })
     applyDefaultChannels()
+    if (dayKey.value) quick.due_at = dayDefaultDue()
     preset.value = ''
     quickExpanded.value = false
     quickFocused.value = false

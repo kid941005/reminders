@@ -264,13 +264,40 @@ func handleListReminders(db *gorm.DB) gin.HandlerFunc {
 				listID = uint(n)
 			}
 		}
-		items, err := listReminders(db, currentUserID(c), c.DefaultQuery("view", "today"), c.Query("q"), listID)
+		view := c.DefaultQuery("view", "today")
+		from, to := parseDateRange(c)
+		// 日历视图必须带区间：缺参数时直接 400，避免静默返回空列表让前端误以为
+		// 「这段时间没有提醒」。
+		if view == "calendar" && (from.IsZero() || to.IsZero() || !to.After(from)) {
+			response.ErrorBadRequest(c, "时间范围无效，需要 from 与 to（YYYY-MM-DD，to 为开区间）")
+			return
+		}
+		items, err := listReminders(db, currentUserID(c), view, c.Query("q"), listID, from, to)
 		if err != nil {
 			response.ErrorInternal(c, "读取提醒失败")
 			return
 		}
 		response.Success(c, items)
 	}
+}
+
+// parseDateRange 解析日历视图的 from/to。日期一律按 Asia/Shanghai 的当天零点
+// 解释：客户端只传 YYYY-MM-DD，不传时刻，避免浏览器时区与会话时区不一致时
+// 出现「少一天」。解析失败按零值返回，由调用方决定是否拒绝。
+func parseDateRange(c *gin.Context) (time.Time, time.Time) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	parse := func(raw string) time.Time {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			return time.Time{}
+		}
+		t, err := time.ParseInLocation("2006-01-02", raw, loc)
+		if err != nil {
+			return time.Time{}
+		}
+		return t
+	}
+	return parse(c.Query("from")), parse(c.Query("to"))
 }
 
 func handleGetReminder(db *gorm.DB) gin.HandlerFunc {

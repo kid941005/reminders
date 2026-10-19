@@ -372,7 +372,10 @@ func parseChannelTargets(raw string) []uint {
 	return ids
 }
 
-func listReminders(db *gorm.DB, userID uint, view, query string, listID uint) ([]ReminderDTO, error) {
+// listReminders 返回某个视图下的提醒。from/to 只对 view=calendar 生效，
+// 表示一个左闭右开的查询区间（to 通常传「最后一天的下一天」）；两者为零值时
+// 说明调用方没有提供区间，calendar 视图会拒绝执行，而不是静默返回空列表。
+func listReminders(db *gorm.DB, userID uint, view, query string, listID uint, from, to time.Time) ([]ReminderDTO, error) {
 	var rows []Reminder
 	q := db.Where("user_id = ? AND deleted_at IS NULL", userID)
 	now := time.Now()
@@ -387,6 +390,13 @@ func listReminders(db *gorm.DB, userID uint, view, query string, listID uint) ([
 		q = q.Where("completed_at IS NULL AND due_at IS NOT NULL")
 	case "completed":
 		q = q.Where("completed_at IS NOT NULL")
+	case "calendar":
+		// 周/月/日视图共用：按区间取数，且不过滤 completed_at ——
+		// 日历要反映当天全貌，已完成项以弱化样式参与布局。
+		if from.IsZero() || to.IsZero() || !to.After(from) {
+			return nil, errors.New("时间范围无效")
+		}
+		q = q.Where("due_at IS NOT NULL AND due_at >= ? AND due_at < ?", from, to)
 	default:
 		q = q.Where("completed_at IS NULL")
 	}

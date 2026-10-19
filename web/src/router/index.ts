@@ -30,6 +30,11 @@ const router = createRouter({
       children: [
         { path: '', name: 'Home', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'today', title: '今天' } },
         { path: 'planned', name: 'Planned', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'planned', title: '计划' } },
+        // 周/月视图共用 CalendarView，靠路由名区分渲染形态。
+        { path: 'week', name: 'WeekView', component: () => import('../views/CalendarView.vue'), meta: { reminderView: 'week', title: '本周' } },
+        { path: 'month', name: 'MonthView', component: () => import('../views/CalendarView.vue'), meta: { reminderView: 'month', title: '本月' } },
+        // 日历里点某一天落到这里：复用 HomeView 的完整列表与编辑能力。
+        { path: 'day/:date(\\d{4}-\\d{2}-\\d{2})', name: 'DayView', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'day', title: '某一天' } },
         { path: 'all', name: 'AllReminders', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'all', title: '全部' } },
         { path: 'completed', name: 'Completed', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'completed', title: '已完成' } },
         { path: 'list/:id', name: 'ReminderList', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'all', title: '我的清单' } },

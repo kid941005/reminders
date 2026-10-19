@@ -240,7 +240,7 @@ func TestListRemindersLoadsRelatedDataInConstantQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items, err := listReminders(appDB, userID, "all", "", 0)
+	items, err := listReminders(appDB, userID, "all", "", 0, time.Time{}, time.Time{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,6 +254,64 @@ func TestListRemindersLoadsRelatedDataInConstantQueries(t *testing.T) {
 		if item.ListName == "" || len(item.Channels) != 2 {
 			t.Fatalf("missing related data: list=%q channels=%v", item.ListName, item.Channels)
 		}
+	}
+}
+
+func TestListRemindersCalendarRange(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	const userID = 77
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+	day := func(offset int) time.Time {
+		return time.Date(2026, 10, 19+offset, 9, 0, 0, 0, loc)
+	}
+	mk := func(title string, due time.Time, completed bool) {
+		t.Helper()
+		item, err := createReminder(appDB, userID, SaveReminderInput{
+			Title: title, RepeatRule: "none", Channels: []string{ChannelInApp}, DueAt: &due,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if completed {
+			if _, err := completeReminder(appDB, userID, item.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	mk("区间之前", day(-1), false)
+	mk("区间内", day(0), false)
+	mk("区间内已完成", day(1), true)
+	mk("区间上界", day(3), false) // to 是开区间，这一条不应出现
+
+	items, err := listReminders(appDB, userID, "calendar", "", 0, day(0), day(3))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("expected 2 reminders in range, got %d", len(items))
+	}
+	// 日历视图必须包含已完成项，否则当天做掉的事会从日历上消失。
+	var completedSeen bool
+	for _, item := range items {
+		if item.Title == "区间上界" || item.Title == "区间之前" {
+			t.Fatalf("reminder outside range leaked in: %q", item.Title)
+		}
+		if item.CompletedAt != nil {
+			completedSeen = true
+		}
+	}
+	if !completedSeen {
+		t.Fatal("calendar view must include completed reminders")
+	}
+
+	// 缺区间或区间倒置必须报错，不能退化成「返回全部」。
+	if _, err := listReminders(appDB, userID, "calendar", "", 0, time.Time{}, time.Time{}); err == nil {
+		t.Fatal("calendar view must reject an empty range")
+	}
+	if _, err := listReminders(appDB, userID, "calendar", "", 0, day(3), day(0)); err == nil {
+		t.Fatal("calendar view must reject a reversed range")
 	}
 }
 

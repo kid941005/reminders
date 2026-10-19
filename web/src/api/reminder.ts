@@ -113,7 +113,8 @@ export const updateList = (id: number, data: Partial<ReminderList>) =>
   request.patch(`/api/reminder/lists/${id}`, data)
 export const deleteList = (id: number) => request.delete(`/api/reminder/lists/${id}`)
 
-export const getReminders = (params: { view?: string; list_id?: number; q?: string }) =>
+// from/to 仅对 view=calendar 生效，格式 YYYY-MM-DD，to 为开区间上界。
+export const getReminders = (params: { view?: string; list_id?: number; q?: string; from?: string; to?: string }) =>
   request.get('/api/reminder/items', { params })
 export const getReminder = (id: number) => request.get(`/api/reminder/items/${id}`)
 export const createReminder = (data: SaveReminderInput) => request.post('/api/reminder/items', data)
