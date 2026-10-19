@@ -196,3 +196,39 @@ type ChannelBindingItem struct {
 	TargetMasked string `json:"target_masked"`
 	Status       string `json:"status"`
 }
+
+// Countdown 表示一个「倒数 / 纪念」条目：生日、结婚纪念日、考试倒计时等。
+// 不设「正数/倒数」模式字段——目标日期晚于今天就是倒数，早于今天就是已经
+// 过去的天数，同一条记录随日期自然切换语义。
+type Countdown struct {
+	ID     uint   `gorm:"primarykey" json:"id"`
+	UserID uint   `gorm:"not null;index" json:"-"`
+	Title  string `gorm:"size:60;not null" json:"title"`
+	// TargetDate 只承载「哪一天」这个信息，统一按 UTC 零点存储，
+	// 这样跨时区比较日期时不会因为本地偏移而差一天。
+	TargetDate time.Time `gorm:"not null;index" json:"target_date"`
+	// RepeatYearly 为真表示每年重复（生日、纪念日），此时 Calendar 决定
+	// 按公历还是农历推算下一次。
+	RepeatYearly bool   `gorm:"not null;default:false" json:"repeat_yearly"`
+	Calendar     string `gorm:"size:8;not null;default:solar" json:"calendar"`
+	// LunarAnchor 存农历锚点 "M:D"（负月份表示闰月），仅农历每年重复时使用。
+	LunarAnchor string `gorm:"size:8" json:"lunar_anchor,omitempty"`
+	Notes       string `gorm:"type:text" json:"notes"`
+	Color       string `gorm:"size:16;not null;default:rose" json:"color"`
+	Position    int    `gorm:"not null;default:0" json:"position"`
+
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// CalendarFeed 保存一个用户的 ICS 订阅令牌。
+//
+// 日历客户端（系统日历、Google Calendar 等）无法携带 JWT，鉴权只能靠 URL
+// 里的高熵令牌，所以令牌必须可轮换：重置后旧地址立即失效。
+type CalendarFeed struct {
+	ID        uint      `gorm:"primarykey" json:"id"`
+	UserID    uint      `gorm:"not null;uniqueIndex" json:"-"`
+	Token     string    `gorm:"size:64;not null;uniqueIndex" json:"token"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}

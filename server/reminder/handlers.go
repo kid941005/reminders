@@ -14,6 +14,12 @@ import (
 	"gorm.io/gorm"
 )
 
+// setupPublicRoutes 注册免登录接口。目前只有日历订阅：系统日历、Google
+// Calendar 之类的客户端无法携带 JWT，只能凭 URL 里的高熵令牌鉴权。
+func setupPublicRoutes(api *gin.RouterGroup, db *gorm.DB) {
+	api.GET("/reminder/feed.ics", handleCalendarFeed(db))
+}
+
 func setupAuthRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group := api.Group("/reminder")
 
@@ -38,6 +44,12 @@ func setupAuthRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group.GET("/notifications/unread-count", handleUnreadCount(db))
 	group.POST("/notifications/:id/read", handleReadNotification(db))
 	group.POST("/notifications/read-all", handleReadAllNotifications(db))
+	group.GET("/countdowns", handleListCountdowns(db))
+	group.POST("/countdowns", handleCreateCountdown(db))
+	group.PUT("/countdowns/:id", handleUpdateCountdown(db))
+	group.DELETE("/countdowns/:id", handleDeleteCountdown(db))
+	group.GET("/feed", handleGetCalendarFeed(db))
+	group.POST("/feed/reset", handleResetCalendarFeed(db))
 
 	group.GET("/channels", handleChannelStatuses(db))
 	group.GET("/lunar", handleLunarCalendar(db))

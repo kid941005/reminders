@@ -91,6 +91,10 @@
         </nav>
 
         <div class="border-t border-border/70 p-3">
+          <RouterLink to="/admin/countdowns" class="nav-row" :class="{ 'nav-row-active': route.path === '/admin/countdowns' }">
+            <span class="nav-symbol bg-rose-500/12 text-rose-500" v-html="icons.countdown"></span>
+            <span class="flex-1">倒数纪念日</span>
+          </RouterLink>
           <RouterLink to="/admin/channels" class="nav-row" :class="{ 'nav-row-active': route.path === '/admin/channels' }">
             <span class="nav-symbol bg-violet-500/12 text-violet-500">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 12h8m-8 4h5m6-11H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4l3 3 3-3h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -233,6 +237,7 @@ const icons = {
   completed: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9" stroke-width="1.8"/><path d="m8 12 2.7 2.7L16.5 9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   week: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="15" rx="3" stroke-width="1.8"/><path d="M8 3v4m8-4v4M4 10h16" stroke-width="1.8" stroke-linecap="round"/><path d="M9.5 13.5v3.5M14.5 13.5v3.5" stroke-width="1.6" stroke-linecap="round"/></svg>',
   month: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="4" y="5" width="16" height="15" rx="3" stroke-width="1.8"/><path d="M8 3v4m8-4v4M4 10h16" stroke-width="1.8" stroke-linecap="round"/><path d="M8.7 13.6h.01M12 13.6h.01M15.3 13.6h.01M8.7 16.8h.01M12 16.8h.01" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  countdown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 3h10M7 21h10" stroke-width="1.8" stroke-linecap="round"/><path d="M8 3c0 4 8 5 8 9s-8 5-8 9" stroke-width="1.8" stroke-linecap="round"/><path d="M16 3c0 4-8 5-8 9s8 5 8 9" stroke-width="1.8" stroke-linecap="round"/></svg>',
 }
 
 const smartNav = [

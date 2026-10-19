@@ -38,6 +38,7 @@ const router = createRouter({
         { path: 'all', name: 'AllReminders', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'all', title: '全部' } },
         { path: 'completed', name: 'Completed', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'completed', title: '已完成' } },
         { path: 'list/:id', name: 'ReminderList', component: () => import('../views/HomeView.vue'), meta: { reminderView: 'all', title: '我的清单' } },
+        { path: 'countdowns', name: 'Countdowns', component: () => import('../views/CountdownsView.vue'), meta: { title: '倒数纪念日' } },
         { path: 'notifications', name: 'Notifications', component: () => import('../views/NotificationsView.vue'), meta: { title: '通知中心' } },
         { path: 'channels', name: 'Channels', component: () => import('../views/ChannelsView.vue'), meta: { title: '通知方式' } },
         { path: 'profile', name: 'Profile', component: () => import('../views/ProfileView.vue') },

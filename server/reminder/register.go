@@ -48,6 +48,7 @@ func init() {
 	database.RegisterModels(
 		&List{}, &Reminder{}, &ReminderChannel{}, &Completion{},
 		&ChannelBinding{}, &ProviderConfig{}, &QQBindCode{}, &DeliveryJob{}, &DeliveryAttempt{}, &Notification{},
+		&Countdown{}, &CalendarFeed{},
 	)
 
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
@@ -67,6 +68,8 @@ func init() {
 		Icon:        "check-circle",
 		RoutePrefix: "/reminders",
 		NavPosition: 10,
+		// 日历订阅地址必须是免登录的：日历客户端无法携带 JWT。
+		Setup:       setupPublicRoutes,
 		SetupAuth:   setupAuthRoutes,
 		SetupAdmin:  setupAdminRoutes,
 		Migrate: func(db *gorm.DB) error {
