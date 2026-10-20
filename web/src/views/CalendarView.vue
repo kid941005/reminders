@@ -7,6 +7,9 @@
         <h1 class="mt-1 text-2xl font-extrabold text-foreground sm:text-3xl">{{ rangeLabel }}</h1>
         <p class="mt-1 text-xs text-muted-foreground">
           共 {{ totalItems }} 项提醒<span v-if="completedCount">，已完成 {{ completedCount }} 项</span>
+          <span v-if="uncoveredYears.length" class="font-semibold text-amber-600 dark:text-amber-400">
+            · {{ uncoveredYears.join('、') }} 年放假安排尚未公布
+          </span>
         </p>
       </div>
       <div class="flex items-center gap-2">
@@ -32,6 +35,12 @@
         <button type="button" class="week-head" @click="openDay(day)">
           <span class="week-name">{{ day.weekdayLabel }}</span>
           <strong class="week-num">{{ day.dayNum }}</strong>
+          <span
+            v-if="day.holiday"
+            class="holiday-badge-inline"
+            :class="day.holiday.off ? 'holiday-off' : 'holiday-work'"
+            :title="`${day.holiday.name}${day.holiday.off ? ' 放假' : ' 调休上班'}`"
+          >{{ day.holiday.off ? '休' : '班' }}</span>
           <span v-if="day.items.length" class="week-count">{{ day.items.length }}</span>
         </button>
         <p
@@ -80,6 +89,12 @@
               'month-num-term': !day.isToday && !day.festival && day.term,
             }"
           >{{ day.dayNum }}</span>
+          <span
+            v-if="day.holiday"
+            class="holiday-badge"
+            :class="day.holiday.off ? 'holiday-off' : 'holiday-work'"
+            :title="`${day.holiday.name}${day.holiday.off ? ' 放假' : ' 调休上班'}`"
+          >{{ day.holiday.off ? '休' : '班' }}</span>
           <!-- 节日优先于节气：同一天既是节气又是节日时只显示节日 -->
           <span
             v-if="day.festival || day.term"
@@ -117,7 +132,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getLunarCalendar, getReminders, type ReminderItem } from '../api/reminder'
+import { getHolidays, getLunarCalendar, getReminders, type HolidayDay, type ReminderItem } from '../api/reminder'
 
 const route = useRoute()
 const router = useRouter()
@@ -163,6 +178,28 @@ const loading = ref(true)
 // term（节气），直接复用农历接口即可，前端不再维护第二份节日表。
 type DayFestival = { festival?: string; term?: string; lunar?: string }
 const festivalByDay = ref(new Map<string, DayFestival>())
+
+// 法定节假日（放假 / 调休补班）。与节日不同，这份数据来自国务院年度公告，
+// 只能查表；未覆盖的年份要明确提示，不能当作普通工作日。
+const holidayByDay = ref(new Map<string, HolidayDay>())
+const holidayMinYear = ref(0)
+const holidayMaxYear = ref(0)
+
+async function loadHolidays() {
+  try {
+    const res = await getHolidays(keyOf(range.value.start), keyOf(range.value.end))
+    const data = res.data?.data
+    const next = new Map<string, HolidayDay>()
+    for (const [date, day] of Object.entries((data?.days || {}) as Record<string, HolidayDay>)) {
+      next.set(date, day)
+    }
+    holidayByDay.value = next
+    holidayMinYear.value = data?.min_year || 0
+    holidayMaxYear.value = data?.max_year || 0
+  } catch {
+    holidayByDay.value = new Map()
+  }
+}
 
 async function loadFestivals() {
   const months = new Set<string>()
@@ -231,10 +268,23 @@ const days = computed(() => {
       festival: info?.festival || '',
       term: info?.term || '',
       lunar: info?.lunar || '',
+      holiday: holidayByDay.value.get(key),
     })
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
   return result
+})
+
+// 当前可见范围里，哪些年份不在节假日数据覆盖内（通常是次年公告尚未发布）。
+const uncoveredYears = computed(() => {
+  if (!holidayMinYear.value || !holidayMaxYear.value) return []
+  const startYear = range.value.start.getUTCFullYear()
+  const endYear = new Date(range.value.end.getTime() - 86400000).getUTCFullYear()
+  const out: number[] = []
+  for (let year = startYear; year <= endYear; year++) {
+    if (year < holidayMinYear.value || year > holidayMaxYear.value) out.push(year)
+  }
+  return out
 })
 
 const totalItems = computed(() => days.value.reduce((sum, day) => sum + day.items.length, 0))
@@ -269,7 +319,7 @@ async function load() {
       to: keyOf(range.value.end),
     })
     items.value = res.data?.data || []
-    await loadFestivals()
+    await Promise.all([loadFestivals(), loadHolidays()])
   } catch {
     items.value = []
   } finally {
@@ -335,7 +385,11 @@ onBeforeUnmount(() => {
 .month-wrap { @apply rounded-2xl border border-border/70 bg-surface/70 p-2 sm:p-3; }
 .month-weekdays { @apply mb-1 grid grid-cols-7 gap-1 text-center text-[10px] font-bold text-muted-foreground; }
 .month-grid { @apply grid grid-cols-7 gap-1; }
-.month-cell { @apply flex min-h-16 flex-col items-start rounded-xl border border-transparent p-1.5 text-left transition hover:border-brand-500/25 hover:bg-brand-500/[.05] sm:min-h-24; }
+.month-cell { @apply relative flex min-h-16 flex-col items-start rounded-xl border border-transparent p-1.5 text-left transition hover:border-brand-500/25 hover:bg-brand-500/[.05] sm:min-h-24; }
+.holiday-badge { @apply absolute right-1 top-1 rounded px-1 text-[9px] font-bold leading-4; }
+.holiday-badge-inline { @apply shrink-0 rounded px-1 text-[9px] font-bold leading-4; }
+.holiday-off { @apply bg-rose-500 text-white; }
+.holiday-work { @apply bg-slate-400 text-white; }
 .month-cell-today { @apply border-brand-500/40 bg-brand-500/[.06]; }
 .month-cell-outside { @apply opacity-45; }
 .month-num { @apply text-[11px] font-bold text-foreground sm:text-xs; }

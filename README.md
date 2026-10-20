@@ -85,6 +85,19 @@ make start
 
 首次注册的用户自动成为管理员。
 
+## 节假日数据
+
+法定节假日与调休补班的数据来自 [vsme/chinese-days](https://github.com/vsme/chinese-days)（MIT），
+随二进制通过 `go:embed` 内置，运行时不访问任何外部接口。
+
+国务院通常在**每年 11 月初**发布次年安排，因此：
+
+- 自动同步脚本见 `docs/holidays-workflow.yml`，复制到 `.github/workflows/holidays.yml` 后即每月
+  检查上游数据、有变更自动开 PR；**当前尚未启用**：本仓库的推送凭据是 OAuth App，
+  缺少 `workflow` 权限，无法直接提交到 `.github/workflows/` 目录；
+- 遇到次年公告尚未发布时，界面会提示「XXXX 年放假安排尚未公布」，**不会**把未覆盖的日期当作普通工作日；
+- 如需覆盖（公司特殊排班），在数据目录放置 `holidays.json`（格式见 `server/holiday/data/README.md`），启动时叠加生效。
+
 ## 核心能力
 
 - 默认清单和自定义清单；
@@ -102,6 +115,7 @@ make start
 - Bark 推送到 iPhone（支持官方服务与自建服务器）；
 - 倒数纪念日：生日、纪念日、考试倒计时，支持每年重复与农历；
 - 日历订阅（ICS）：把提醒同步到系统日历、Google Calendar 或 Outlook；
+- 法定节假日与调休：日历上直接标出「休 / 班」，数据随二进制内置，离线可用；
 - 浅色/深色主题和响应式手机界面。
 
 ## 外部渠道配置

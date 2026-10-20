@@ -1,0 +1,64 @@
+# ⚠️ 启用方式：把本文件复制到 .github/workflows/holidays.yml
+# 当前仓库的推送凭据是 OAuth App，缺少 workflow scope，无法直接提交到
+# .github/workflows/ 目录。用 GitHub 网页版新建该文件并粘贴内容即可生效，
+# 或重新授权一个具备 workflow 权限的凭据后再执行 git mv。
+#
+name: 节假日数据同步
+
+# 法定节假日与调休来自国务院年度公告，通常每年 11 月初发布次年安排。
+# 这里每月检查一次上游数据，有变化就开 PR，人工只需要审阅合并。
+# 之所以不在运行时调用外部接口：自托管部署不应因为第三方服务不可用
+# 而丢失「今天上不上班」这种基础判断。
+on:
+  schedule:
+    - cron: "17 3 1 * *" # 每月 1 日 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: 同步节假日数据
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 拉取上游数据
+        run: |
+          curl -fsSL https://cdn.jsdelivr.net/npm/chinese-days/dist/chinese-days.json \
+            -o server/holiday/data/chinese-days.json
+
+      - name: 校验数据结构
+        run: |
+          python3 - <<'PY'
+          import json
+          path = "server/holiday/data/chinese-days.json"
+          with open(path, encoding="utf-8") as f:
+              data = json.load(f)
+          assert data.get("holidays"), "holidays 为空，疑似上游异常"
+          years = sorted({date[:4] for date in data["holidays"]})
+          print(f"holidays={len(data['holidays'])} workdays={len(data.get('workdays', {}))} years={years[0]}~{years[-1]}")
+          PY
+
+      - name: 有变更则创建 PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if git diff --quiet -- server/holiday/data/chinese-days.json; then
+            echo "数据无变化，跳过"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          branch="chore/holiday-data-$(date +%Y%m%d)"
+          git checkout -b "$branch"
+          git add server/holiday/data/chinese-days.json
+          git commit -m "数据：同步法定节假日与调休（$(date +%Y-%m-%d)）"
+          git push -u origin "$branch"
+          gh pr create \
+            --title "数据：同步法定节假日与调休" \
+            --body "自动同步自 [vsme/chinese-days](https://github.com/vsme/chinese-days)。合并前请确认覆盖年份已包含新公告（通常是次年安排），并核对 \`min_year\` / \`max_year\` 是否前移。" \
+            --base main \
+            --head "$branch"

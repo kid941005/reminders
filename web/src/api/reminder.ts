@@ -69,6 +69,19 @@ export interface LunarDayInfo {
   in_month: boolean
 }
 
+export interface HolidayDay {
+  name: string
+  /** true=放假，false=调休上班 */
+  off: boolean
+}
+
+export interface HolidayRange {
+  days: Record<string, HolidayDay>
+  /** 内置数据实际覆盖的年份范围，用于判断「这一年公告尚未发布」 */
+  min_year: number
+  max_year: number
+}
+
 export interface LunarCalendarMonth {
   year: number
   month: number
@@ -85,6 +98,8 @@ export interface LunarConvertResult {
   day: number
 }
 
+export const getHolidays = (from: string, to: string) =>
+  request.get('/api/reminder/holidays', { params: { from, to } })
 export const getLunarCalendar = (year: number, month: number) =>
   request.get('/api/reminder/lunar', { params: { year, month } })
 

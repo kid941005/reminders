@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"smallgo/server/holiday"
 	"smallgo/server/lunar"
 	"smallgo/server/response"
 
@@ -44,6 +45,7 @@ func setupAuthRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group.GET("/notifications/unread-count", handleUnreadCount(db))
 	group.POST("/notifications/:id/read", handleReadNotification(db))
 	group.POST("/notifications/read-all", handleReadAllNotifications(db))
+	group.GET("/holidays", handleHolidays())
 	group.GET("/countdowns", handleListCountdowns(db))
 	group.POST("/countdowns", handleCreateCountdown(db))
 	group.PUT("/countdowns/:id", handleUpdateCountdown(db))
@@ -432,6 +434,33 @@ func handleSnoozeReminder(db *gorm.DB) gin.HandlerFunc {
 		}
 		publishDataChanged(item.UserID, "reminder", "snoozed", item.ID, originClientID(c))
 		response.Success(c, item)
+	}
+}
+
+// handleHolidays 返回一段区间内的法定节假日与调休补班。
+// 与节日（festival）不同：这里回答的是「这天放不放假」，数据来自
+// 国务院年度公告，无法由日历规则推导。
+func handleHolidays() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		loc := shanghai()
+		now := time.Now().In(loc)
+		from := strings.TrimSpace(c.Query("from"))
+		to := strings.TrimSpace(c.Query("to"))
+		if from == "" {
+			from = time.Date(now.Year(), 1, 1, 0, 0, 0, 0, loc).Format("2006-01-02")
+		}
+		if to == "" {
+			to = time.Date(now.Year()+1, 1, 1, 0, 0, 0, 0, loc).Format("2006-01-02")
+		}
+		if _, err := time.ParseInLocation("2006-01-02", from, loc); err != nil {
+			response.ErrorBadRequest(c, "from 格式应为 YYYY-MM-DD")
+			return
+		}
+		if _, err := time.ParseInLocation("2006-01-02", to, loc); err != nil {
+			response.ErrorBadRequest(c, "to 格式应为 YYYY-MM-DD")
+			return
+		}
+		response.Success(c, holiday.Default().Range(from, to))
 	}
 }
 

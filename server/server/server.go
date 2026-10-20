@@ -18,6 +18,7 @@ import (
 	"smallgo/server/audit"
 	"smallgo/server/config"
 	"smallgo/server/database"
+	"smallgo/server/holiday"
 	"smallgo/server/logger"
 	"smallgo/server/middleware"
 	"smallgo/server/response"
@@ -346,6 +347,12 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 
 	// Admin operation log (browse + CSV export).
 	audit.RegisterRoutes(adminGroup, db)
+
+	// 节假日数据随二进制内置；<data-dir>/holidays.json 存在时叠加覆盖。
+	// 覆盖文件损坏不应阻断启动——节假日是辅助信息，缺了也不影响提醒本身。
+	if err := holiday.Load(filepath.Join(cfg.DataDir, "holidays.json")); err != nil {
+		logger.Warn("load holiday data: %v", err)
+	}
 
 	// Register apps from the registry (includes the qrcode example app).
 	apps.SetupAll(publicGroup, db)

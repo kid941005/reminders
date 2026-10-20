@@ -11,6 +11,10 @@ server/smallgo-*
 server/data/
 data/
 dev/data/
+# 内置节假日数据随二进制编译（go:embed），必须入库；
+# 上面的 data/ 规则会顺带忽略 server/holiday/data/，这里显式放行。
+!server/holiday/data/
+!server/holiday/data/**
 *.db
 *.db-journal
 

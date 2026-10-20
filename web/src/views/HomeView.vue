@@ -235,7 +235,7 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LunarDatePicker from '../components/LunarDatePicker.vue'
 import RepeatNotifySelect from '../components/RepeatNotifySelect.vue'
 import {
-  completeReminder, createReminder, deleteReminder, getChannelStatuses, getLists, getLunarCalendar, getReminders,
+  completeReminder, createReminder, deleteReminder, getChannelStatuses, getHolidays, getLists, getLunarCalendar, getReminders,
   restoreReminder, snoozeReminder, updateReminder,
   type ChannelStatus, type LunarDayInfo, type ReminderChannel, type ReminderItem, type ReminderList, type SaveReminderInput
 } from '../api/reminder'
@@ -289,18 +289,27 @@ const dayKey = computed(() => view.value === 'day' ? String(route.params.date ||
 // 日视图副标题会带上当天节日/节气。数据来自农历接口，与月视图、周视图同源，
 // 因此三处显示不会出现「月视图有、日视图没有」这类不一致。
 const dayFestival = ref('')
+// 法定节假日（放假 / 补班）：来自国务院年度公告，与节日是两套数据。
+const dayHoliday = ref<{ name: string; off: boolean } | null>(null)
 watch(dayKey, async (key) => {
   if (!key) {
     dayFestival.value = ''
+    dayHoliday.value = null
     return
   }
   const [year, month, day] = key.split('-').map(Number)
   try {
-    const res = await getLunarCalendar(year, month)
-    const cell = (res.data?.data?.days || []).find((c: LunarDayInfo) => c.year === year && c.month === month && c.day === day)
+    const [lunarRes, holidayRes] = await Promise.all([
+      getLunarCalendar(year, month),
+      getHolidays(key, nextDayKey(key)),
+    ])
+    const cell = (lunarRes.data?.data?.days || []).find((c: LunarDayInfo) => c.year === year && c.month === month && c.day === day)
     dayFestival.value = cell?.festival || cell?.term || ''
+    const holidayDays = holidayRes.data?.data?.days || {}
+    dayHoliday.value = holidayDays[key] || null
   } catch {
     dayFestival.value = ''
+    dayHoliday.value = null
   }
 }, { immediate: true })
 
@@ -335,8 +344,10 @@ const subtitle = computed(() => {
   if (view.value === 'completed') return '每一个勾选，都是向前一步'
   if (dayKey.value) {
     const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long', timeZone: 'UTC' }).format(dayDate(dayKey.value))
+    // 放假/补班比节日名更影响当天安排，紧跟在星期后面。
+    const offMark = dayHoliday.value ? (dayHoliday.value.off ? '（休）' : '（班）') : ''
     const festival = dayFestival.value ? ` · ${dayFestival.value}` : ''
-    return `${weekday}${festival} · ${items.value.length} 项提醒`
+    return `${weekday}${offMark}${festival} · ${items.value.length} 项提醒`
   }
   return '所有未完成的提醒都在这里'
 })
