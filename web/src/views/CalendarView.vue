@@ -66,11 +66,25 @@
           :class="{ 'month-cell-today': day.isToday, 'month-cell-outside': !day.inMonth }"
           @click="openDay(day)"
         >
-          <span class="month-num" :class="{ 'month-num-today': day.isToday }">{{ day.dayNum }}</span>
+          <span
+            class="month-num"
+            :class="{
+              'month-num-today': day.isToday,
+              'month-num-festival': !day.isToday && day.festival,
+              'month-num-term': !day.isToday && !day.festival && day.term,
+            }"
+          >{{ day.dayNum }}</span>
+          <!-- 节日优先于节气：同一天既是节气又是节日时只显示节日 -->
+          <span
+            v-if="day.festival || day.term"
+            class="month-fest"
+            :class="{ 'month-fest-term': !day.festival }"
+            :title="day.festival || day.term"
+          >{{ day.festival || day.term }}</span>
           <!-- 桌面显示标题，手机只显示圆点，否则格子会被文字撑爆 -->
           <span class="hidden sm:flex sm:flex-col sm:gap-0.5 sm:w-full">
             <span
-              v-for="item in day.items.slice(0, 3)"
+              v-for="item in day.items.slice(0, 2)"
               :key="item.id"
               class="month-item"
               :class="{ 'month-item-done': !!item.completed_at }"
@@ -78,7 +92,7 @@
               <span class="month-dot"></span>
               <span class="truncate">{{ item.title }}</span>
             </span>
-            <span v-if="day.items.length > 3" class="month-more">+{{ day.items.length - 3 }} 项</span>
+            <span v-if="day.items.length > 2" class="month-more">+{{ day.items.length - 2 }} 项</span>
           </span>
           <span v-if="day.items.length" class="mt-1 flex flex-wrap gap-0.5 sm:hidden">
             <span
@@ -97,7 +111,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getReminders, type ReminderItem } from '../api/reminder'
+import { getLunarCalendar, getReminders, type ReminderItem } from '../api/reminder'
 
 const route = useRoute()
 const router = useRouter()
@@ -139,6 +153,35 @@ const anchor = ref(todayKey())
 const items = ref<ReminderItem[]>([])
 const loading = ref(true)
 
+// 月视图的节日数据。后端 DayInfo 已经带 festival（国际节日 + 农历传统节日）与
+// term（节气），直接复用农历接口即可，前端不再维护第二份节日表。
+type DayFestival = { festival?: string; term?: string; lunar?: string }
+const festivalByDay = ref(new Map<string, DayFestival>())
+
+async function loadFestivals() {
+  const months = new Set<string>()
+  const start = range.value.start
+  let cursor = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), 1))
+  while (cursor.getTime() < range.value.end.getTime()) {
+    months.add(`${cursor.getUTCFullYear()}-${cursor.getUTCMonth() + 1}`)
+    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))
+  }
+  const next = new Map<string, DayFestival>()
+  for (const key of months) {
+    const [year, month] = key.split('-').map(Number)
+    try {
+      const res = await getLunarCalendar(year, month)
+      for (const cell of res.data?.data?.days || []) {
+        const dayKey = `${cell.year}-${String(cell.month).padStart(2, '0')}-${String(cell.day).padStart(2, '0')}`
+        next.set(dayKey, { festival: cell.festival, term: cell.term, lunar: cell.lunar })
+      }
+    } catch {
+      // 节日只是装饰，取不到不能影响提醒本身。
+    }
+  }
+  festivalByDay.value = next
+}
+
 // 周视图：本周一到周日。月视图：覆盖整月所需的完整周（含相邻月份补格），
 // 与系统日历一致 —— 补格里的提醒也照常显示，点进去能看当天。
 const range = computed(() => {
@@ -171,6 +214,7 @@ const days = computed(() => {
     const key = keyOf(cursor)
     const list = byDay.get(key) || []
     list.sort((a, b) => String(a.due_at).localeCompare(String(b.due_at)))
+    const info = festivalByDay.value.get(key)
     result.push({
       key,
       dayNum: cursor.getUTCDate(),
@@ -178,6 +222,9 @@ const days = computed(() => {
       isToday: key === today,
       inMonth: cursor.getUTCMonth() === anchorMonth,
       items: list,
+      festival: info?.festival || '',
+      term: info?.term || '',
+      lunar: info?.lunar || '',
     })
     cursor.setUTCDate(cursor.getUTCDate() + 1)
   }
@@ -216,6 +263,7 @@ async function load() {
       to: keyOf(range.value.end),
     })
     items.value = res.data?.data || []
+    if (!isWeek.value) await loadFestivals()
   } catch {
     items.value = []
   } finally {
@@ -284,6 +332,10 @@ onBeforeUnmount(() => {
 .month-cell-outside { @apply opacity-45; }
 .month-num { @apply text-[11px] font-bold text-foreground sm:text-xs; }
 .month-num-today { @apply flex h-5 min-w-5 items-center justify-center rounded-full bg-brand-500 px-1 text-white; }
+.month-num-festival { @apply text-rose-500; }
+.month-num-term { @apply text-emerald-600 dark:text-emerald-400; }
+.month-fest { @apply mt-0.5 w-full truncate text-[8px] font-bold leading-tight text-rose-500 sm:text-[10px]; }
+.month-fest-term { @apply text-emerald-600 dark:text-emerald-400; }
 .month-item { @apply flex items-center gap-1 text-[10px] font-medium text-foreground; }
 .month-item-done { @apply text-muted-foreground line-through; }
 .month-dot { @apply h-1 w-1 shrink-0 rounded-full bg-brand-500; }

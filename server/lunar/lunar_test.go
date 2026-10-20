@@ -1,6 +1,7 @@
 package lunar
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -147,5 +148,40 @@ func TestNextOccurrenceLeapMonthAnchorWithoutLeapYear(t *testing.T) {
 	// 2027 年没有闰六月，应回退到六月十五（2027-07-18）。
 	if want := "2027-07-18"; got.Format("2006-01-02") != want {
 		t.Fatalf("expected %s, got %s", want, got.Format("2006-01-02"))
+	}
+}
+
+// 月视图的节日来自 CalendarMonth 填充的 Festival 字段。这里锁住三类来源：
+// 公历固定节日（元旦/国庆）、农历传统节日（春节），确保库的接线不被打断。
+func TestCalendarMonthFillsFestivals(t *testing.T) {
+	loc, _ := time.LoadLocation("Asia/Shanghai")
+
+	cases := []struct {
+		year     int
+		month    time.Month
+		day      int
+		contains string
+	}{
+		{2026, time.January, 1, "元旦"},
+		{2026, time.October, 1, "国庆"},
+		{2026, time.February, 17, "春节"}, // 2026 年农历正月初一
+	}
+
+	for _, tc := range cases {
+		days, err := CalendarMonth(tc.year, tc.month, loc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got string
+		for _, d := range days {
+			if d.Month == int(tc.month) && d.Day == tc.day {
+				got = d.Festival
+				break
+			}
+		}
+		if !strings.Contains(got, tc.contains) {
+			t.Fatalf("%d-%02d-%02d festival = %q, want contains %q",
+				tc.year, int(tc.month), tc.day, got, tc.contains)
+		}
 	}
 }

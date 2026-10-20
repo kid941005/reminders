@@ -36,7 +36,7 @@
         </button>
 
         <nav class="mt-6 flex-1 overflow-y-auto px-3 pb-5">
-          <p class="nav-caption">智能清单</p>
+          <p class="nav-caption">导航</p>
           <RouterLink
             v-for="item in smartNav"
             :key="item.to"
@@ -66,17 +66,6 @@
           </form>
 
           <RouterLink
-            to="/admin/all"
-            class="nav-row"
-            :class="{ 'nav-row-active': isActive('/admin/all') }"
-            @click="mobileOpen = false"
-          >
-            <span class="h-2.5 w-2.5 rounded-full bg-violet-500 ring-4 ring-violet-500/10"></span>
-            <span class="flex-1">全部</span>
-            <span v-if="summary.all" class="nav-count">{{ summary.all }}</span>
-          </RouterLink>
-
-          <RouterLink
             v-for="list in lists"
             :key="list.id"
             :to="`/admin/list/${list.id}`"
@@ -91,10 +80,6 @@
         </nav>
 
         <div class="border-t border-border/70 p-3">
-          <RouterLink to="/admin/countdowns" class="nav-row" :class="{ 'nav-row-active': route.path === '/admin/countdowns' }">
-            <span class="nav-symbol bg-rose-500/12 text-rose-500" v-html="icons.countdown"></span>
-            <span class="flex-1">倒数纪念日</span>
-          </RouterLink>
           <RouterLink to="/admin/channels" class="nav-row" :class="{ 'nav-row-active': route.path === '/admin/channels' }">
             <span class="nav-symbol bg-violet-500/12 text-violet-500">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 12h8m-8 4h5m6-11H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4l3 3 3-3h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -240,13 +225,15 @@ const icons = {
   countdown: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 3h10M7 21h10" stroke-width="1.8" stroke-linecap="round"/><path d="M8 3c0 4 8 5 8 9s-8 5-8 9" stroke-width="1.8" stroke-linecap="round"/><path d="M16 3c0 4-8 5-8 9s8 5 8 9" stroke-width="1.8" stroke-linecap="round"/></svg>',
 }
 
+// 顺序即信息优先级：先看「时间怎么排」（周/月），再看「今天做什么」，
+// 然后才是归档与全集。计划视图不再占用入口，路由 /admin/planned 仍然可用。
 const smartNav = [
-  { to: '/admin', label: '今天', key: 'today', tone: 'bg-blue-500/12 text-blue-500', icon: icons.today },
-  { to: '/admin/planned', label: '计划', key: 'planned', tone: 'bg-amber-500/12 text-amber-500', icon: icons.planned },
-  { to: '/admin/week', label: '本周', key: 'week', tone: 'bg-teal-500/12 text-teal-500', icon: icons.week },
-  { to: '/admin/month', label: '本月', key: 'month', tone: 'bg-indigo-500/12 text-indigo-500', icon: icons.month },
-  { to: '/admin/all', label: '全部', key: 'all', tone: 'bg-violet-500/12 text-violet-500', icon: icons.all },
+  { to: '/admin/week', label: '周视图', key: 'week', tone: 'bg-teal-500/12 text-teal-500', icon: icons.week },
+  { to: '/admin/month', label: '月视图', key: 'month', tone: 'bg-indigo-500/12 text-indigo-500', icon: icons.month },
+  { to: '/admin', label: '今日待办', key: 'today', tone: 'bg-blue-500/12 text-blue-500', icon: icons.today },
   { to: '/admin/completed', label: '已完成', key: 'completed', tone: 'bg-emerald-500/12 text-emerald-500', icon: icons.completed },
+  { to: '/admin/all', label: '全部清单', key: 'all', tone: 'bg-violet-500/12 text-violet-500', icon: icons.all },
+  { to: '/admin/countdowns', label: '纪念日', key: 'countdown', tone: 'bg-rose-500/12 text-rose-500', icon: icons.countdown },
 ]
 const adminNav = [
   { to: '/admin/users', label: '用户管理', tone: 'bg-blue-500/12 text-blue-500', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20M9.5 10.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM21 20v-1.5a4 4 0 0 0-3-3.87M16.5 3.6a3.5 3.5 0 0 1 0 6.79" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
