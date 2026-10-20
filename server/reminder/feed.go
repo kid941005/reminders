@@ -12,6 +12,7 @@ import (
 
 	"smallgo/server/lunar"
 	"smallgo/server/response"
+	"smallgo/server/sysconfig"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -166,6 +167,11 @@ func buildCalendarICS(db *gorm.DB, userID uint) (string, error) {
 	for _, item := range countdowns {
 		writeCountdownEvents(&b, item, loc, now)
 	}
+	// 节日默认不写入：订阅的主体是「我的事」，节日应当显式开启，
+	// 否则日历会被一堆与自己无关的条目占满。
+	if include, err := sysconfig.GetConfig(db, "ics_include_holidays", userID); err == nil && include == "true" {
+		writeHolidayEvents(&b, loc, now)
+	}
 
 	writeICSLine(&b, "END:VCALENDAR")
 	return b.String(), nil
@@ -217,6 +223,37 @@ func writeReminderEvent(b *strings.Builder, item Reminder, due time.Time, loc *t
 	}
 	writeICSLine(b, "TRANSP:OPAQUE")
 	writeICSLine(b, "END:VEVENT")
+}
+
+// writeHolidayEvents 追加「当年 + 次年」的节日全天事件。
+//
+// 只生成节日，不生成二十四节气：节气一年 24 个，全部塞进日历会把真正的事项挤掉。
+// 农历节日每年对应的公历日期不同，因此按年逐月展开，而不是用 RRULE。
+func writeHolidayEvents(b *strings.Builder, loc *time.Location, now time.Time) {
+	year := now.In(loc).Year()
+	for y := year; y <= year+1; y++ {
+		for m := 1; m <= 12; m++ {
+			days, err := lunar.CalendarMonth(y, time.Month(m), loc)
+			if err != nil {
+				continue
+			}
+			for _, day := range days {
+				// 月视图返回的网格含相邻月份补格，只看本月，避免同一天写两次。
+				if !day.InMonth || day.Festival == "" {
+					continue
+				}
+				start := time.Date(day.Year, time.Month(day.Month), day.Day, 0, 0, 0, 0, loc)
+				writeICSLine(b, "BEGIN:VEVENT")
+				writeICSLine(b, fmt.Sprintf("UID:holiday-%04d%02d%02d@kid941005-reminders", day.Year, day.Month, day.Day))
+				writeICSLine(b, "DTSTAMP:"+now.UTC().Format("20060102T150405Z"))
+				writeICSLine(b, "DTSTART;VALUE=DATE:"+start.Format("20060102"))
+				writeICSLine(b, "DTEND;VALUE=DATE:"+start.AddDate(0, 0, 1).Format("20060102"))
+				writeICSLine(b, "SUMMARY:"+escapeICS(day.Festival))
+				writeICSLine(b, "TRANSP:TRANSPARENT")
+				writeICSLine(b, "END:VEVENT")
+			}
+		}
+	}
 }
 
 func writeCountdownEvents(b *strings.Builder, item Countdown, loc *time.Location, now time.Time) {

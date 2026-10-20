@@ -34,6 +34,12 @@
           <strong class="week-num">{{ day.dayNum }}</strong>
           <span v-if="day.items.length" class="week-count">{{ day.items.length }}</span>
         </button>
+        <p
+          v-if="day.festival || day.term"
+          class="week-fest"
+          :class="{ 'week-fest-term': !day.festival }"
+          :title="day.festival || day.term"
+        >{{ day.festival || day.term }}</p>
         <div class="week-body">
           <button
             v-for="item in day.items"
@@ -263,7 +269,7 @@ async function load() {
       to: keyOf(range.value.end),
     })
     items.value = res.data?.data || []
-    if (!isWeek.value) await loadFestivals()
+    await loadFestivals()
   } catch {
     items.value = []
   } finally {
@@ -318,6 +324,8 @@ onBeforeUnmount(() => {
 .week-count { @apply ml-auto rounded-full bg-brand-500/10 px-1.5 text-[10px] font-bold text-brand-600 dark:text-brand-300; }
 .week-body { @apply mt-1 flex flex-col gap-1; }
 .week-empty { @apply py-2 text-center text-[10px] text-muted-foreground/60; }
+.week-fest { @apply mt-0.5 truncate px-1 text-[9px] font-bold leading-tight text-rose-500; }
+.week-fest-term { @apply text-emerald-600 dark:text-emerald-400; }
 
 .cal-chip { @apply flex w-full items-start gap-1 rounded-lg bg-muted/60 px-1.5 py-1 text-left transition hover:bg-brand-500/10; }
 .cal-chip-time { @apply shrink-0 text-[9px] font-bold tabular-nums text-muted-foreground; }

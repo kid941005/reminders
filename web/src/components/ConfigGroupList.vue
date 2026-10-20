@@ -156,6 +156,7 @@ const groupTitleMap: Record<string, string> = {
   access: '访问控制',
   appearance: '外观',
   notification: '提醒通知',
+  calendar: '日历订阅',
   system: '系统维护',
 }
 

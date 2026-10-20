@@ -57,6 +57,11 @@ func init() {
 		Description: "新建提醒时默认勾选的通知方式；未绑定的渠道会自动跳过，站内消息始终保留",
 	})
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
+		Key: "ics_include_holidays", Scope: sysconfig.ScopeUser, Type: sysconfig.TypeBool,
+		Default: "false", Group: "calendar", Label: "订阅包含节日",
+		Description: "开启后日历订阅会额外包含节日全天事件（不含二十四节气）",
+	})
+	sysconfig.RegisterConfig(sysconfig.ConfigDef{
 		Key: "reminder_all_day_time", Scope: sysconfig.ScopeUser, Type: sysconfig.TypeString,
 		Default: "09:00", Group: "notification", Label: "全天提醒时间",
 		Description: "只有日期的提醒在当天何时通知",

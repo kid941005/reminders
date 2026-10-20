@@ -1,10 +1,13 @@
 package reminder
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
+
+	"smallgo/server/sysconfig"
 )
 
 func TestCalendarICSContent(t *testing.T) {
@@ -135,5 +138,37 @@ func TestCalendarFeedTokenLifecycle(t *testing.T) {
 	}
 	if again.Token != feed.Token {
 		t.Fatal("ensureCalendarFeed must be idempotent")
+	}
+}
+
+// 节日在订阅里默认关闭：订阅的主体是「我的事」，节日应显式开启。
+// 开启后必须包含当年元旦，用来确认节日确实按年生成而不是空转。
+func TestCalendarICSHolidaysOptIn(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	const userID = 92
+
+	ics, err := buildCalendarICS(appDB, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(ics, "holiday-") {
+		t.Fatal("holidays must be off by default")
+	}
+
+	if err := sysconfig.UpdateConfig(appDB, "ics_include_holidays", "true", userID); err != nil {
+		t.Fatal(err)
+	}
+	ics, err = buildCalendarICS(appDB, userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ics, "holiday-") {
+		t.Fatal("holidays should appear once enabled")
+	}
+	year := time.Now().In(mustShanghai(t)).Year()
+	if !strings.Contains(ics, fmt.Sprintf("holiday-%04d0101", year)) {
+		t.Fatalf("expected New Year holiday event for %d", year)
 	}
 }

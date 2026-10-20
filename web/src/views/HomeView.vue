@@ -235,9 +235,9 @@ import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LunarDatePicker from '../components/LunarDatePicker.vue'
 import RepeatNotifySelect from '../components/RepeatNotifySelect.vue'
 import {
-  completeReminder, createReminder, deleteReminder, getChannelStatuses, getLists, getReminders,
+  completeReminder, createReminder, deleteReminder, getChannelStatuses, getLists, getLunarCalendar, getReminders,
   restoreReminder, snoozeReminder, updateReminder,
-  type ChannelStatus, type ReminderChannel, type ReminderItem, type ReminderList, type SaveReminderInput
+  type ChannelStatus, type LunarDayInfo, type ReminderChannel, type ReminderItem, type ReminderList, type SaveReminderInput
 } from '../api/reminder'
 import { getUserConfigMeta } from '../api/config'
 
@@ -286,6 +286,24 @@ const selectedList = computed(() => lists.value.find(x => x.id === selectedListI
 // 只是把取数范围限定在那一天。日期一律按 YYYY-MM-DD 处理，避免时区偏移。
 const dayKey = computed(() => view.value === 'day' ? String(route.params.date || '') : '')
 
+// 日视图副标题会带上当天节日/节气。数据来自农历接口，与月视图、周视图同源，
+// 因此三处显示不会出现「月视图有、日视图没有」这类不一致。
+const dayFestival = ref('')
+watch(dayKey, async (key) => {
+  if (!key) {
+    dayFestival.value = ''
+    return
+  }
+  const [year, month, day] = key.split('-').map(Number)
+  try {
+    const res = await getLunarCalendar(year, month)
+    const cell = (res.data?.data?.days || []).find((c: LunarDayInfo) => c.year === year && c.month === month && c.day === day)
+    dayFestival.value = cell?.festival || cell?.term || ''
+  } catch {
+    dayFestival.value = ''
+  }
+}, { immediate: true })
+
 function dayDate(key: string): Date {
   const [y, m, d] = key.split('-').map(Number)
   return new Date(Date.UTC(y, m - 1, d))
@@ -317,7 +335,8 @@ const subtitle = computed(() => {
   if (view.value === 'completed') return '每一个勾选，都是向前一步'
   if (dayKey.value) {
     const weekday = new Intl.DateTimeFormat('zh-CN', { weekday: 'long', timeZone: 'UTC' }).format(dayDate(dayKey.value))
-    return `${weekday} · ${items.value.length} 项提醒`
+    const festival = dayFestival.value ? ` · ${dayFestival.value}` : ''
+    return `${weekday}${festival} · ${items.value.length} 项提醒`
   }
   return '所有未完成的提醒都在这里'
 })
