@@ -31,6 +31,7 @@
         :key="day.key"
         class="week-col"
         :class="{ 'week-col-today': day.isToday }"
+        @click="onWeekColumnClick($event, day)"
       >
         <button type="button" class="week-head" @click="openDay(day)">
           <span class="week-name">{{ day.weekdayLabel }}</span>
@@ -346,6 +347,15 @@ function openDay(day: { key: string }) {
   router.push(`/admin/day/${day.key}`)
 }
 
+// 周视图整列可点：点空白处也能进入当天，与月视图「整格可点」保持一致。
+// 命中列内已有的按钮（列头、提醒条目）时直接返回，交给按钮自己的处理，
+// 否则一次点击会触发两次跳转。
+function onWeekColumnClick(event: MouseEvent, day: { key: string }) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('button')) return
+  openDay(day)
+}
+
 // 在日视图里改完提醒回到这里时，日历要跟着更新。
 function onRealtime() {
   void load()
@@ -366,7 +376,7 @@ onBeforeUnmount(() => {
 .cal-nav { @apply flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-lg font-bold text-foreground transition hover:bg-muted; }
 .cal-today { @apply h-9 rounded-xl border border-border bg-surface px-3 text-xs font-bold text-foreground transition hover:bg-muted; }
 
-.week-col { @apply rounded-2xl border border-border/70 bg-surface/70 p-2; }
+.week-col { @apply cursor-pointer rounded-2xl border border-border/70 bg-surface/70 p-2 transition hover:border-brand-500/25 hover:bg-brand-500/[.04]; }
 .week-col-today { @apply border-brand-500/40 bg-brand-500/[.06]; }
 .week-head { @apply flex w-full items-center gap-1.5 rounded-lg px-1 py-0.5 text-left transition hover:bg-muted/60; }
 .week-name { @apply text-[10px] font-bold text-muted-foreground; }

@@ -228,9 +228,9 @@ const icons = {
 // 顺序即信息优先级：先看「时间怎么排」（周/月），再看「今天做什么」，
 // 然后才是归档与全集。计划视图不再占用入口，路由 /admin/planned 仍然可用。
 const smartNav = [
-  { to: '/admin/week', label: '周视图', key: 'week', tone: 'bg-teal-500/12 text-teal-500', icon: icons.week },
-  { to: '/admin/month', label: '月视图', key: 'month', tone: 'bg-indigo-500/12 text-indigo-500', icon: icons.month },
   { to: '/admin', label: '今日待办', key: 'today', tone: 'bg-blue-500/12 text-blue-500', icon: icons.today },
+  { to: '/admin/week', label: '本周安排', key: 'week', tone: 'bg-teal-500/12 text-teal-500', icon: icons.week },
+  { to: '/admin/month', label: '本月计划', key: 'month', tone: 'bg-indigo-500/12 text-indigo-500', icon: icons.month },
   { to: '/admin/completed', label: '已完成', key: 'completed', tone: 'bg-emerald-500/12 text-emerald-500', icon: icons.completed },
   { to: '/admin/all', label: '全部清单', key: 'all', tone: 'bg-violet-500/12 text-violet-500', icon: icons.all },
   { to: '/admin/countdowns', label: '纪念日', key: 'countdown', tone: 'bg-rose-500/12 text-rose-500', icon: icons.countdown },
