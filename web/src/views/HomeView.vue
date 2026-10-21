@@ -33,6 +33,7 @@
             maxlength="200"
             @keydown.enter.prevent="submitQuick"
             @focus="quickFocused = true"
+            @blur="quickFocused = false"
           />
           <p v-if="quick.notes" class="mt-1 truncate text-xs text-muted-foreground">{{ quick.notes }}</p>
         </div>
@@ -444,8 +445,14 @@ async function loadItems() {
   const params = dayKey.value
     ? { view: 'calendar', from: dayKey.value, to: nextDayKey(dayKey.value), q: search.value || undefined }
     : { view: view.value, list_id: selectedListID.value, q: search.value || undefined }
-  const res = await getReminders(params)
-  items.value = res.data.data || []
+  // 搜索防抖与实时刷新都是裸调用，这里必须自己兜住错误，
+  // 否则请求失败时用户只看到列表不变，控制台留一条 unhandled rejection。
+  try {
+    const res = await getReminders(params)
+    items.value = res.data.data || []
+  } catch (err: any) {
+    showToast(err.response?.data?.message || '加载失败，请重试', 'error')
+  }
 }
 async function submitQuick() {
   if (!quick.title?.trim() || saving.value) return
@@ -462,7 +469,8 @@ async function submitQuick() {
     if (dayKey.value) quick.due_at = dayDefaultDue()
     preset.value = ''
     quickExpanded.value = false
-    quickFocused.value = false
+    // 不再手动把 quickFocused 置 false：输入框随后会重新获得焦点，不会触发
+    // blur，强行置 false 会让「今天/明天…」这一行收起来且无法恢复。
     if (undated && !selectedListID.value && (view.value === 'today' || view.value === 'planned')) {
       await router.push({ name: 'AllReminders' })
       showToast('已保存到「全部」：这条提醒没有设置日期')
@@ -670,8 +678,6 @@ function onShortcut(e: KeyboardEvent) {
 .quick-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(#3b82f6, #6366f1); opacity: .75; }
 .quick-chip { @apply inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-surface px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:border-brand-500/30 hover:text-brand-600 disabled:opacity-40 sm:h-8 sm:rounded-xl sm:px-3 sm:text-xs; }
 .quick-chip.active { @apply border-brand-500/25 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
-.field-label { @apply block text-[11px] font-bold text-muted-foreground; }
-.compact-input { @apply mt-1.5 h-9 w-full rounded-xl border border-border bg-surface px-3 text-xs font-medium text-foreground outline-none focus:border-brand-500/50; }
 .channel-pill { @apply rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-muted-foreground transition disabled:cursor-not-allowed disabled:opacity-35; }
 .channel-pill.selected { @apply border-brand-500/30 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
 .reminder-row { @apply relative flex min-h-0 items-center gap-2.5 overflow-hidden rounded-2xl border border-border/65 bg-surface/85 px-3 py-2.5 shadow-[0_6px_24px_-20px_rgba(15,23,42,.5)] backdrop-blur transition-all hover:-translate-y-0.5 hover:border-brand-500/20 hover:shadow-[0_16px_36px_-26px_rgba(15,23,42,.65)] sm:gap-3 sm:px-4 sm:py-3.5; content-visibility: auto; contain-intrinsic-size: 64px; }
@@ -686,7 +692,6 @@ function onShortcut(e: KeyboardEvent) {
 .tiny-badge { @apply rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[9px] font-extrabold text-violet-500; }
 .row-actions { @apply flex shrink-0 items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100; }
 .row-action { @apply flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground; }
-.empty-state { @apply mt-4 flex min-h-[230px] flex-col items-center justify-center rounded-[28px] border border-dashed border-border bg-surface/35 px-6 text-center sm:min-h-[280px]; }
 .empty-art { @apply relative h-28 w-28; }
 .empty-ring { @apply absolute inset-2 rounded-full border border-brand-500/20 bg-brand-500/5; }
 .empty-check { @apply absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-[0_16px_35px_-12px_rgba(59,130,246,.65)]; }

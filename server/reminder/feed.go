@@ -140,7 +140,7 @@ func handleCalendarFeed(db *gorm.DB) gin.HandlerFunc {
 // 而历来的用途是「接下来要做什么」。全天事件用 DATE 值，且 DTEND 取次日
 // ——ICS 的全天事件是左闭右开区间。
 func buildCalendarICS(db *gorm.DB, userID uint) (string, error) {
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc := shanghai()
 	now := time.Now()
 	var reminders []Reminder
 	if err := db.Where("user_id = ? AND deleted_at IS NULL AND completed_at IS NULL AND due_at IS NOT NULL", userID).
@@ -185,6 +185,17 @@ func writeReminderEvents(b *strings.Builder, item Reminder, loc *time.Location, 
 	if lunarRepeat {
 		// 农历重复无法用 RRULE 表达，展开成若干独立事件。
 		cursor := item.DueAt.In(loc)
+		// 一条创建于多年前、一直未完成的农历提醒，若始终从旧的 DueAt 起展开，
+		// 这 10 个事件会全部落在过去，订阅里再也看不到未来事件。
+		// 先把游标推进到今天，保证窗口覆盖未来；400 次足以跨过 30 年。
+		today := dateOnlyUTC(now, loc)
+		for guard := 0; guard < 400 && cursor.Before(today); guard++ {
+			next, err := nextOccurrenceWithCalendar(cursor, item.RepeatRule, item.Calendar, item.LunarAnchor)
+			if err != nil || !next.After(cursor) {
+				break
+			}
+			cursor = next
+		}
 		for i := 0; i < icsExpandLimit; i++ {
 			writeReminderEvent(b, item, cursor, loc, now, fmt.Sprintf("reminder-%d-%d@kid941005-reminders", item.ID, i), "")
 			next, err := nextOccurrenceWithCalendar(cursor, item.RepeatRule, item.Calendar, item.LunarAnchor)

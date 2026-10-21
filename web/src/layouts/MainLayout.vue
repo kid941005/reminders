@@ -47,7 +47,7 @@
           >
             <span class="nav-symbol" :class="item.tone" v-html="item.icon"></span>
             <span class="flex-1">{{ item.label }}</span>
-            <span v-if="summary[item.key]" class="nav-count">{{ summary[item.key] }}</span>
+            <span v-if="item.key && summary[item.key]" class="nav-count">{{ summary[item.key] }}</span>
           </RouterLink>
 
           <div class="mt-7 flex items-center justify-between px-3">
@@ -150,8 +150,8 @@
     </div>
 
     <nav class="mobile-tabbar" :class="{ 'mobile-tabbar-hidden': keyboardOpen }">
-      <RouterLink to="/admin" class="mobile-tab" :class="{ active: route.path === '/admin' }"><span v-html="smartNav[0].icon"></span><small>今天</small></RouterLink>
-      <RouterLink to="/admin/planned" class="mobile-tab" :class="{ active: route.path === '/admin/planned' }"><span v-html="smartNav[1].icon"></span><small>计划</small></RouterLink>
+      <RouterLink to="/admin" class="mobile-tab" :class="{ active: route.path === '/admin' }"><span v-html="icons.today"></span><small>今天</small></RouterLink>
+      <RouterLink to="/admin/planned" class="mobile-tab" :class="{ active: route.path === '/admin/planned' }"><span v-html="icons.planned"></span><small>计划</small></RouterLink>
       <button class="mobile-add" aria-label="新建提醒" @click="openQuickAdd"><svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" stroke-width="2.2" stroke-linecap="round"/></svg></button>
       <RouterLink to="/admin/notifications" class="mobile-tab" :class="{ active: route.path === '/admin/notifications' }"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke-width="1.8" stroke-linecap="round"/></svg></span><small>通知</small></RouterLink>
       <RouterLink to="/admin/channels" class="mobile-tab" :class="{ active: route.path === '/admin/channels' }"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 12h8m-8 4h5m6-11H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4l3 3 3-3h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" stroke-width="1.8"/></svg></span><small>方式</small></RouterLink>
@@ -227,13 +227,15 @@ const icons = {
 
 // 顺序即信息优先级：先看「时间怎么排」（周/月），再看「今天做什么」，
 // 然后才是归档与全集。计划视图不再占用入口，路由 /admin/planned 仍然可用。
+// key 对应后端 handleSummary 返回的计数字段；本周/本月/纪念日后端没有对应计数，
+// 留空串而不是写一个取不到值的键，避免读代码时误以为有徽标。
 const smartNav = [
   { to: '/admin', label: '今日待办', key: 'today', tone: 'bg-blue-500/12 text-blue-500', icon: icons.today },
-  { to: '/admin/week', label: '本周安排', key: 'week', tone: 'bg-teal-500/12 text-teal-500', icon: icons.week },
-  { to: '/admin/month', label: '本月计划', key: 'month', tone: 'bg-indigo-500/12 text-indigo-500', icon: icons.month },
+  { to: '/admin/week', label: '本周安排', key: '', tone: 'bg-teal-500/12 text-teal-500', icon: icons.week },
+  { to: '/admin/month', label: '本月计划', key: '', tone: 'bg-indigo-500/12 text-indigo-500', icon: icons.month },
   { to: '/admin/completed', label: '已完成', key: 'completed', tone: 'bg-emerald-500/12 text-emerald-500', icon: icons.completed },
   { to: '/admin/all', label: '全部清单', key: 'all', tone: 'bg-violet-500/12 text-violet-500', icon: icons.all },
-  { to: '/admin/countdowns', label: '纪念日', key: 'countdown', tone: 'bg-rose-500/12 text-rose-500', icon: icons.countdown },
+  { to: '/admin/countdowns', label: '纪念日', key: '', tone: 'bg-rose-500/12 text-rose-500', icon: icons.countdown },
 ]
 const adminNav = [
   { to: '/admin/users', label: '用户管理', tone: 'bg-blue-500/12 text-blue-500', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20M9.5 10.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM21 20v-1.5a4 4 0 0 0-3-3.87M16.5 3.6a3.5 3.5 0 0 1 0 6.79" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
@@ -573,7 +575,6 @@ onBeforeUnmount(() => {
 .tiny-add { @apply flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground; }
 .sub-link { @apply ml-11 block rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground; }
 .topbar { @apply sticky top-0 z-30 flex h-12 items-center border-b border-border/70 bg-background/75 px-3.5 backdrop-blur-xl sm:h-16 sm:px-6 lg:h-[76px] lg:px-8 xl:px-10; }
-.icon-button { @apply flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground sm:h-10 sm:w-10; }
 .avatar { @apply flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-indigo-500 text-sm font-extrabold text-white shadow-sm sm:h-9 sm:w-9; }
 .mobile-tabbar { @apply fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 items-center justify-around rounded-2xl border border-white/30 bg-surface/90 px-1.5 shadow-[0_14px_40px_-18px_rgba(15,23,42,.45)] backdrop-blur-2xl transition-all duration-200 lg:hidden; }
 .mobile-tabbar-hidden { @apply pointer-events-none translate-y-28 opacity-0; }

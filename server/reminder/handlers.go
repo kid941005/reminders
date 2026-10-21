@@ -299,7 +299,7 @@ func handleListReminders(db *gorm.DB) gin.HandlerFunc {
 // 解释：客户端只传 YYYY-MM-DD，不传时刻，避免浏览器时区与会话时区不一致时
 // 出现「少一天」。解析失败按零值返回，由调用方决定是否拒绝。
 func parseDateRange(c *gin.Context) (time.Time, time.Time) {
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc := shanghai()
 	parse := func(raw string) time.Time {
 		raw = strings.TrimSpace(raw)
 		if raw == "" {
@@ -570,7 +570,7 @@ func handleLunarConvert(db *gorm.DB) gin.HandlerFunc {
 func handleSummary(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := currentUserID(c)
-		loc, _ := time.LoadLocation("Asia/Shanghai")
+		loc := shanghai()
 		now := time.Now()
 		local := now.In(loc)
 		endToday := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)

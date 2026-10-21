@@ -73,6 +73,12 @@ textarea {
 }
 
 @layer components {
+  /* 通用表单与空状态样式。这些类名在多个页面复用，必须放在全局层：
+     Vue 的 scoped 样式带组件专属属性选择器，写在某个视图里对其它页面不生效。 */
+  .field-label { @apply block text-[11px] font-bold text-muted-foreground; }
+  .compact-input { @apply mt-1.5 h-9 w-full rounded-xl border border-border bg-surface px-3 text-xs font-medium text-foreground outline-none focus:border-brand-500/50; }
+  .empty-state { @apply mt-4 flex min-h-[230px] flex-col items-center justify-center rounded-[28px] border border-dashed border-border bg-surface/35 px-6 text-center sm:min-h-[280px]; }
+  .icon-button { @apply flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground sm:h-10 sm:w-10; }
   /* Glassy surface used for cards and panels — consumes semantic tokens so
      it follows the active theme/brand automatically. */
   .surface {

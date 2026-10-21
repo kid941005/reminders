@@ -95,7 +95,7 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 	if err == nil {
 		attempt.Result = "success"
 		attempt.ResponseSummary = "sent"
-		_ = db.Transaction(func(tx *gorm.DB) error {
+		finalizeErr := db.Transaction(func(tx *gorm.DB) error {
 			if e := tx.Create(&attempt).Error; e != nil {
 				return e
 			}
@@ -110,6 +110,16 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 			// yet, so queue the next notification for repeat-notify reminders.
 			return scheduleRepeatNotify(tx, item, job)
 		})
+		// 消息已经发出去了。收尾事务失败如果放任不管，任务会停在 processing，
+		// 5 分钟后被重置成 retry 再发一次，用户收到重复提醒。
+		// 因此这里记日志并尽最大努力把任务标记为完成：宁可少一条投递记录，
+		// 也不要重复打扰用户。
+		if finalizeErr != nil {
+			logger.Warn("reminder: finalize delivery job %d: %v", job.ID, finalizeErr)
+			_ = db.Model(&DeliveryJob{}).Where("id = ?", job.ID).Updates(map[string]interface{}{
+				"status": "succeeded", "locked_at": nil, "worker_id": "",
+			}).Error
+		}
 		if job.Channel != ChannelInApp {
 			_ = db.Model(&ChannelBinding{}).Where("user_id = ? AND channel = ?", job.UserID, job.Channel).Updates(map[string]interface{}{"last_error_code": "", "last_error_at": nil}).Error
 		}

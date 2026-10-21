@@ -106,7 +106,7 @@ func (in *SaveCountdownInput) normalize() (time.Time, error) {
 }
 
 func listCountdowns(db *gorm.DB, userID uint) ([]CountdownDTO, error) {
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc := shanghai()
 	today := dateOnlyUTC(time.Now(), loc)
 	var rows []Countdown
 	if err := db.Where("user_id = ?", userID).
@@ -144,7 +144,7 @@ func createCountdown(db *gorm.DB, userID uint, in SaveCountdownInput) (Countdown
 	if err := db.Create(&row).Error; err != nil {
 		return CountdownDTO{}, err
 	}
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc := shanghai()
 	return buildCountdownDTO(row, dateOnlyUTC(time.Now(), loc), loc), nil
 }
 
@@ -174,7 +174,7 @@ func updateCountdown(db *gorm.DB, userID, id uint, in SaveCountdownInput) (Count
 	if err := db.Save(&row).Error; err != nil {
 		return CountdownDTO{}, err
 	}
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc := shanghai()
 	return buildCountdownDTO(row, dateOnlyUTC(time.Now(), loc), loc), nil
 }
 

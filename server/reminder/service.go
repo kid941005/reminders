@@ -417,7 +417,7 @@ func listReminders(db *gorm.DB, userID uint, view, query string, listID uint, fr
 	var rows []Reminder
 	q := db.Where("user_id = ? AND deleted_at IS NULL", userID)
 	now := time.Now()
-	loc, _ := time.LoadLocation("Asia/Shanghai")
+	loc := shanghai()
 	localNow := now.In(loc)
 	startToday := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, loc)
 	endToday := startToday.AddDate(0, 0, 1)
@@ -643,7 +643,7 @@ func nextOccurrenceWithCalendar(t time.Time, rule, calendar, anchor string) (tim
 		if !ok {
 			return t, nil
 		}
-		loc, _ := time.LoadLocation("Asia/Shanghai")
+		loc := shanghai()
 		switch rule {
 		case "monthly":
 			return lunar.NextMonthlyOccurrence(parsed.Day, t, loc)
@@ -682,7 +682,7 @@ func parseLunarAnchor(anchor string) (lunar.Date, bool) {
 func normalizeLunarAnchor(anchor string, due time.Time) (string, error) {
 	anchor = strings.TrimSpace(anchor)
 	if anchor == "" {
-		loc, _ := time.LoadLocation("Asia/Shanghai")
+		loc := shanghai()
 		converted := lunar.FromTime(due.In(loc))
 		return fmt.Sprintf("%d:%d", converted.Month, converted.Day), nil
 	}

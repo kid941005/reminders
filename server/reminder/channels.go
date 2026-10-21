@@ -1238,11 +1238,9 @@ func truncateRunes(s string, max int) string {
 }
 
 func safeError(err error) string {
-	text := err.Error()
-	if len(text) > 160 {
-		return text[:160]
-	}
-	return text
+	// 按字符而不是字节截断：错误信息会写进投递记录与通知正文，
+	// 按字节截会在中文上切出半个 UTF-8 字符，JSON 里变成乱码。
+	return truncateRunes(err.Error(), 160)
 }
 
 func shanghai() *time.Location {
