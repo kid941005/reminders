@@ -557,6 +557,38 @@ func TestAppRoutesUsePublicRateLimiter(t *testing.T) {
 	}
 }
 
+// 限流键取自 c.ClientIP()。gin 默认信任所有来源的 X-Forwarded-For，客户端每次
+// 换一个伪造值就能把「每 IP 每分钟 N 次」的登录爆破防护变成无限次。NewRouter
+// 只信任回环与内网网段，所以公网直连带来的 XFF 必须被忽略。
+func TestSpoofedForwardedForCannotBypassRateLimit(t *testing.T) {
+	_, db, dir := setupTestRouter(t)
+	secret, err := sysconfig.GetConfig(db, "jwt_secret", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := NewRouter(config.Config{
+		CORSOrigin: "*",
+		RateLimit:  1,
+		UploadDir:  filepath.Join(dir, "uploads"),
+	}, db, secret)
+
+	for i, spoofed := range []string{"1.1.1.1", "2.2.2.2"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/qrcode?content=hello", nil)
+		// TEST-NET-3 地址，模拟公网直连：不在受信代理网段内。
+		req.RemoteAddr = "203.0.113.9:1234"
+		req.Header.Set("X-Forwarded-For", spoofed)
+		recorder := httptest.NewRecorder()
+		r.ServeHTTP(recorder, req)
+
+		if i == 0 && recorder.Code != http.StatusOK {
+			t.Fatalf("首次请求返回 %d，期望 200", recorder.Code)
+		}
+		if i == 1 && recorder.Code != http.StatusTooManyRequests {
+			t.Fatalf("伪造 X-Forwarded-For 绕过了限流：返回 %d，期望 429", recorder.Code)
+		}
+	}
+}
+
 // TestBootstrapReadsBypassRateLimiter protects the SPA startup reads. They are
 // called on every navigation and must never 429: a rejected setup-required call
 // leaves setupRequired=false, which sends a first-time install to the login

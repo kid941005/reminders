@@ -378,9 +378,11 @@ async function confirmRemove() {
     show(`${channel.label}已解绑`)
   } catch (err: any) { show(err.response?.data?.message || '解绑失败', 'error') }
 }
-async function startRebind(channel: ChannelStatus) {
-  await unbindChannel(channel.channel)
-  await load()
+function startRebind(channel: ChannelStatus) {
+  // 「更换」本质是先解绑再重新绑定，会丢掉已保存的密钥。与「解绑」共用
+  // 同一个确认弹窗，避免单击即永久删除；实际解绑在 confirmRemove 里做，
+  // 那里已有 try/catch 与重新加载。
+  confirmChannel.value = channel
 }
 function show(message: string, type: 'success' | 'error' = 'success') { toast.message = ''; setTimeout(() => Object.assign(toast, { message, type }), 0) }
 function statusText(channel: ChannelStatus) {

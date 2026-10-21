@@ -14,11 +14,21 @@ import (
 	"gorm.io/gorm"
 )
 
-func LimitJSONBody(maxBytes int64) gin.HandlerFunc {
+// LimitJSONBody caps the request body size.
+//
+// 不能按 Content-Type 判断：gin 的 ShouldBindJSON 不看 Content-Type，直接
+// json.Decode(req.Body)，客户端只要写 text/plain 就能绕过体积上限，把整个
+// 请求体读进内存。因此这里无条件生效，只对显式列出的路径豁免（上传路由
+// 自己设了更大的上限）。
+func LimitJSONBody(maxBytes int64, exemptPaths ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if strings.HasPrefix(c.GetHeader("Content-Type"), "application/json") {
-			c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
+		for _, path := range exemptPaths {
+			if c.Request.URL.Path == path {
+				c.Next()
+				return
+			}
 		}
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxBytes)
 		c.Next()
 	}
 }

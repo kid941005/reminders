@@ -258,10 +258,22 @@ func newHTTPServer(handler http.Handler) *http.Server {
 // use it to exercise the API against an in-memory database.
 func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 	r := gin.New()
+	// 只信任来自回环与内网网段的 X-Forwarded-For。gin 默认信任所有来源，
+	// 任何直连客户端伪造 XFF 都能绕过限流（登录爆破防护）并污染审计 IP。
+	// 部署在反代之后时，反代来自内网/回环，仍然能取到真实客户端 IP；
+	// 公网直连的来源不在名单内，XFF 会被忽略。
+	if err := r.SetTrustedProxies([]string{
+		"127.0.0.1/32", "::1/128",
+		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
+	}); err != nil {
+		logger.Warn("set trusted proxies: %v", err)
+	}
 	r.Use(middleware.Logger())
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORS(cfg.CORSOrigin))
-	r.Use(middleware.LimitJSONBody(1 << 20))
+	// 上传路由自己设了 21MB 上限（见 upload.HandleUpload），这里豁免，
+	// 其余请求一律 1MB，与 Content-Type 无关。
+	r.Use(middleware.LimitJSONBody(1<<20, "/api/upload"))
 	// 静态资源长缓存：构建产物名带内容哈希，可以与 SPA 入口的 no-store 并存。
 	r.Use(middleware.StaticCacheHeaders())
 	// 文本响应统一 gzip：160KB 的入口包压到约 1/5，弱网首屏差别最明显。

@@ -2,6 +2,36 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.11.4（2026-10-21）
+
+### 安全
+
+- **请求体上限可被 Content-Type 绕过**（`middleware/middleware.go`）：
+  旧实现只在 `Content-Type` 以 `application/json` 开头时才套 `MaxBytesReader`，
+  而 gin 的 `ShouldBindJSON` 根本不看 Content-Type，直接 `json.Decode(req.Body)`。
+  匿名请求带 `Content-Type: text/plain` 即可提交任意大的 JSON，把整包读进内存。
+  现在无条件生效，仅豁免上传路径（它自己设了 21MB 上限）。
+- **只信任内网与回环来源的 X-Forwarded-For**（`server/server.go`）：
+  未设置信任代理时 gin 默认信任 `0.0.0.0/0`，任何直连客户端伪造 XFF 都能让
+  `ClientIP()` 返回任意值，从而绕过「每 IP 每分钟 20 次」的登录限流、并污染审计 IP。
+  现在受信名单为回环 + 三个私有网段：反代来自内网时仍能取到真实客户端 IP，
+  公网直连带来的伪造头被忽略。
+
+### 修复
+
+- **弱网冷启动会把已登录用户登出**（`web/src/stores/auth.ts`）：`checkAuth()` 超时与
+  「后端明确应答未认证」共用同一分支，都执行 `clearSession()`，会删掉本地 token。
+  现在只有后端明确返回未认证才清会话，超时保留 token，交给后续请求的 401 拦截器判断。
+- **「更换绑定」单击即永久解绑**（`web/src/views/ChannelsView.vue`）：原来直接调用
+  `unbindChannel`，无二次确认、无 try/catch。现在与「解绑」共用确认弹窗。
+- **启用/禁用用户失败无提示**（`web/src/views/AdminUsersView.vue`）：`catch {}` 吞掉错误，
+  管理员以为已封禁实际未生效。现在失败写入页面错误提示，并加 `togglingId` 防重复点击。
+
+### 测试
+
+- `middleware/bodylimit_test.go`：`text/plain` 的超大请求体必须被限制；上传路径必须豁免。
+- `server/server_test.go`：伪造 `X-Forwarded-For` 不能绕过限流（第二次仍须 429）。
+
 ## v0.11.3（2026-10-21）
 
 ### 修复（全仓审查所得）

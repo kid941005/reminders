@@ -112,7 +112,7 @@
               <td class="py-3.5 px-4 text-muted-foreground whitespace-nowrap">{{ user.created_at }}</td>
               <td class="py-3.5 px-6">
                 <div class="flex items-center justify-end gap-1">
-                  <button @click="handleToggleStatus(user)" :title="user.status === 1 ? '禁用' : '启用'" class="icon-btn hover:text-amber-600 hover:bg-amber-50 dark:hover:bg-amber-500/10">
+                  <button @click="handleToggleStatus(user)" :disabled="togglingId === user.id" :title="user.status === 1 ? '禁用' : '启用'" class="icon-btn hover:text-amber-600 hover:bg-amber-50 disabled:opacity-40 dark:hover:bg-amber-500/10">
                     <svg v-if="user.status === 1" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636"/></svg>
                     <svg v-else class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                   </button>
@@ -212,6 +212,8 @@ const page = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const errorMsg = ref('')
+// 正在切换状态的用户 id，用于防重复点击（连点会发两次相反的请求）。
+const togglingId = ref<number | null>(null)
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
 
 // 统计卡片只统计当前页（接口按页返回），文案与「用户总数」的全局口径区分开，
@@ -283,10 +285,21 @@ function nextPage() {
 }
 
 async function handleToggleStatus(user: any) {
+  if (togglingId.value === user.id) return
+  togglingId.value = user.id
   try {
     const res = await toggleUserStatus(user.id)
-    if (res.data?.code === 0) await loadUsers()
-  } catch {}
+    if (res.data?.code === 0) {
+      await loadUsers()
+    } else {
+      errorMsg.value = res.data?.message || '操作失败'
+    }
+  } catch (err: any) {
+    // 禁用/启用是安全操作，失败必须让管理员看到，不能静默。
+    errorMsg.value = err.response?.data?.message || '操作失败，请重试'
+  } finally {
+    togglingId.value = null
+  }
 }
 
 // 删除确认走应用内浮层（见 ConfirmDialog）。失败必须留在浮层里说出来：

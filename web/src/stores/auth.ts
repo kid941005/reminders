@@ -105,7 +105,10 @@ export const useAuthStore = defineStore('auth', () => {
         if (authRes?.data?.code === 0 && authRes.data.data?.authenticated) {
           user.value = authRes.data.data.user
           void loadUserPreferences()
-        } else {
+        } else if (authRes?.data?.code === 0) {
+          // 只有后端明确应答「未认证」才清会话。超时时 authRes 为 null，
+          // 它既可能是网络慢也可能是服务未就绪，不能据此把已登录用户登出并
+          // 删掉本地 token；真正的失效交给后续请求的 401 拦截器处理。
           clearSession()
         }
       }
