@@ -55,12 +55,14 @@ type Reminder struct {
 	RepeatNotifyMinutes int `gorm:"not null;default:0" json:"repeat_notify_minutes"`
 	// RemindBeforeMinutes fires the first notification this many minutes before
 	// the due time. 0 means "exactly at the due time"; new reminders default to 15.
-	// 不设 gorm default：GORM 会把显式写入的 0 当成「零值」替换成默认值，
-	// 导致「准时提醒」存不进去。默认值由服务层创建时决定。
-	RemindBeforeMinutes int `gorm:"not null" json:"remind_before_minutes"`
+	// 必须带 default：SQLite 给已存在的表新增 NOT NULL 列时要求同时给出默认值，
+	// 否则启动迁移直接失败（Cannot add a NOT NULL column with default value NULL）。
+	// default 取 0 而不是 15，是因为 GORM 会把「零值」替换成 default——若写成 15，
+	// 显式选择的「准时提醒」（0）就永远存不进去。新建时 15 的默认值由服务层决定。
+	RemindBeforeMinutes int `gorm:"not null;default:0" json:"remind_before_minutes"`
 	// RepeatNotifyTimes caps how many times an overdue reminder re-notifies.
 	// 0 keeps the previous behaviour: repeat until the reminder is handled.
-	RepeatNotifyTimes int `gorm:"not null" json:"repeat_notify_times"`
+	RepeatNotifyTimes int `gorm:"not null;default:0" json:"repeat_notify_times"`
 	CompletedAt         *time.Time        `gorm:"index:idx_reminders_user_completed" json:"completed_at"`
 	SnoozedUntil        *time.Time        `json:"snoozed_until"`
 	Position            int               `gorm:"not null;default:0" json:"position"`

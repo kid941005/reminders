@@ -2,6 +2,23 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.11.2（2026-10-21）
+
+### 修复
+
+- **升级到 v0.11.0/v0.11.1 后启动失败**：日志反复出现
+  `Failed to migrate database: Cannot add a NOT NULL column with default value NULL`。
+  - 根因：v0.11.0 为「准时提醒」（显式 0）能存进去，把两个新字段的 gorm
+    `default:` 标签去掉了，只留 `not null`。但 SQLite 给**已存在的表**新增
+    NOT NULL 列时必须带默认值，否则拒绝执行——全新数据库建表不受此限制，
+    所以常规测试与 CI 都没暴露。
+  - 修复：两个字段恢复 `not null;default:0`。默认值取 0 而不是 15，是因为
+    GORM 会把「零值」替换成 default：写 15 会让「准时提醒」永远存不进去；
+    新建提醒默认 15 分钟仍由服务层在创建时决定。
+  - 恢复后老库可正常迁移，已有提醒的该列取 0（准时提醒），行为不变。
+- 新增 `TestAutoMigrateAddsNewColumnsToExistingTable`：删掉新列后重跑迁移，
+  复现「老库升级」路径。这类问题只有走 ALTER TABLE 才会暴露，必须专门覆盖。
+
 ## v0.11.1（2026-10-21）
 
 ### 修复
