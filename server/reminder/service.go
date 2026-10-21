@@ -341,9 +341,16 @@ func rebuildJobs(tx *gorm.DB, reminder Reminder, channels []string) error {
 		// 用户主动「稍后提醒」的优先级高于提前量。
 		runAt = reminder.SnoozedUntil.UTC()
 	case reminder.RemindBeforeMinutes > 0:
+		advance := time.Duration(reminder.RemindBeforeMinutes) * time.Minute
+		// 全天提醒没有具体时刻（due 落在当天 00:00），小于一天的前置量只会把通知
+		// 推到前一天深夜（例如 23:45），因此视为「准时」；整天级的前置（提前 1 天）
+		// 仍然有意义，照常生效。要精确到分钟的全天提醒应改用定时提醒。
+		if reminder.AllDay && advance < 24*time.Hour {
+			break
+		}
 		// ScheduledFor 仍是到期时刻，只把实际投递时刻提前：这样陈旧任务判断
 		// 与过期重复链条的基准都不受影响。提前量落到过去则立即投递。
-		runAt = scheduledFor.Add(-time.Duration(reminder.RemindBeforeMinutes) * time.Minute)
+		runAt = scheduledFor.Add(-advance)
 	}
 	for _, ch := range channels {
 		raw := fmt.Sprintf("%d|%s|%s|%d", reminder.ID, reminder.DueAt.UTC().Format(time.RFC3339Nano), ch, reminder.Version)

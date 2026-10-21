@@ -612,3 +612,46 @@ func TestRepeatNotifyStopsAtConfiguredTimes(t *testing.T) {
 		t.Fatalf("达到次数上限后不应再生成任务：before=%d after=%d", before, after)
 	}
 }
+
+// 全天提醒的 due 是当天 00:00，小于一天的前置量会把通知推到前一天深夜，
+// 因此按「准时」处理；整天级前置（提前 1 天）仍然生效。
+func TestAllDayAdvanceIsClampedToWholeDays(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	day := time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)
+
+	window := 15
+	created, err := createReminder(appDB, 74, SaveReminderInput{
+		Title: "全天-分钟级", DueAt: &day, AllDay: true, RepeatRule: "none",
+		RemindBeforeMinutes: &window, Channels: []string{ChannelInApp},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var job DeliveryJob
+	if err := appDB.Where("reminder_id = ? AND channel = ? AND status = ?", created.ID, ChannelInApp, "pending").
+		First(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !job.RunAt.Equal(day.UTC()) {
+		t.Fatalf("全天提醒的分钟级提前量应被忽略，run_at=%s，期望 %s", job.RunAt, day.UTC())
+	}
+
+	wholeDay := 1440
+	created2, err := createReminder(appDB, 74, SaveReminderInput{
+		Title: "全天-提前一天", DueAt: &day, AllDay: true, RepeatRule: "none",
+		RemindBeforeMinutes: &wholeDay, Channels: []string{ChannelInApp},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var job2 DeliveryJob
+	if err := appDB.Where("reminder_id = ? AND channel = ? AND status = ?", created2.ID, ChannelInApp, "pending").
+		First(&job2).Error; err != nil {
+		t.Fatal(err)
+	}
+	if want := day.Add(-24 * time.Hour).UTC(); !job2.RunAt.Equal(want) {
+		t.Fatalf("全天提醒提前一天应生效，run_at=%s，期望 %s", job2.RunAt, want)
+	}
+}
