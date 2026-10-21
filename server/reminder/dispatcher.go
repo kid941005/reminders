@@ -188,11 +188,17 @@ func scheduleRepeatNotify(tx *gorm.DB, item Reminder, job DeliveryJob) error {
 	if item.RepeatNotifyMinutes <= 0 || item.DueAt == nil {
 		return nil
 	}
-	next := job.ScheduledFor.Add(time.Duration(item.RepeatNotifyMinutes) * time.Minute)
+	interval := time.Duration(item.RepeatNotifyMinutes) * time.Minute
+	next := job.ScheduledFor.Add(interval)
 	// 逾期一段时间后才开启/重建链条时，被跳过的间隔不再逐个补发（避免一次性
 	// 轰炸一串过期通知），直接从现在起排下一个完整间隔。
 	if now := time.Now().UTC(); !next.After(now) {
-		next = now.Add(time.Duration(item.RepeatNotifyMinutes) * time.Minute)
+		next = now.Add(interval)
+	}
+	// RepeatNotifyTimes 以到期时间为基准计算这是第几次重复（0 表示不限）。
+	// 用 next 而非计数列来判断，是为了让链条在重建、跨重启后依然幂等。
+	if item.RepeatNotifyTimes > 0 && int(next.Sub(*item.DueAt)/interval) > item.RepeatNotifyTimes {
+		return nil
 	}
 	raw := fmt.Sprintf("%d|%s|%s|chain", item.ID, job.Channel, next.UTC().Format(time.RFC3339Nano))
 	sum := sha256.Sum256([]byte(raw))

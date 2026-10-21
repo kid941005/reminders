@@ -37,6 +37,10 @@ type SaveReminderInput struct {
 	// RepeatNotifyMinutes re-notifies an uncompleted reminder on this interval
 	// (in minutes) after each due time; 0 disables it.
 	RepeatNotifyMinutes int `json:"repeat_notify_minutes"`
+	// RemindBeforeMinutes / RepeatNotifyTimes 用指针区分「未提供」与「显式 0」：
+	// 新建时未提供按默认值（提前 15 分钟、不限次数），显式 0 才是「不提前 / 不重复」。
+	RemindBeforeMinutes *int `json:"remind_before_minutes"`
+	RepeatNotifyTimes   *int `json:"repeat_notify_times"`
 	// ChannelTargets optionally maps a multi-target channel (email) to the
 	// ChannelBinding IDs this reminder delivers to. Absent or empty means all.
 	ChannelTargets map[string][]uint `json:"channel_targets"`
@@ -113,6 +117,12 @@ func validateReminderInput(in *SaveReminderInput) error {
 	default:
 		return errors.New("历法无效，仅支持公历或农历")
 	}
+	if in.RemindBeforeMinutes != nil && (*in.RemindBeforeMinutes < 0 || *in.RemindBeforeMinutes > 60*24*7) {
+		return errors.New("提前提醒时间无效")
+	}
+	if in.RepeatNotifyTimes != nil && (*in.RepeatNotifyTimes < 0 || *in.RepeatNotifyTimes > 100) {
+		return errors.New("过期提醒次数无效")
+	}
 	if in.RepeatNotifyMinutes < 0 || in.RepeatNotifyMinutes > 60*24*31 {
 		return errors.New("过期提醒频率无效，最长 31 天")
 	}
@@ -179,11 +189,20 @@ func createReminder(db *gorm.DB, userID uint, in SaveReminderInput) (ReminderDTO
 		if err := assertListOwner(tx, userID, in.ListID); err != nil {
 			return err
 		}
+		remindBefore := 15
+		if in.RemindBeforeMinutes != nil {
+			remindBefore = *in.RemindBeforeMinutes
+		}
+		repeatTimes := 0
+		if in.RepeatNotifyTimes != nil {
+			repeatTimes = *in.RepeatNotifyTimes
+		}
 		created = Reminder{
 			UserID: userID, ListID: in.ListID, Title: in.Title, Notes: in.Notes,
 			Priority: in.Priority, DueAt: in.DueAt, AllDay: in.AllDay,
 			RepeatRule: in.RepeatRule, Calendar: in.Calendar, LunarAnchor: in.LunarAnchor,
-			RepeatNotifyMinutes: in.RepeatNotifyMinutes, Version: 1,
+			RepeatNotifyMinutes: in.RepeatNotifyMinutes,
+			RemindBeforeMinutes: remindBefore, RepeatNotifyTimes: repeatTimes, Version: 1,
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return err
@@ -229,6 +248,12 @@ func updateReminder(db *gorm.DB, userID, reminderID uint, in SaveReminderInput) 
 		existing.Calendar = in.Calendar
 		existing.LunarAnchor = in.LunarAnchor
 		existing.RepeatNotifyMinutes = in.RepeatNotifyMinutes
+		if in.RemindBeforeMinutes != nil {
+			existing.RemindBeforeMinutes = *in.RemindBeforeMinutes
+		}
+		if in.RepeatNotifyTimes != nil {
+			existing.RepeatNotifyTimes = *in.RepeatNotifyTimes
+		}
 		existing.SnoozedUntil = nil
 		existing.Version++
 		if err := tx.Save(&existing).Error; err != nil {
@@ -311,8 +336,14 @@ func rebuildJobs(tx *gorm.DB, reminder Reminder, channels []string) error {
 	// scheduler's timestamp predicate compares the stored values as text.
 	scheduledFor := reminder.DueAt.UTC()
 	runAt := scheduledFor
-	if reminder.SnoozedUntil != nil {
+	switch {
+	case reminder.SnoozedUntil != nil:
+		// 用户主动「稍后提醒」的优先级高于提前量。
 		runAt = reminder.SnoozedUntil.UTC()
+	case reminder.RemindBeforeMinutes > 0:
+		// ScheduledFor 仍是到期时刻，只把实际投递时刻提前：这样陈旧任务判断
+		// 与过期重复链条的基准都不受影响。提前量落到过去则立即投递。
+		runAt = scheduledFor.Add(-time.Duration(reminder.RemindBeforeMinutes) * time.Minute)
 	}
 	for _, ch := range channels {
 		raw := fmt.Sprintf("%d|%s|%s|%d", reminder.ID, reminder.DueAt.UTC().Format(time.RFC3339Nano), ch, reminder.Version)

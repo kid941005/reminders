@@ -68,7 +68,9 @@
             <label class="field-label">重复<select v-model="quick.repeat_rule" class="compact-input"><option value="none">不重复</option><option value="daily">每天</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="yearly">每年</option></select></label>
             <label class="field-label">备注<input v-model="quick.notes" class="compact-input" placeholder="可选" maxlength="5000" /></label>
             <label class="field-label">按农历循环<select v-model="quick.calendar" class="compact-input" @change="upgradeCalendarToYearly(quick)"><option value="solar">公历</option><option value="lunar">农历</option></select></label>
+            <label class="field-label">提前提醒<RemindBeforeSelect :model-value="quick.remind_before_minutes ?? 15" @update:model-value="quick.remind_before_minutes = $event" /></label>
             <label class="field-label">过期提醒频率<RepeatNotifySelect :model-value="quick.repeat_notify_minutes ?? 0" @update:model-value="quick.repeat_notify_minutes = $event" /></label>
+            <label v-if="(quick.repeat_notify_minutes ?? 0) > 0" class="field-label">过期提醒次数<RepeatTimesSelect :model-value="quick.repeat_notify_times ?? 0" @update:model-value="quick.repeat_notify_times = $event" /></label>
             <p v-if="quick.calendar === 'lunar'" class="text-[10px] leading-4 text-muted-foreground sm:col-span-2 lg:col-span-4">已按农历循环：提醒按所选日期的农历月/日重复，腊月三十遇小年自动改为除夕当天，闰月日期遇无闰月年份自动用对应平月。</p>
             <div class="sm:col-span-2 lg:col-span-4">
               <p class="field-label mb-2">通知方式</p>
@@ -178,8 +180,10 @@
                 <label class="editor-field"><span>优先级</span><select v-model.number="editing.priority"><option :value="0">无</option><option :value="1">低</option><option :value="2">中</option><option :value="3">高</option></select></label>
                 <label class="editor-field"><span>重复</span><select v-model="editing.repeat_rule"><option value="none">不重复</option><option value="daily">每天</option><option value="weekly">每周</option><option value="monthly">每月</option><option value="yearly">每年</option></select></label>
                 <label class="editor-field"><span>按农历循环</span><select v-model="editing.calendar" @change="upgradeCalendarToYearly(editing)"><option value="solar">公历</option><option value="lunar">农历</option></select></label>
+                <label class="editor-field"><span>提前提醒</span><RemindBeforeSelect :model-value="editing.remind_before_minutes ?? 15" @update:model-value="editing.remind_before_minutes = $event" /></label>
                 <label class="editor-field"><span>过期提醒频率</span><RepeatNotifySelect :model-value="editing.repeat_notify_minutes ?? 0" @update:model-value="editing.repeat_notify_minutes = $event" /></label>
-                <p class="col-span-2 mt-1 text-[10px] leading-4 text-muted-foreground">“过期提醒频率”在到点未完成时按所选间隔重复通知，点击完成后停止；配合“每天”等重复规则可实现固定时间的每日催办。</p>
+                <label v-if="(editing.repeat_notify_minutes ?? 0) > 0" class="editor-field"><span>过期提醒次数</span><RepeatTimesSelect :model-value="editing.repeat_notify_times ?? 0" @update:model-value="editing.repeat_notify_times = $event" /></label>
+                <p class="col-span-2 mt-1 text-[10px] leading-4 text-muted-foreground">“提前提醒”在到期前若干分钟先通知一次（默认 15 分钟）；“过期提醒频率”在到点未完成时按所选间隔重复通知，配合“过期提醒次数”可限定最多重复几次（不限则直到完成）。</p>
                 <p v-if="editing.calendar === 'lunar'" class="col-span-2 -mt-3 text-[10px] leading-4 text-muted-foreground">“按农历循环”按所选日期对应的农历月/日重复，适合农历生日等纪念日期；腊月三十遇小年自动改为除夕当天，闰月日期遇无闰月年份自动用对应平月。</p>
               </div>
               <div>
@@ -234,6 +238,8 @@ import Toast from '../components/Toast.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LunarDatePicker from '../components/LunarDatePicker.vue'
 import RepeatNotifySelect from '../components/RepeatNotifySelect.vue'
+import RemindBeforeSelect from '../components/RemindBeforeSelect.vue'
+import RepeatTimesSelect from '../components/RepeatTimesSelect.vue'
 import {
   completeReminder, createReminder, deleteReminder, getChannelStatuses, getHolidays, getLists, getLunarCalendar, getReminders,
   restoreReminder, snoozeReminder, updateReminder,
@@ -260,6 +266,8 @@ const toast = reactive<{ message: string; type: 'success' | 'error' }>({ message
 const blankInput = (): SaveReminderInput => ({
   title: '', notes: '', list_id: 0, priority: 0, due_at: null,
   all_day: false, repeat_rule: 'none', calendar: 'solar', repeat_notify_minutes: 0, channels: ['inapp'],
+  // 新提醒默认提前 15 分钟提醒；过期重复默认不限次数（保持历史行为）。
+  remind_before_minutes: 15, repeat_notify_times: 0,
 })
 const quick = reactive<SaveReminderInput>(blankInput())
 const editing = reactive<SaveReminderInput & { id?: number }>(blankInput())
@@ -528,6 +536,8 @@ function editItem(item: ReminderItem) {
     priority: item.priority, due_at: item.due_at, all_day: item.all_day,
     repeat_rule: item.repeat_rule, calendar: item.calendar || 'solar',
     repeat_notify_minutes: item.repeat_notify_minutes || 0,
+    remind_before_minutes: item.remind_before_minutes ?? 15,
+    repeat_notify_times: item.repeat_notify_times ?? 0,
     channels: [...(item.channels || [])], version: item.version,
     lunar_anchor: item.lunar_anchor || '',
     channel_targets: item.channel_targets ? { ...item.channel_targets } : undefined,

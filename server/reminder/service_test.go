@@ -508,3 +508,107 @@ func TestRepeatNotifyCatchUpSkipsMissedIntervals(t *testing.T) {
 		t.Fatalf("expected catch-up chain ~5 minutes out, got %v", nextIn)
 	}
 }
+
+// 新提醒默认提前 15 分钟投递，ScheduledFor 仍停在到期时刻——
+// 后者是陈旧任务判断与重复链条的基准，不能被提前量污染。
+func TestReminderSchedulesAdvanceNotice(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	due := time.Now().Add(3 * time.Hour).Truncate(time.Second)
+	created, err := createReminder(appDB, 71, SaveReminderInput{
+		Title: "提前提醒", DueAt: &due, RepeatRule: "none", Channels: []string{ChannelInApp},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var job DeliveryJob
+	if err := appDB.Where("reminder_id = ? AND channel = ? AND status = ?", created.ID, ChannelInApp, "pending").
+		First(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !job.ScheduledFor.Equal(due.UTC()) {
+		t.Fatalf("scheduled_for 应为到期时刻 %s，实际 %s", due.UTC(), job.ScheduledFor)
+	}
+	if want := due.Add(-15 * time.Minute).UTC(); !job.RunAt.Equal(want) {
+		t.Fatalf("run_at 应提前 15 分钟（%s），实际 %s", want, job.RunAt)
+	}
+}
+
+func TestReminderAdvanceCanBeDisabled(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	due := time.Now().Add(2 * time.Hour).Truncate(time.Second)
+	zero := 0
+	created, err := createReminder(appDB, 72, SaveReminderInput{
+		Title: "准时提醒", DueAt: &due, RepeatRule: "none",
+		RemindBeforeMinutes: &zero, Channels: []string{ChannelInApp},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.RemindBeforeMinutes != 0 {
+		t.Fatalf("显式 0 应表示不提前，实际 %d", created.RemindBeforeMinutes)
+	}
+
+	var job DeliveryJob
+	if err := appDB.Where("reminder_id = ? AND channel = ? AND status = ?", created.ID, ChannelInApp, "pending").
+		First(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !job.RunAt.Equal(due.UTC()) {
+		t.Fatalf("run_at 应等于到期时刻 %s，实际 %s", due.UTC(), job.RunAt)
+	}
+}
+
+// 过期重复链条达到上限后必须停止，不能像以前那样无限催办。
+func TestRepeatNotifyStopsAtConfiguredTimes(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	due := time.Now().Add(5 * time.Minute).Truncate(time.Second)
+	times := 2
+	created, err := createReminder(appDB, 73, SaveReminderInput{
+		Title: "限次催办", DueAt: &due, RepeatRule: "none",
+		RepeatNotifyMinutes: 10, RepeatNotifyTimes: &times, Channels: []string{ChannelInApp},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var item Reminder
+	if err := appDB.First(&item, created.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	job := DeliveryJob{UserID: 73, ReminderID: item.ID, Channel: ChannelInApp, ScheduledFor: due.UTC()}
+
+	// 前两次应生成链条任务（对应第 1、2 次重复）。
+	for i := 1; i <= times; i++ {
+		if err := scheduleRepeatNotify(appDB, item, job); err != nil {
+			t.Fatal(err)
+		}
+		var chain DeliveryJob
+		if err := appDB.Where("reminder_id = ? AND channel = ? AND status = ?", item.ID, ChannelInApp, "pending").
+			Order("scheduled_for DESC").First(&chain).Error; err != nil {
+			t.Fatalf("第 %d 次重复应生成链条任务: %v", i, err)
+		}
+		if want := due.Add(time.Duration(i*10) * time.Minute).UTC(); !chain.ScheduledFor.Equal(want) {
+			t.Fatalf("第 %d 次链节点应为 %s，实际 %s", i, want, chain.ScheduledFor)
+		}
+		job = chain
+	}
+
+	// 第 3 次已达上限，不应再产生新任务。
+	before := int64(0)
+	appDB.Model(&DeliveryJob{}).Where("reminder_id = ?", item.ID).Count(&before)
+	if err := scheduleRepeatNotify(appDB, item, job); err != nil {
+		t.Fatal(err)
+	}
+	after := int64(0)
+	appDB.Model(&DeliveryJob{}).Where("reminder_id = ?", item.ID).Count(&after)
+	if after != before {
+		t.Fatalf("达到次数上限后不应再生成任务：before=%d after=%d", before, after)
+	}
+}

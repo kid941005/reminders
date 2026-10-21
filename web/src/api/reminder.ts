@@ -30,6 +30,10 @@ export interface ReminderItem {
   channels: ReminderChannel[]
   channel_targets?: Record<string, number[]>
   repeat_notify_minutes: number
+  /** 提前多少分钟提醒，0=准时 */
+  remind_before_minutes: number
+  /** 过期后最多重复几次，0=不限 */
+  repeat_notify_times: number
   created_at: string
   updated_at: string
 }
@@ -39,6 +43,8 @@ export interface SaveReminderInput {
   notes?: string
   channel_targets?: Record<string, number[]>
   repeat_notify_minutes?: number
+  remind_before_minutes?: number
+  repeat_notify_times?: number
   list_id?: number
   priority?: number
   due_at?: string | null

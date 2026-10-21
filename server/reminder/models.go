@@ -52,7 +52,13 @@ type Reminder struct {
 	LunarAnchor string `gorm:"size:8" json:"lunar_anchor,omitempty"`
 	// RepeatNotifyMinutes re-notifies an uncompleted reminder on a fixed
 	// interval after each due time; 0 disables the behaviour.
-	RepeatNotifyMinutes int               `gorm:"not null;default:0" json:"repeat_notify_minutes"`
+	RepeatNotifyMinutes int `gorm:"not null;default:0" json:"repeat_notify_minutes"`
+	// RemindBeforeMinutes fires the first notification this many minutes before
+	// the due time. 0 means "exactly at the due time"; new reminders default to 15.
+	RemindBeforeMinutes int `gorm:"not null;default:15" json:"remind_before_minutes"`
+	// RepeatNotifyTimes caps how many times an overdue reminder re-notifies.
+	// 0 keeps the previous behaviour: repeat until the reminder is handled.
+	RepeatNotifyTimes int `gorm:"not null;default:0" json:"repeat_notify_times"`
 	CompletedAt         *time.Time        `gorm:"index:idx_reminders_user_completed" json:"completed_at"`
 	SnoozedUntil        *time.Time        `json:"snoozed_until"`
 	Position            int               `gorm:"not null;default:0" json:"position"`
