@@ -83,8 +83,9 @@ jobs:
             echo "未配置 Docker Hub 凭据，本次只推送到 ghcr.io。" >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - uses: docker/setup-qemu-action@v3
-
+      # 只构建 amd64，不再需要 QEMU 跨架构模拟。
+      # 原 arm64 走 QEMU 时，镜像内的 npm ci + vite 构建会长时间挂起
+      # （v0.11.3 曾跑满 6 小时被 GitHub 超时取消）。
       - uses: docker/setup-buildx-action@v3
 
       - name: 登录 GitHub Container Registry
@@ -107,7 +108,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta-ghcr.outputs.tags }}
           labels: ${{ steps.meta-ghcr.outputs.labels }}
@@ -141,7 +142,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta-dockerhub.outputs.tags }}
           labels: ${{ steps.meta-dockerhub.outputs.labels }}

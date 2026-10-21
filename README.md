@@ -16,13 +16,13 @@
 
 | 渠道 | 获取方式 |
 |---|---|
-| Docker 镜像 | `docker pull ghcr.io/kid941005/reminders:latest`（amd64 / arm64 多平台） |
+| Docker 镜像 | `docker pull ghcr.io/kid941005/reminders:latest`（linux/amd64） |
 | GitHub Releases | <https://github.com/kid941005/reminders/releases> —— 各平台压缩包与 `docker-compose.yml` |
 
 > 镜像托管在 GitHub Container Registry。**首次发布后包默认是私有的**，需要到
 > 仓库右侧 Packages → `reminders` → Package settings 里把可见性改为 Public，
 > 匿名用户才能拉取；私有状态下需先 `docker login ghcr.io` 并用自己的 GitHub
-> token 认证。镜像由 tag 触发的 CI 自动构建，支持 `linux/amd64` 与 `linux/arm64`。
+> token 认证。镜像由 tag 触发的 CI 自动构建，仅构建 `linux/amd64`。arm64 需 QEMU 跨架构模拟，在镜像内跑前端构建会长时间挂起，故不再提供。
 
 快速启动：
 
@@ -218,7 +218,7 @@ make package PACKAGE_TARGET=apps
 make package PACKAGE_TARGET=docker
 ```
 
-打 tag 推送后，CI 会自动构建 amd64/arm64 多架构镜像并创建 Release，无需本地执行上述命令。
+打 tag 推送后，CI 会自动构建 amd64 镜像并创建 Release，无需本地执行上述命令。
 
 开发约定、目录职责与提交规范见 [AGENTS.md](./AGENTS.md)。
 
