@@ -178,12 +178,3 @@ END:VCALENDAR`
 		t.Fatalf("远端删除后本地应剩 1 条，实际 %d", count)
 	}
 }
-
-func mustShanghai(t *testing.T) *time.Location {
-	t.Helper()
-	loc, err := time.LoadLocation("Asia/Shanghai")
-	if err != nil {
-		t.Fatalf("加载时区失败: %v", err)
-	}
-	return loc
-}
