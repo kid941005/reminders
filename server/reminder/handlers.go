@@ -41,6 +41,12 @@ func setupAuthRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group.POST("/items/:id/restore", handleRestoreReminder(db))
 	group.POST("/items/:id/snooze", handleSnoozeReminder(db))
 
+	// 钉钉日程同步：读取/保存/关闭配置，以及手动触发一次导入。
+	group.GET("/calendar-sync", handleGetCalendarSync(db))
+	group.PUT("/calendar-sync", handleSaveCalendarSync(db))
+	group.DELETE("/calendar-sync", handleDeleteCalendarSync(db))
+	group.POST("/calendar-sync/run", handleRunCalendarSync(db))
+
 	group.GET("/notifications", handleNotifications(db))
 	group.GET("/notifications/unread-count", handleUnreadCount(db))
 	group.POST("/notifications/:id/read", handleReadNotification(db))

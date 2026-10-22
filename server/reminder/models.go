@@ -69,6 +69,13 @@ type Reminder struct {
 	Version             uint              `gorm:"not null;default:1" json:"version"`
 	CreatedAt           time.Time         `json:"created_at"`
 	UpdatedAt           time.Time         `json:"updated_at"`
+	// ExternalSource / ExternalUID 标记这条提醒来自外部日历（目前只有 "dingtalk"）。
+	// 两个字段都不加 NOT NULL，也不建唯一索引：SQLite 给存量表加 NOT NULL 列必须带
+	// DEFAULT，而 (user_id, source, uid) 全为 '' 的存量行会让唯一索引直接建不起来。
+	// 唯一性由同步逻辑按这三列查询保证。
+	ExternalSource string `gorm:"size:32;index" json:"external_source"`
+	ExternalUID    string `gorm:"size:255;index" json:"external_uid"`
+
 	DeletedAt           *time.Time        `gorm:"index" json:"-"`
 	Channels            []ReminderChannel `gorm:"foreignKey:ReminderID" json:"-"`
 }

@@ -175,3 +175,34 @@ export const saveFeishuProvider = (data: { app_id: string; app_secret: string })
 export const saveProvider = (provider: 'email' | 'sms' | 'qq', data: Record<string, string>) =>
   request.put(`/api/reminder/admin/providers/${provider}`, data)
 export const createQQBindCode = () => request.post('/api/reminder/channels/qq/bind-code')
+
+// 钉钉日程（CalDAV）单向导入。password 只在保存时提交，读取接口从不返回它。
+export interface CalendarSyncConfig {
+  id: number
+  server: string
+  calendar_url: string
+  username: string
+  list_id: number
+  list_name: string
+  enabled: boolean
+  window_back_days: number
+  window_forward_days: number
+  remind_before_minutes: number
+  last_sync_at: string | null
+  last_status: string
+  last_error: string
+  last_imported: number
+}
+export interface CalendarSyncInput {
+  server: string
+  username: string
+  password?: string
+  enabled?: boolean
+  window_back_days?: number
+  window_forward_days?: number
+  remind_before_minutes?: number
+}
+export const getCalendarSync = () => request.get('/api/reminder/calendar-sync')
+export const saveCalendarSync = (data: CalendarSyncInput) => request.put('/api/reminder/calendar-sync', data)
+export const deleteCalendarSync = () => request.delete('/api/reminder/calendar-sync')
+export const runCalendarSync = () => request.post('/api/reminder/calendar-sync/run')

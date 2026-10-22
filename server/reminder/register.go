@@ -48,7 +48,7 @@ func init() {
 	database.RegisterModels(
 		&List{}, &Reminder{}, &ReminderChannel{}, &Completion{},
 		&ChannelBinding{}, &ProviderConfig{}, &QQBindCode{}, &DeliveryJob{}, &DeliveryAttempt{}, &Notification{},
-		&Countdown{}, &CalendarFeed{},
+		&Countdown{}, &CalendarFeed{}, &CalendarSync{},
 	)
 
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
@@ -90,6 +90,16 @@ func init() {
 		Run: func() {
 			if appDB != nil {
 				dispatchDueJobs(appDB)
+			}
+		},
+	})
+	scheduler.Register(scheduler.Job{
+		// 钉钉日程单向导入。30 分钟一次：CalDAV 没有增量令牌，每次都是窗口内
+		// 全量拉取，频率再高只是重复消耗对端。
+		Name: "reminder-calendar-sync", Interval: 30 * time.Minute,
+		Run: func() {
+			if appDB != nil {
+				SyncAllCalendars(appDB)
 			}
 		},
 	})
