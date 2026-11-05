@@ -42,7 +42,10 @@ export function connectReminderEvents(
         const headers: Record<string, string> = { Accept: 'text/event-stream' }
         if (token) headers.Authorization = `Bearer ${token}`
         // client_id 让服务端广播数据变更时跳过本标签页（它已经在本地改过了）。
-        const url = new URL('api/reminder/events', document.baseURI)
+        // 必须相对应用基址解析：以 document.baseURI（当前页面 URL）为基准时，
+        // /admin/day/2026-11-05 这类深层路由会解析成 /admin/day/api/...，
+        // 请求落到 SPA 兜底页上，长连接静默失效。
+        const url = new URL(`${import.meta.env.BASE_URL}api/reminder/events`, window.location.origin)
         const id = clientID()
         if (id) url.searchParams.set('client_id', id)
         const response = await fetch(url, {

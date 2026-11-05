@@ -133,8 +133,11 @@ export const useAuthStore = defineStore('auth', () => {
         const themeItem = metaRes.data.data.find((it: any) => it.key === 'theme_mode')
         if (themeItem && ['system', 'light', 'dark'].includes(themeItem.value)) {
           const themeStore = useThemeStore()
-          if (themeStore.mode !== themeItem.value) {
-            themeStore.setMode(themeItem.value)
+          // 本机已有明确选择时以本机为准：服务端 theme_mode 的默认值是
+          // system，无条件套用会把用户刚切换的主题在下次刷新时打回原状。
+          const hasLocalChoice = localStorage.getItem(SK.themeMode) !== null
+          if (!hasLocalChoice && themeStore.mode !== themeItem.value) {
+            themeStore.setModeFromServer(themeItem.value)
           }
         }
       }

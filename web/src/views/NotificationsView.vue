@@ -80,17 +80,26 @@ async function load() {
   }
 }
 async function read(item: NotificationItem) {
-  if (!item.read_at) {
+  if (item.read_at) return
+  try {
     await markNotificationRead(item.id)
     item.read_at = new Date().toISOString()
     window.dispatchEvent(new CustomEvent('reminder-data-changed'))
+  } catch (err: any) {
+    // 未捕获的 rejection 会让这一行「点了没反应」，也没有任何提示。
+    errorMsg.value = err.response?.data?.message || '标记已读失败，请重试'
   }
 }
 async function readAll() {
-  await markAllNotificationsRead()
-  const now = new Date().toISOString()
-  notifications.value.forEach(x => { if (!x.read_at) x.read_at = now })
-  window.dispatchEvent(new CustomEvent('reminder-data-changed'))
+  try {
+    await markAllNotificationsRead()
+    const now = new Date().toISOString()
+    notifications.value.forEach(x => { if (!x.read_at) x.read_at = now })
+    errorMsg.value = ''
+    window.dispatchEvent(new CustomEvent('reminder-data-changed'))
+  } catch (err: any) {
+    errorMsg.value = err.response?.data?.message || '全部标记已读失败，请重试'
+  }
 }
 function formatTime(value: string) {
   const d = new Date(value)

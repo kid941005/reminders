@@ -7,9 +7,17 @@ const P = 'reminders.'
 
 export const SK = {
   token: `${P}token`,
+  // 主题偏好：index.html 的首屏内联脚本也会读这两个键（避免首帧闪白），
+  // 两处必须使用同一个字符串，因此集中在这里维护。
+  themeMode: `${P}theme_mode`,
+  themeBrand: `${P}theme_brand`,
   // 安全提示的「稍后再说」时间戳：同样带前缀，避免与同域其它应用互相覆盖。
   securityPromptDismissed: `${P}security_prompt_dismissed_at`,
   // 本标签页的客户端标识（sessionStorage，一个标签页一个）：随请求与 SSE 连接
   // 一起发给服务端，服务端广播数据变更时据此跳过发起者自己。同样必须带前缀。
   clientId: `${P}client_id`,
+  // 赞赏提示的抑制记录（本发行版默认不展示赞赏入口，保留键名以兼容旧版本）。
+  donateSupportedVersion: `${P}donate_supported_version`,
+  donateDismissedStart: `${P}donate_dismissed_start`,
+  donateDismissedVersion: `${P}donate_dismissed_version`,
 } as const

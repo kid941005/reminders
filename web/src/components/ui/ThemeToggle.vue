@@ -2,7 +2,7 @@
   <button
     type="button"
     class="ui-toggle"
-    @click="themeStore.toggle()"
+    @click="cycleTheme"
     :title="tooltip"
     :aria-label="tooltip"
   >
@@ -21,8 +21,20 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useThemeStore } from '../../stores/theme'
+import { updateConfig } from '../../api/config'
+import { SK } from '../../utils/storage-keys'
 
 const themeStore = useThemeStore()
+
+// 切换后同步到用户配置：只写 localStorage 的话，下次进入应用时
+// auth.loadUserPreferences 会拿服务端默认值（system）把选择覆盖掉。
+function cycleTheme() {
+  themeStore.toggle()
+  if (!localStorage.getItem(SK.token)) return
+  updateConfig('theme_mode', themeStore.mode).catch(() => {
+    // 主题偏好同步失败不影响本地显示。
+  })
+}
 const tooltip = computed(() => ({
   light: '浅色（点击切到跟随系统）',
   dark:  '深色（点击切到浅色）',

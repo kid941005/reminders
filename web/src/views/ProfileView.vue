@@ -129,7 +129,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import { changePassword, regenerateAPIKey } from '../api/auth'
+import { changePassword, getCurrentUser, regenerateAPIKey } from '../api/auth'
 import { getSecurityQuestions, setSecurityQuestions } from '../api/security'
 import { passwordValidationError } from '../utils/password'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -178,6 +178,16 @@ const apiKeyMsg = ref('')
 const apiKeySuccess = ref(false)
 
 onMounted(async () => {
+  // 已有 API Key 必须读出来：以前只有点「重新生成」才会出现在页面上，
+  // 用户看不到自己当前在用的 Key。
+  try {
+    const me = await getCurrentUser()
+    if (me.data?.code === 0) {
+      apiKey.value = me.data.data?.api_key || ''
+    }
+  } catch {
+    // 读不到就只显示「重新生成」，不影响其它功能。
+  }
   try {
     const res = await getSecurityQuestions()
     if (res.data?.code === 0 && res.data.data?.has_questions) {
@@ -270,10 +280,16 @@ async function handleRegenerateApiKey() {
   }
 }
 
-function copyApiKey() {
-  navigator.clipboard.writeText(apiKey.value)
-  apiKeyMsg.value = '已复制到剪贴板'
-  apiKeySuccess.value = true
+async function copyApiKey() {
+  try {
+    await navigator.clipboard.writeText(apiKey.value)
+    apiKeyMsg.value = '已复制到剪贴板'
+    apiKeySuccess.value = true
+  } catch {
+    // 非 HTTPS 或权限被拒时会走到这里，不能再谎报复制成功。
+    apiKeyMsg.value = '复制失败，请手动选中复制'
+    apiKeySuccess.value = false
+  }
   setTimeout(() => { apiKeyMsg.value = '' }, 2000)
 }
 </script>

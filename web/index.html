@@ -16,8 +16,12 @@
       // light flash cuts in before Pinia's theme store runs apply().
       (function () {
         try {
-          var mode = localStorage.getItem('reminder-theme-mode') || 'system';
-          var brand = localStorage.getItem('reminder-theme-brand') || 'default';
+          // 键名必须与 src/utils/storage-keys.ts 的 SK.themeMode / SK.themeBrand 一致；
+          // 第二个取值是旧版本的裸键，兼容升级后第一次打开（store 会把它迁移过来）。
+          var mode = localStorage.getItem('reminders.theme_mode')
+            || localStorage.getItem('reminder-theme-mode') || 'system';
+          var brand = localStorage.getItem('reminders.theme_brand')
+            || localStorage.getItem('reminder-theme-brand') || 'default';
           var dark = mode === 'dark' ||
             (mode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
           var root = document.documentElement;

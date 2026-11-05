@@ -157,7 +157,7 @@
       <RouterLink to="/admin/channels" class="mobile-tab" :class="{ active: route.path === '/admin/channels' }"><span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 12h8m-8 4h5m6-11H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4l3 3 3-3h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" stroke-width="1.8"/></svg></span><small>方式</small></RouterLink>
     </nav>
 
-    <Toast :message="realtimeToast" type="success" :duration="5000" />
+    <Toast :message="realtimeToast" :type="realtimeToastType" :duration="5000" />
 
     <!-- 站内提醒弹窗：PC 与手机一致，必须处理完才消失 -->
     <ReminderAlert
@@ -212,6 +212,8 @@ const creatingList = ref(false)
 const newListName = ref('')
 const listInput = ref<HTMLInputElement | null>(null)
 const realtimeToast = ref('')
+// 渠道投递失败是错误，不该用绿色成功样式提示。
+const realtimeToastType = ref<'success' | 'error'>('success')
 const appVersion = ref('')
 const appBuildTime = ref('')
 
@@ -266,17 +268,35 @@ function isActive(to: string) {
 function listColor(color: string) {
   return ({ blue: '#3182f6', violet: '#8b5cf6', rose: '#f43f5e', amber: '#f59e0b', emerald: '#10b981' } as Record<string, string>)[color] || '#3182f6'
 }
+// 只有 HomeView 监听 open-quick-reminder（见 HomeView 的 onMounted）。
+// 之前用一个硬编码的 4 个页面名做排除，结果在纪念日/用户管理/周视图等页面上
+// 点「新建提醒」没有任何反应；这里改为「当前路由是否就是 HomeView」。
+const HOME_ROUTE_NAMES = ['Home', 'Planned', 'DayView', 'AllReminders', 'Completed', 'ReminderList']
 function openQuickAdd() {
-  if (!route.path.startsWith('/admin') || ['notifications', 'channels', 'settings', 'profile'].some(x => route.path.includes(x))) router.push('/admin')
+  if (!HOME_ROUTE_NAMES.includes(String(route.name))) router.push('/admin')
   mobileOpen.value = false
   setTimeout(() => window.dispatchEvent(new CustomEvent('open-quick-reminder')), 80)
 }
 async function submitList() {
-  if (!newListName.value.trim()) return
-  await createList({ name: newListName.value.trim(), color: ['blue', 'violet', 'rose', 'amber', 'emerald'][lists.value.length % 5] })
-  newListName.value = ''
-  creatingList.value = false
-  await refreshNavigation()
+  const name = newListName.value.trim()
+  if (!name) return
+  try {
+    const res = await createList({ name, color: ['blue', 'violet', 'rose', 'amber', 'emerald'][lists.value.length % 5] })
+    if (res.data?.code !== 0) {
+      realtimeToastType.value = 'error'
+      realtimeToast.value = ''
+      setTimeout(() => { realtimeToast.value = res.data?.message || '创建清单失败' }, 0)
+      return
+    }
+    newListName.value = ''
+    creatingList.value = false
+    await refreshNavigation()
+  } catch (err: any) {
+    realtimeToastType.value = 'error'
+    realtimeToast.value = ''
+    const message = err?.response?.data?.message || '创建清单失败，请重试'
+    setTimeout(() => { realtimeToast.value = message }, 0)
+  }
 }
 async function refreshNavigation() {
   try {
@@ -451,6 +471,7 @@ function handleRealtimeEvent(event: ReminderRealtimeEvent) {
     playReminderSound()
     return
   }
+  realtimeToastType.value = event.notification.type === 'channel_failed' ? 'error' : 'success'
   realtimeToast.value = ''
   setTimeout(() => {
     realtimeToast.value = event.notification?.title || ''
@@ -466,16 +487,17 @@ function handleRealtimeEvent(event: ReminderRealtimeEvent) {
 const ALERT_RECOVERY_WINDOW_MS = 60 * 60 * 1000
 // 页面打开前 60 分钟内到点且仍未读的也补弹：此刻打开应用，就该看到刚刚错过的提醒；
 // 更早的留给通知中心的未读角标，避免离开几天回来被一屏旧弹窗轰炸。
-const alertRecoverySince = new Date(Date.now() - ALERT_RECOVERY_WINDOW_MS)
-
 async function recoverMissedAlerts() {
+  // 窗口必须相对「此刻」计算：写成模块级常量时，页面开了一整天后窗口仍停在
+  // 加载时刻，反而会把更早的未读到点通知全弹一遍。
+  const alertRecoverySince = Date.now() - ALERT_RECOVERY_WINDOW_MS
   try {
     const res = await getNotifications()
     const items = (res.data?.data || []) as RealtimeNotification[]
     let added = 0
     for (const item of items) {
       if (item.type !== 'reminder_due' || item.read_at) continue
-      if (new Date(item.created_at).getTime() < alertRecoverySince.getTime()) continue
+      if (new Date(item.created_at).getTime() < alertRecoverySince) continue
       const before = alertQueue.value.length
       enqueueDueAlert(item)
       added += alertQueue.value.length - before

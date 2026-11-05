@@ -249,7 +249,8 @@ async function loadUsers() {
   try {
     const res = await getUsers(page.value, pageSize.value, search.value || undefined)
     if (res.data?.code === 0) {
-      users.value = res.data.data?.list || res.data.data?.items || []
+      // 列表接口统一是 SuccessPage 的 { items, total, page, pageSize }。
+      users.value = res.data.data?.items || []
       total.value = res.data.data?.total || 0
     } else {
       users.value = []

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { getVersion } from '../api/config'
 import { donateSupport } from '../api/system'
+import { SK } from '../utils/storage-keys'
 
 // 赞赏支持的全局状态。
 //
@@ -25,9 +26,9 @@ import { donateSupport } from '../api/system'
 //
 // 赞赏完全自愿：不赞赏不影响任何功能。
 
-const KEY_SUPPORTED_VERSION = 'donate_supported_version'
-const KEY_DISMISSED_START = 'donate_dismissed_start'
-const KEY_DISMISSED_VERSION = 'donate_dismissed_version'
+const KEY_SUPPORTED_VERSION = SK.donateSupportedVersion
+const KEY_DISMISSED_START = SK.donateDismissedStart
+const KEY_DISMISSED_VERSION = SK.donateDismissedVersion
 
 /**
  * 赞赏入口总开关。
