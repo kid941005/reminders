@@ -157,6 +157,13 @@ func validateReminderInput(in *SaveReminderInput) error {
 		}
 		in.ChannelTargets = cleaned
 	}
+	// 存库一律 UTC。SQLite 把时间当文本比较：同一时刻写成 "2026-11-06T07:00:00+08:00"
+	// 与 "2026-11-05T23:00:00Z" 两种文本时，任何按到期时间做的边界比较都会错开一个
+	// 时区偏移（AGENTS.md §3.6）。写入侧归一化后，比较侧只需同样用 UTC 边界。
+	if in.DueAt != nil {
+		utc := in.DueAt.UTC()
+		in.DueAt = &utc
+	}
 	return nil
 }
 
@@ -423,7 +430,8 @@ func listReminders(db *gorm.DB, userID uint, view, query string, listID uint, fr
 	endToday := startToday.AddDate(0, 0, 1)
 	switch view {
 	case "today":
-		q = q.Where("completed_at IS NULL AND due_at IS NOT NULL AND due_at < ?", endToday)
+		// 边界必须与列内文本同格式（UTC），否则凌晨 0–8 点的提醒会被算进今天。
+		q = q.Where("completed_at IS NULL AND due_at IS NOT NULL AND due_at < ?", endToday.UTC())
 	case "planned":
 		q = q.Where("completed_at IS NULL AND due_at IS NOT NULL")
 	case "completed":
@@ -434,7 +442,7 @@ func listReminders(db *gorm.DB, userID uint, view, query string, listID uint, fr
 		if from.IsZero() || to.IsZero() || !to.After(from) {
 			return nil, errors.New("时间范围无效")
 		}
-		q = q.Where("due_at IS NOT NULL AND due_at >= ? AND due_at < ?", from, to)
+		q = q.Where("due_at IS NOT NULL AND due_at >= ? AND due_at < ?", from.UTC(), to.UTC())
 	default:
 		q = q.Where("completed_at IS NULL")
 	}
@@ -533,9 +541,10 @@ func completeReminder(db *gorm.DB, userID, reminderID uint) (ReminderDTO, error)
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND user_id = ? AND deleted_at IS NULL", reminderID, userID).First(&item).Error; err != nil {
 			return err
 		}
-		now := time.Now()
+		now := time.Now().UTC()
 		if item.RepeatRule != "" && item.RepeatRule != "none" && item.DueAt != nil {
-			history := Completion{ReminderID: item.ID, UserID: userID, ScheduledFor: item.DueAt, CompletedAt: now, TitleSnapshot: item.Title}
+			scheduledFor := item.DueAt.UTC()
+			history := Completion{ReminderID: item.ID, UserID: userID, ScheduledFor: &scheduledFor, CompletedAt: now, TitleSnapshot: item.Title}
 			if err := tx.Create(&history).Error; err != nil {
 				return err
 			}
@@ -543,6 +552,8 @@ func completeReminder(db *gorm.DB, userID, reminderID uint) (ReminderDTO, error)
 			if err != nil {
 				return err
 			}
+			// 下一次发生时间同样按 UTC 入库，保持列内文本格式一致。
+			next = next.UTC()
 			item.DueAt = &next
 			item.CompletedAt = nil
 			item.SnoozedUntil = nil
@@ -603,6 +614,7 @@ func snoozeReminder(db *gorm.DB, userID, reminderID uint, until time.Time) (Remi
 	if !until.After(time.Now()) {
 		return ReminderDTO{}, errors.New("稍后提醒时间必须晚于当前时间")
 	}
+	until = until.UTC()
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var item Reminder
 		if err := tx.Where("id = ? AND user_id = ? AND completed_at IS NULL AND deleted_at IS NULL", reminderID, userID).First(&item).Error; err != nil {

@@ -139,6 +139,9 @@ func connectQQGateway(db *gorm.DB, settings map[string]string) error {
 	}
 	logger.Info("QQ gateway connected; waiting for private messages")
 	var writeMu sync.Mutex
+	// sequence 由读循环写入、由心跳 goroutine 读取，必须加锁：
+	// 无锁读写 interface{} 是真实的数据竞争（go test -race 会报）。
+	var seqMu sync.Mutex
 	var sequence interface{}
 	done := make(chan struct{})
 	defer close(done)
@@ -150,8 +153,11 @@ func connectQQGateway(db *gorm.DB, settings map[string]string) error {
 			case <-done:
 				return
 			case <-ticker.C:
+				seqMu.Lock()
+				current := sequence
+				seqMu.Unlock()
 				writeMu.Lock()
-				_ = conn.WriteJSON(map[string]interface{}{"op": 1, "d": sequence})
+				_ = conn.WriteJSON(map[string]interface{}{"op": 1, "d": current})
 				writeMu.Unlock()
 			}
 		}
@@ -167,7 +173,9 @@ func connectQQGateway(db *gorm.DB, settings map[string]string) error {
 			return err
 		}
 		if packet.S != nil {
+			seqMu.Lock()
 			sequence = packet.S
+			seqMu.Unlock()
 		}
 		if packet.Op == 0 && packet.T == "C2C_MESSAGE_CREATE" {
 			handleQQC2CMessage(db, token, settings, packet.D)

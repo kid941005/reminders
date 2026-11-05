@@ -3,6 +3,7 @@ package reminder
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -60,6 +61,52 @@ func TestNewColumnsAreSafeToAddToExistingTable(t *testing.T) {
 		if !migrator.HasColumn(&Reminder{}, column) {
 			t.Fatalf("迁移后缺少列 %s", column)
 		}
+	}
+}
+
+// 存量行里同一个时刻可能存成两种文本（"+08:00" 与 "Z"），迁移必须把它们统一
+// 改写成 UTC，且不改变时刻本身；迁移可重跑（幂等）。
+func TestTimestampNormalizationUpgrade(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	const legacy = "2026-11-06T07:00:00+08:00"
+	if err := appDB.Exec(`INSERT INTO reminders
+		(user_id, list_id, title, due_at, repeat_rule, calendar, version, priority, all_day, position, remind_before_minutes, repeat_notify_minutes, repeat_notify_times)
+		VALUES (1, 1, 'legacy', ?, 'none', 'solar', 1, 0, 0, 0, 0, 0, 0)`, legacy).Error; err != nil {
+		t.Fatalf("insert legacy row: %v", err)
+	}
+
+	var upgrade *database.Upgrade
+	for i := range database.Upgrades {
+		if database.Upgrades[i].Name == "normalize_reminder_timestamps_to_utc" {
+			upgrade = &database.Upgrades[i]
+			break
+		}
+	}
+	if upgrade == nil {
+		t.Fatal("未注册 normalize_reminder_timestamps_to_utc 迁移")
+	}
+	for round := 0; round < 2; round++ { // 第二轮验证幂等
+		if err := upgrade.Upgrade(appDB); err != nil {
+			t.Fatalf("run upgrade (round %d): %v", round, err)
+		}
+	}
+
+	var stored string
+	if err := appDB.Raw("SELECT due_at FROM reminders WHERE title = 'legacy'").Scan(&stored).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(stored, "Z") {
+		t.Fatalf("due_at 未归一化为 UTC: %q", stored)
+	}
+	var item Reminder
+	if err := appDB.Where("title = ?", "legacy").First(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	want := time.Date(2026, 11, 5, 23, 0, 0, 0, time.UTC)
+	if item.DueAt == nil || !item.DueAt.Equal(want) {
+		t.Fatalf("迁移改变了时刻: got %v want %v", item.DueAt, want)
 	}
 }
 

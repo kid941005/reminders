@@ -101,8 +101,9 @@ func TestCompleteLunarYearlyAdvancesToNextLunarBirthday(t *testing.T) {
 		t.Fatalf("expected next occurrence at lunar 2027-8-15, got %d-%d-%d (%s)",
 			lunarDate.Year, lunarDate.Month, lunarDate.Day, next.DueAt.Format("2006-01-02"))
 	}
-	if next.DueAt.Hour() != 9 || next.DueAt.Minute() != 0 {
-		t.Fatalf("expected the original 09:00 time-of-day, got %s", next.DueAt.Format("15:04"))
+	// 时刻按应用时区（Asia/Shanghai）展示，入库是 UTC，因此这里先换算。
+	if local := next.DueAt.In(loc); local.Hour() != 9 || local.Minute() != 0 {
+		t.Fatalf("expected the original 09:00 time-of-day, got %s", local.Format("15:04"))
 	}
 
 	// 推进后应重建投递任务，只保留一个 pending 任务。

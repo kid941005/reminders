@@ -49,8 +49,32 @@ type App struct {
 
 var registered []App
 
+// userDataCleanup holds per-app purgers for a deleted account. The framework
+// cannot know an app's schema, and an app must not import the user package, so
+// the hook is registered from the app's init() like the other extension points.
+var userDataCleanup []func(db *gorm.DB, userID uint) error
+
 func Register(a App) {
 	registered = append(registered, a)
+}
+
+// RegisterUserDataCleanup adds a callback that deletes the rows an app owns for
+// one account. It runs inside the caller's transaction, so a failure rolls the
+// whole account deletion back.
+func RegisterUserDataCleanup(fn func(db *gorm.DB, userID uint) error) {
+	if fn != nil {
+		userDataCleanup = append(userDataCleanup, fn)
+	}
+}
+
+// CleanupUserData invokes every registered cleaner in registration order.
+func CleanupUserData(db *gorm.DB, userID uint) error {
+	for _, fn := range userDataCleanup {
+		if err := fn(db, userID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func All() []App {

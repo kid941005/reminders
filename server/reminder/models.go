@@ -62,13 +62,13 @@ type Reminder struct {
 	RemindBeforeMinutes int `gorm:"not null;default:0" json:"remind_before_minutes"`
 	// RepeatNotifyTimes caps how many times an overdue reminder re-notifies.
 	// 0 keeps the previous behaviour: repeat until the reminder is handled.
-	RepeatNotifyTimes int `gorm:"not null;default:0" json:"repeat_notify_times"`
-	CompletedAt         *time.Time        `gorm:"index:idx_reminders_user_completed" json:"completed_at"`
-	SnoozedUntil        *time.Time        `json:"snoozed_until"`
-	Position            int               `gorm:"not null;default:0" json:"position"`
-	Version             uint              `gorm:"not null;default:1" json:"version"`
-	CreatedAt           time.Time         `json:"created_at"`
-	UpdatedAt           time.Time         `json:"updated_at"`
+	RepeatNotifyTimes int        `gorm:"not null;default:0" json:"repeat_notify_times"`
+	CompletedAt       *time.Time `gorm:"index:idx_reminders_user_completed" json:"completed_at"`
+	SnoozedUntil      *time.Time `json:"snoozed_until"`
+	Position          int        `gorm:"not null;default:0" json:"position"`
+	Version           uint       `gorm:"not null;default:1" json:"version"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 	// ExternalSource / ExternalUID 标记这条提醒来自外部日历（目前只有 "dingtalk"）。
 	// 两个字段都不加 NOT NULL，也不建唯一索引：SQLite 给存量表加 NOT NULL 列必须带
 	// DEFAULT，而 (user_id, source, uid) 全为 '' 的存量行会让唯一索引直接建不起来。
@@ -76,8 +76,8 @@ type Reminder struct {
 	ExternalSource string `gorm:"size:32;index" json:"external_source"`
 	ExternalUID    string `gorm:"size:255;index" json:"external_uid"`
 
-	DeletedAt           *time.Time        `gorm:"index" json:"-"`
-	Channels            []ReminderChannel `gorm:"foreignKey:ReminderID" json:"-"`
+	DeletedAt *time.Time        `gorm:"index" json:"-"`
+	Channels  []ReminderChannel `gorm:"foreignKey:ReminderID" json:"-"`
 }
 
 type ReminderChannel struct {

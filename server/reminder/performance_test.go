@@ -82,7 +82,9 @@ func TestSummaryUsesTwoAggregateQueries(t *testing.T) {
 	defer cleanup()
 
 	const userID = 72
-	now := time.Now()
+	// 应用写入一律是 UTC（见 validateReminderInput）；这里直接建行，也要按同一
+	// 约定构造，否则测的是「本地文本 vs UTC 边界」这种迁移前的历史形态。
+	now := time.Now().UTC()
 	past := now.Add(-time.Hour)
 	future := now.Add(time.Hour)
 	completedAt := now

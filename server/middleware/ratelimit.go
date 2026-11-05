@@ -107,7 +107,7 @@ func LimitRequests(rl *RateLimiter) gin.HandlerFunc {
 		if !rl.Allow(rateLimitKey(c)) {
 			c.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{
 				"code":    429,
-				"message": "too many requests, please try again later",
+				"message": "请求过于频繁，请稍后再试",
 				"data":    nil,
 			})
 			return

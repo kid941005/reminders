@@ -219,6 +219,12 @@ func handleUpdateList(db *gorm.DB) gin.HandlerFunc {
 		}
 		updates := map[string]interface{}{}
 		if name := strings.TrimSpace(in.Name); name != "" {
+			// 与创建清单保持同一条约束：否则 PATCH 可以写入超过列宽的清单名，
+			// 前端布局也会被撑破。
+			if len([]rune(name)) > 40 {
+				response.ErrorBadRequest(c, "清单名称应为 1–40 个字符")
+				return
+			}
 			updates["name"] = name
 		}
 		if in.Color != "" {
@@ -579,7 +585,9 @@ func handleSummary(db *gorm.DB) gin.HandlerFunc {
 		loc := shanghai()
 		now := time.Now()
 		local := now.In(loc)
-		endToday := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1)
+		// 与库内文本（UTC）同格式比较，见 service.go 的入库归一化。
+		endToday := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, loc).AddDate(0, 0, 1).UTC()
+		nowUTC := now.UTC()
 		var counts struct {
 			Today     int64
 			Planned   int64
@@ -593,7 +601,7 @@ func handleSummary(db *gorm.DB) gin.HandlerFunc {
 				COALESCE(SUM(CASE WHEN completed_at IS NULL AND due_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS planned,
 				COALESCE(SUM(CASE WHEN completed_at IS NULL THEN 1 ELSE 0 END), 0) AS open_total,
 				COALESCE(SUM(CASE WHEN completed_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS completed,
-				COALESCE(SUM(CASE WHEN completed_at IS NULL AND due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END), 0) AS overdue`, endToday, now).
+				COALESCE(SUM(CASE WHEN completed_at IS NULL AND due_at IS NOT NULL AND due_at < ? THEN 1 ELSE 0 END), 0) AS overdue`, endToday, nowUTC).
 			Where("user_id = ? AND deleted_at IS NULL", userID).
 			Scan(&counts).Error; err != nil {
 			response.ErrorInternal(c, "统计提醒失败")

@@ -158,6 +158,10 @@ func (w *gzipResponseWriter) decide(data []byte) {
 		}
 	}
 	if size < compressMinSize {
+		// 一旦决定不压缩就必须锁定结论：响应头此刻已经写出，后续再改
+		// Content-Encoding 只会让同一份响应里出现「明文 + gzip 字节」的混合体
+		// （审计日志 CSV 导出先写 BOM 再批量刷缓冲区，正好命中这条路径）。
+		w.decided = true
 		return
 	}
 

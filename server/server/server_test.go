@@ -11,13 +11,16 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"smallgo/server/auth"
 	"smallgo/server/config"
 	"smallgo/server/database"
 	_ "smallgo/server/qrcode"
+	"smallgo/server/reminder"
 	"smallgo/server/sysconfig"
 
 	"github.com/gin-gonic/gin"
@@ -34,6 +37,9 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *gorm.DB, string) {
 	if err != nil {
 		t.Fatalf("init db: %v", err)
 	}
+	// 必须显式关闭：Windows 上未释放的 SQLite 句柄会让 t.TempDir() 的
+	// RemoveAll 失败，整包测试被判为失败（Linux 上删除打开中的文件不报错）。
+	t.Cleanup(func() { _ = database.CloseDB(db) })
 	if err := database.AutoMigrate(db); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -871,6 +877,51 @@ func TestAdHocConfigWritesCallerScope(t *testing.T) {
 	w = doJSON(r, "GET", "/api/configs", userTok, nil)
 	if v := decode(t, w)["data"].(map[string]interface{})["custom_note"]; v != "hello" {
 		t.Fatalf("ad-hoc key missing from merged list: %v", v)
+	}
+}
+
+// 删除账号必须连带清理该账号在应用内的数据：框架不认识这些表，靠
+// apps.RegisterUserDataCleanup 注册的清理函数完成。
+func TestDeleteUserPurgesOwnedData(t *testing.T) {
+	r, db, _ := setupTestRouter(t)
+	adminToken := registerUser(t, r, "admin", "secret123")
+	registerUser(t, r, "bob", "secret123")
+
+	var bob database.User
+	if err := db.Where("username = ?", "bob").First(&bob).Error; err != nil {
+		t.Fatal(err)
+	}
+	// 本测试包只注册了 qrcode 应用，没有注册提醒路由，因此直接按模型造数据；
+	// 清理逻辑本身走的是 apps.RegisterUserDataCleanup 注册的钩子。
+	due := time.Now().Add(time.Hour).UTC()
+	item := reminder.Reminder{UserID: bob.ID, ListID: 1, Title: "bob 的提醒", DueAt: &due, RepeatRule: "none", Calendar: "solar", Version: 1}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&reminder.ReminderChannel{ReminderID: item.ID, UserID: bob.ID, Channel: "inapp", Enabled: true}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&reminder.DeliveryJob{
+		UserID: bob.ID, ReminderID: item.ID, Channel: "inapp",
+		ScheduledFor: due, RunAt: due, Status: "pending", IdempotencyKey: "cascade-test",
+	}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&reminder.Countdown{UserID: bob.ID, Title: "bob 的纪念日", TargetDate: due, Color: "rose"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if w := doJSON(r, "DELETE", "/api/users/"+strconv.FormatUint(uint64(bob.ID), 10), adminToken, nil); w.Code != http.StatusOK {
+		t.Fatalf("delete user: %d %s", w.Code, w.Body.String())
+	}
+
+	for _, table := range []string{"reminders", "reminder_channels", "delivery_jobs", "countdowns", "notifications"} {
+		var count int64
+		if err := db.Table(table).Where("user_id = ?", bob.ID).Count(&count).Error; err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
+		if count != 0 {
+			t.Fatalf("%s 仍有 %d 行属于已删除账号", table, count)
+		}
 	}
 }
 

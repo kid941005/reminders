@@ -14,13 +14,13 @@ import (
 // Every field except the credentials is optional; omitted values keep whatever
 // was stored before (or the model defaults on first save).
 type CalendarSyncInput struct {
-	Server    string `json:"server"`
-	Username  string `json:"username"`
-	Password  string `json:"password"`
-	Enabled   *bool  `json:"enabled"`
-	WindowBackDays    *int `json:"window_back_days"`
-	WindowForwardDays *int `json:"window_forward_days"`
-	RemindBeforeMinutes *int `json:"remind_before_minutes"`
+	Server              string `json:"server"`
+	Username            string `json:"username"`
+	Password            string `json:"password"`
+	Enabled             *bool  `json:"enabled"`
+	WindowBackDays      *int   `json:"window_back_days"`
+	WindowForwardDays   *int   `json:"window_forward_days"`
+	RemindBeforeMinutes *int   `json:"remind_before_minutes"`
 }
 
 // syncListName is the dedicated list imported events land in. Keeping them
@@ -166,10 +166,10 @@ func SyncAllCalendars(db *gorm.DB) {
 
 func markSyncResult(db *gorm.DB, id uint, imported int, syncErr error) {
 	updates := map[string]interface{}{
-		"last_sync_at":   time.Now().UTC(),
-		"last_imported":  imported,
-		"last_status":    "ok",
-		"last_error":     "",
+		"last_sync_at":  time.Now().UTC(),
+		"last_imported": imported,
+		"last_status":   "ok",
+		"last_error":    "",
 	}
 	if syncErr != nil {
 		updates["last_status"] = "error"
@@ -215,6 +215,8 @@ func syncCalendar(db *gorm.DB, cfg CalendarSync) (int, error) {
 			if event.AllDay {
 				due = time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, shanghai())
 			}
+			// 与手工创建的提醒一样按 UTC 入库（见 service.go 的入库归一化）。
+			due = due.UTC()
 			notes := composeSyncNotes(event)
 
 			var existing Reminder
@@ -322,7 +324,7 @@ func enabledChannelsOf(tx *gorm.DB, item Reminder) []string {
 // leaves the server.
 type CalendarSyncDTO struct {
 	CalendarSync
-	Server string `json:"server"`
+	Server   string `json:"server"`
 	ListName string `json:"list_name"`
 }
 

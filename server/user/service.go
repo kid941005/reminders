@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	"smallgo/server/apps"
 	"smallgo/server/auth"
 	"smallgo/server/database"
 	"smallgo/server/sysconfig"
@@ -177,17 +178,6 @@ func LogoutApplicationSession(db *gorm.DB, userID uint) error {
 	return nil
 }
 
-func loginResult(user database.User, jwtSecret string) (map[string]interface{}, error) {
-	token, err := auth.GenerateToken(user.ID, user.Username, user.Role, user.AuthVersion, jwtSecret)
-	if err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{
-		"token": token,
-		"user":  map[string]interface{}{"id": user.ID, "username": user.Username, "role": user.Role},
-	}, nil
-}
-
 func ChangePassword(db *gorm.DB, userID uint, oldPassword string, oldPasswordMd5 string, newPassword string) error {
 	if err := validatePassword(newPassword); err != nil {
 		return err
@@ -348,6 +338,12 @@ func DeleteUser(db *gorm.DB, userID uint) error {
 			return err
 		}
 		if err := tx.Where("user_id = ?", userID).Delete(&database.SystemConfig{}).Error; err != nil {
+			return err
+		}
+		// 业务数据（提醒、清单、渠道绑定、投递记录、纪念日…）由各应用注册的
+		// 清理函数删除：框架不认识这些表，但「删除账号」必须删干净，否则会留下
+		// 任何人都访问不到的孤儿数据。
+		if err := apps.CleanupUserData(tx, userID); err != nil {
 			return err
 		}
 		return tx.Delete(&target).Error

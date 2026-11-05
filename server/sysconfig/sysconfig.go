@@ -3,6 +3,7 @@ package sysconfig
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 
@@ -33,7 +34,7 @@ func InitDefaultConfigs(db *gorm.DB) error {
 		}
 		var existing database.SystemConfig
 		result := db.Where("user_id = ? AND key = ?", 0, def.Key).First(&existing)
-		if result.Error == gorm.ErrRecordNotFound {
+		if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 			row := database.SystemConfig{UserID: 0, Key: def.Key, Value: value, Public: def.Public}
 			if err := db.Create(&row).Error; err != nil {
 				return err
@@ -98,7 +99,7 @@ func GetConfig(db *gorm.DB, key string, userID uint) (string, error) {
 func UpdateConfig(db *gorm.DB, key string, value string, userID uint) error {
 	var config database.SystemConfig
 	result := db.Where("user_id = ? AND key = ?", userID, key).First(&config)
-	if result.Error == gorm.ErrRecordNotFound {
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		config = database.SystemConfig{
 			UserID: userID,
 			Key:    key,

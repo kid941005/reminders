@@ -96,6 +96,39 @@ func TestCompleteRecurringReminderAdvancesFromScheduledTime(t *testing.T) {
 	}
 }
 
+// 「今天」视图的边界必须与库内时间文本同格式（UTC）。旧实现拿本地 +08:00 的
+// 明日零点去和 UTC 文本比较，次日 00:00–08:00 的提醒会被算进今天。
+func TestTodayViewExcludesTomorrowEarlyMorning(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	loc := shanghai()
+	localNow := time.Now().In(loc)
+	today := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 20, 0, 0, 0, loc)
+	tomorrowMorning := today.AddDate(0, 0, 1).Add(-13 * time.Hour) // 次日 07:00
+
+	for title, due := range map[string]time.Time{"今天": today, "明天凌晨": tomorrowMorning} {
+		d := due
+		if _, err := createReminder(appDB, 61, SaveReminderInput{
+			Title: title, DueAt: &d, RepeatRule: "none", Channels: []string{ChannelInApp},
+		}); err != nil {
+			t.Fatalf("create %s: %v", title, err)
+		}
+	}
+
+	items, err := listReminders(appDB, 61, "today", "", 0, time.Time{}, time.Time{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Title != "今天" {
+		got := make([]string, 0, len(items))
+		for _, item := range items {
+			got = append(got, item.Title)
+		}
+		t.Fatalf("today 视图应只含今天的提醒，实际 %v", got)
+	}
+}
+
 func TestYearlyLeapDayUsesEndOfFebruary(t *testing.T) {
 	loc := shanghai()
 	start := time.Date(2024, time.February, 29, 8, 30, 0, 0, loc)

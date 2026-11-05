@@ -124,8 +124,8 @@ func TestBrokenOverrideFallsBack(t *testing.T) {
 func TestParseName(t *testing.T) {
 	cases := map[string]string{
 		"New Year's Day,元旦,1": "元旦",
-		"国庆节":                  "国庆节",
-		" ,中秋,1":               "中秋",
+		"国庆节":                 "国庆节",
+		" ,中秋,1":              "中秋",
 	}
 	for raw, want := range cases {
 		if got := parseName(raw); got != want {

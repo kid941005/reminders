@@ -35,7 +35,7 @@ func SetSecurityQuestions(db *gorm.DB, userID uint, q1, a1, q2, a2, q3, a3 strin
 		return ErrAnswerTooLong
 	}
 
-	if result.Error == gorm.ErrRecordNotFound {
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		sq = database.SecurityQuestion{
 			UserID:    userID,
 			Question1: q1,
@@ -64,7 +64,7 @@ func SetSecurityQuestions(db *gorm.DB, userID uint, q1, a1, q2, a2, q3, a3 strin
 func GetSecurityQuestions(db *gorm.DB, userID uint) (map[string]interface{}, error) {
 	var sq database.SecurityQuestion
 	result := db.Where("user_id = ?", userID).First(&sq)
-	if result.Error == gorm.ErrRecordNotFound {
+	if errors.Is(result.Error, gorm.ErrRecordNotFound) {
 		return map[string]interface{}{
 			"question1":     "",
 			"question2":     "",

@@ -2,6 +2,7 @@ package reminder
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 	"time"
 
@@ -201,6 +202,7 @@ func handleCreateCountdown(db *gorm.DB) gin.HandlerFunc {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
+		publishDataChanged(item.UserID, "countdown", "created", item.ID, originClientID(c))
 		response.Success(c, item)
 	}
 }
@@ -221,6 +223,7 @@ func handleUpdateCountdown(db *gorm.DB) gin.HandlerFunc {
 			writeServiceError(c, err)
 			return
 		}
+		publishDataChanged(item.UserID, "countdown", "updated", item.ID, originClientID(c))
 		response.Success(c, item)
 	}
 }
@@ -237,9 +240,10 @@ func handleDeleteCountdown(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		if res.RowsAffected == 0 {
-			response.Error(c, 404, response.CodeNotFound, "纪念日不存在")
+			response.Error(c, http.StatusNotFound, response.CodeNotFound, "纪念日不存在")
 			return
 		}
+		publishDataChanged(currentUserID(c), "countdown", "deleted", id, originClientID(c))
 		response.Success(c, gin.H{"deleted": true})
 	}
 }

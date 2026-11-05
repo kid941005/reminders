@@ -100,19 +100,6 @@ func handleLogin(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
-func setLoginAuditContext(c *gin.Context, result map[string]interface{}) {
-	user, ok := result["user"].(map[string]interface{})
-	if !ok {
-		return
-	}
-	if uid, ok := user["id"].(uint); ok {
-		c.Set("userID", uid)
-	}
-	if username, ok := user["username"].(string); ok {
-		c.Set("username", username)
-	}
-}
-
 func handleCheckAuth(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requireLogin, _ := sysconfig.GetConfig(db, "require_login", 0)

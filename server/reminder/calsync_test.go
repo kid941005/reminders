@@ -1,6 +1,7 @@
 package reminder
 
 import (
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -74,6 +75,12 @@ func TestParseICalEventsUnfoldsLines(t *testing.T) {
 // TestCalendarSyncImportsUpdatesAndPrunes 用假的 CalDAV 服务跑完整链路：
 // 发现 → 拉取 → 落库 → 幂等重跑 → 远端删除后本地软删。
 func TestCalendarSyncImportsUpdatesAndPrunes(t *testing.T) {
+	// httptest 服务监听 127.0.0.1，而生产的出站校验会拒绝回环地址；这里只在
+	// 本测试内换成普通拨号器。
+	originalDial := caldavDialContext
+	caldavDialContext = (&net.Dialer{Timeout: 10 * time.Second}).DialContext
+	defer func() { caldavDialContext = originalDial }()
+
 	cleanup := testDB(t)
 	defer cleanup()
 	t.Setenv("REMINDER_DATA_KEY", "test-key")

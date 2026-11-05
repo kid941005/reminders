@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -22,12 +23,81 @@ type caldavClient struct {
 	password string
 }
 
+// caldavDialContext 是出站连接实际使用的拨号器。默认走 safeDialContext；
+// 单元测试要在本地 httptest 服务（监听 127.0.0.1）上跑，因此留一个可替换点，
+// 生产路径不受影响。
+var caldavDialContext = safeDialContext
+
 func newCalDAVClient(username, password string) *caldavClient {
 	return &caldavClient{
-		http:     &http.Client{Timeout: 25 * time.Second},
+		http: &http.Client{
+			Timeout: 25 * time.Second,
+			// 日历地址由用户填写，属于「服务端替用户发起请求」的能力。没有这层
+			// 校验时，任何登录用户都能把它当成内网探针（例如指向 127.0.0.1 上的
+			// 管理面板或 169.254.169.254 的元数据服务）。
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+					return caldavDialContext(ctx, network, address)
+				},
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 20 * time.Second,
+			},
+			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
+				if len(via) >= 3 {
+					return errors.New("日历服务器重定向次数过多")
+				}
+				return nil
+			},
+		},
 		username: username,
 		password: password,
 	}
+}
+
+// blockedDialTarget 判断出站连接目标是否必须拒绝。
+//
+// 只拦「必然属于本机或链路本地」的地址：局域网自建 CalDAV（192.168/10.x）
+// 是正当用法，私有网段保持放行。
+func blockedDialTarget(ip net.IP) bool {
+	if ip == nil {
+		return true
+	}
+	if v4 := ip.To4(); v4 != nil {
+		ip = v4
+	}
+	return ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() ||
+		ip.IsLinkLocalMulticast() || ip.IsInterfaceLocalMulticast() || ip.IsMulticast()
+}
+
+// safeDialContext 先自行解析目标并校验，再直接连接已校验的 IP：这样即使域名
+// 第二次解析给出别的地址（DNS rebinding），也绕不过检查。
+func safeDialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(address)
+	if err != nil {
+		return nil, err
+	}
+	resolved, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, fmt.Errorf("解析日历服务器地址失败: %w", err)
+	}
+	if len(resolved) == 0 {
+		return nil, errors.New("日历服务器地址无法解析")
+	}
+	for _, candidate := range resolved {
+		if blockedDialTarget(candidate.IP) {
+			return nil, errors.New("该地址指向本机或链路本地网络，已拒绝连接")
+		}
+	}
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	var lastErr error
+	for _, candidate := range resolved {
+		conn, dialErr := dialer.DialContext(ctx, network, net.JoinHostPort(candidate.IP.String(), port))
+		if dialErr == nil {
+			return conn, nil
+		}
+		lastErr = dialErr
+	}
+	return nil, lastErr
 }
 
 // normalizeServerURL accepts what a user typically pastes from the DingTalk
@@ -46,6 +116,12 @@ func normalizeServerURL(server string) (string, error) {
 	}
 	if parsed.Host == "" {
 		return "", errors.New("服务器地址无效")
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", errors.New("服务器地址必须以 http:// 或 https:// 开头")
+	}
+	if parsed.User != nil {
+		return "", errors.New("服务器地址不能包含账号信息，请在下方单独填写账号")
 	}
 	if !strings.HasSuffix(parsed.Path, "/") {
 		parsed.Path += "/"
@@ -207,7 +283,8 @@ func (c *caldavClient) request(ctx context.Context, method, target, depth, body 
 	case resp.StatusCode == http.StatusNotFound:
 		return nil, errors.New("日历地址不存在")
 	case resp.StatusCode >= 300:
-		return nil, fmt.Errorf("CalDAV 返回 %d: %s", resp.StatusCode, truncateRunes(strings.TrimSpace(string(payload)), 120))
+		// 只回状态码，不回响应体：否则这个接口会变成「读任意内网页面」的通道。
+		return nil, fmt.Errorf("CalDAV 返回 %d（%s）", resp.StatusCode, http.StatusText(resp.StatusCode))
 	}
 	return payload, nil
 }
