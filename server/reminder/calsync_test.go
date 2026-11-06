@@ -107,22 +107,18 @@ func TestCalendarSyncImportsUpdatesAndPrunes(t *testing.T) {
 <d:response><d:href>/calendars/u/main/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/><c:calendar/></d:resourcetype></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
 </d:multistatus>`))
 		case r.Method == "REPORT":
-			events := `BEGIN:VCALENDAR
-BEGIN:VEVENT
-UID:evt-a
-SUMMARY:周会
-DTSTART;TZID=Asia/Shanghai:20261023T100000
-END:VEVENT`
+			// 日期必须相对「现在」生成：同步只清理本轮窗口内的条目，写死日期会在
+			// 某一天之后自动落到窗口之外，让断言随日历翻页而失效。
+			loc := mustShanghai(t)
+			syncA := time.Now().AddDate(0, 0, 2).In(loc)
+			syncB := syncA.AddDate(0, 0, 1)
+			events := "BEGIN:VCALENDAR\nBEGIN:VEVENT\nUID:evt-a\nSUMMARY:周会\nDTSTART;TZID=Asia/Shanghai:" +
+				syncA.Format("20060102T150405") + "\nEND:VEVENT"
 			if atomic.LoadInt32(&includeSecond) == 1 {
-				events += `
-BEGIN:VEVENT
-UID:evt-b
-SUMMARY:评审
-DTSTART;TZID=Asia/Shanghai:20261024T140000
-END:VEVENT`
+				events += "\nBEGIN:VEVENT\nUID:evt-b\nSUMMARY:评审\nDTSTART;TZID=Asia/Shanghai:" +
+					syncB.Format("20060102T150405") + "\nEND:VEVENT"
 			}
-			events += `
-END:VCALENDAR`
+			events += "\nEND:VCALENDAR"
 			_, _ = w.Write([]byte(`<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
 <d:response><d:href>/calendars/u/main/evt.ics</d:href><d:propstat><d:prop>
