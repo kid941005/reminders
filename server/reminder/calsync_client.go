@@ -42,11 +42,10 @@ func newCalDAVClient(username, password string) *caldavClient {
 				TLSHandshakeTimeout:   10 * time.Second,
 				ResponseHeaderTimeout: 20 * time.Second,
 			},
-			CheckRedirect: func(_ *http.Request, via []*http.Request) error {
-				if len(via) >= 3 {
-					return errors.New("日历服务器重定向次数过多")
-				}
-				return nil
+			// 重定向由 request() 自己逐跳重发：Go 的 Client 对 301/302/303 会把
+			// 非 GET 方法改写成 GET 并丢掉请求体，PROPFIND 一旦被重定向就废了。
+			CheckRedirect: func(*http.Request, []*http.Request) error {
+				return http.ErrUseLastResponse
 			},
 		},
 		username: username,
@@ -129,6 +128,20 @@ func normalizeServerURL(server string) (string, error) {
 	return parsed.String(), nil
 }
 
+// discoveryEntries 按优先级给出发现入口：先标准 RFC 6764 的
+// /.well-known/caldav，再退回用户填写的地址。
+//
+// 钉钉的服务器根路径是网页应用（GET / 返回 200 HTML），对 PROPFIND 直接回
+// 405；真正的 CalDAV 入口由 /.well-known/caldav 302 到 /dav/。不先走 well-known
+// 就会在山门口被 405 挡下——这正是用户看到的「CalDAV 返回 405」。
+func discoveryEntries(base string) []string {
+	entries := make([]string, 0, 2)
+	if parsed, err := url.Parse(base); err == nil && parsed.Host != "" {
+		entries = append(entries, parsed.Scheme+"://"+parsed.Host+"/.well-known/caldav")
+	}
+	return append(entries, base)
+}
+
 // Discover walks principal → calendar-home → calendar collections and returns
 // the first calendar collection it finds. DingTalk's CalDAV dialog shows only a
 // server address and credentials, so the URL cannot be typed in by hand.
@@ -140,13 +153,32 @@ func (c *caldavClient) Discover(ctx context.Context, server string) (string, err
 
 	principalBody := `<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:"><d:prop><d:current-user-principal/></d:prop></d:propfind>`
-	principal, err := c.discoverHref(ctx, base, "0", principalBody, func(p davProp) string {
-		return p.CurrentUserPrincipal.Href
-	})
-	if err != nil {
-		return "", err
+	var principal string
+	var lastErr error
+	for _, entry := range discoveryEntries(base) {
+		href, err := c.discoverHref(ctx, entry, "0", principalBody, func(p davProp) string {
+			return p.CurrentUserPrincipal.Href
+		})
+		if err != nil {
+			// 只有「这个入口不是 CalDAV 端点」才值得换下一个入口；认证失败、
+			// 网络错误必须立刻回给用户，否则真正的错因（例如密码不对）会被后一个
+			// 入口的 405 覆盖掉——那正是「明明密码错了却报 405」的由来。
+			var statusErr *caldavStatusError
+			if errors.As(err, &statusErr) && (statusErr.Status == http.StatusNotFound || statusErr.Status == http.StatusMethodNotAllowed) {
+				lastErr = err
+				continue
+			}
+			return "", err
+		}
+		if href != "" {
+			principal = href
+			break
+		}
 	}
 	if principal == "" {
+		if lastErr != nil {
+			return "", lastErr
+		}
 		return "", errors.New("该地址不是可用的 CalDAV 服务：未返回 current-user-principal")
 	}
 	principalURL := resolveHref(base, principal)
@@ -177,8 +209,11 @@ func (c *caldavClient) Discover(ctx context.Context, server string) (string, err
 
 // discoverHref issues a PROPFIND and returns the first non-empty href picker
 // result.
+// discoverHref issues a PROPFIND and returns the first non-empty href picker
+// result, resolved against the URL the response actually came from (after
+// redirects), so relative hrefs still land on the right host/path.
 func (c *caldavClient) discoverHref(ctx context.Context, target, depth, body string, pick func(davProp) string) (string, error) {
-	payload, err := c.request(ctx, "PROPFIND", target, depth, body)
+	payload, finalURL, err := c.request(ctx, "PROPFIND", target, depth, body)
 	if err != nil {
 		return "", err
 	}
@@ -188,8 +223,8 @@ func (c *caldavClient) discoverHref(ctx context.Context, target, depth, body str
 	}
 	for _, resp := range multi.Responses {
 		for _, ps := range resp.Propstat {
-			if href := pick(ps.Prop); href != "" {
-				return href, nil
+			if href := strings.TrimSpace(pick(ps.Prop)); href != "" {
+				return resolveHref(finalURL, href), nil
 			}
 		}
 	}
@@ -201,7 +236,7 @@ func (c *caldavClient) discoverHref(ctx context.Context, target, depth, body str
 func (c *caldavClient) discoverCalendarCollection(ctx context.Context, homeURL string) (string, error) {
 	body := `<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>`
-	payload, err := c.request(ctx, "PROPFIND", homeURL, "1", body)
+	payload, finalURL, err := c.request(ctx, "PROPFIND", homeURL, "1", body)
 	if err != nil {
 		return "", err
 	}
@@ -215,7 +250,7 @@ func (c *caldavClient) discoverCalendarCollection(ctx context.Context, homeURL s
 		}
 		for _, ps := range resp.Propstat {
 			if ps.Prop.ResourceType.Calendar != nil {
-				return resolveHref(homeURL, resp.Href), nil
+				return resolveHref(finalURL, resp.Href), nil
 			}
 		}
 	}
@@ -233,7 +268,7 @@ func (c *caldavClient) FetchEvents(ctx context.Context, calendarURL string, from
 </c:calendar-query>`,
 		from.UTC().Format("20060102T150405Z"), to.UTC().Format("20060102T150405Z"))
 
-	payload, err := c.request(ctx, "REPORT", calendarURL, "1", body)
+	payload, _, err := c.request(ctx, "REPORT", calendarURL, "1", body)
 	if err != nil {
 		return nil, err
 	}
@@ -255,38 +290,111 @@ func (c *caldavClient) FetchEvents(ctx context.Context, calendarURL string, from
 	return events, nil
 }
 
-func (c *caldavClient) request(ctx context.Context, method, target, depth, body string) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, method, target, strings.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.SetBasicAuth(c.username, c.password)
-	req.Header.Set("Content-Type", "application/xml; charset=utf-8")
-	if depth != "" {
-		req.Header.Set("Depth", depth)
-	}
+const (
+	maxCalDAVRedirects = 3
+	maxCalDAVBodyBytes = 8 << 20
+)
 
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("连接 CalDAV 服务失败: %w", err)
-	}
-	defer resp.Body.Close()
+// request 发起一次 CalDAV 请求，并自行逐跳跟随同主机重定向，返回响应体与
+// 最终生效的地址。
+//
+// 不能用 http.Client 自动跟随：Go 对 301/302/303 会把非 GET 方法改写成 GET 并
+// 丢弃请求体，而 /.well-known/caldav → /dav/ 这类跳转必须继续用 PROPFIND。
+func (c *caldavClient) request(ctx context.Context, method, target, depth, body string) ([]byte, string, error) {
+	current := target
+	for hop := 0; hop <= maxCalDAVRedirects; hop++ {
+		req, err := http.NewRequestWithContext(ctx, method, current, strings.NewReader(body))
+		if err != nil {
+			return nil, "", err
+		}
+		req.SetBasicAuth(c.username, c.password)
+		req.Header.Set("Content-Type", "application/xml; charset=utf-8")
+		if depth != "" {
+			req.Header.Set("Depth", depth)
+		}
 
-	// 限制读取体积：日历集合通常几十 KB，超过 8MB 说明响应异常。
-	payload, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+		resp, err := c.http.Do(req)
+		if err != nil {
+			return nil, "", fmt.Errorf("连接 CalDAV 服务失败: %w", err)
+		}
+		// 限制读取体积：日历集合通常几十 KB，超过 8MB 说明响应异常。
+		payload, readErr := io.ReadAll(io.LimitReader(resp.Body, maxCalDAVBodyBytes))
+		_ = resp.Body.Close()
+		if readErr != nil {
+			return nil, "", fmt.Errorf("读取 CalDAV 响应失败: %w", readErr)
+		}
+
+		if isCalDAVRedirect(resp.StatusCode) {
+			next, err := sameHostRedirect(current, resp.Header.Get("Location"))
+			if err != nil {
+				return nil, "", err
+			}
+			current = next
+			continue
+		}
+
+		switch {
+		case resp.StatusCode == http.StatusUnauthorized:
+			return nil, "", &caldavStatusError{Status: resp.StatusCode, Message: "账号或密码不正确"}
+		case resp.StatusCode == http.StatusNotFound:
+			return nil, "", &caldavStatusError{Status: resp.StatusCode, Message: "日历地址不存在"}
+		case resp.StatusCode >= 300:
+			// 带上方法与实际请求地址：出现 405 时能立刻区分「地址不对（不是
+			// CalDAV 集合）」和「服务器不允许该方法」。不回显响应体，避免把这个
+			// 接口变成任意内网页面的读取通道。
+			return nil, "", &caldavStatusError{Status: resp.StatusCode, Method: method, URL: current}
+		}
+		return payload, current, nil
+	}
+	return nil, "", errors.New("日历服务器重定向次数过多")
+}
+
+// caldavStatusError 表示「服务器应答了，但状态码不是 2xx」。调用方据此区分
+// 「这个入口不是 CalDAV 端点（404/405，可以换下一个入口试试）」与「认证失败或
+// 其它错误（必须直接告诉用户）」。Message 非空时优先作为用户可见文案。
+type caldavStatusError struct {
+	Status  int
+	Method  string
+	URL     string
+	Message string
+}
+
+func (e *caldavStatusError) Error() string {
+	if e.Message != "" {
+		return e.Message
+	}
+	return fmt.Sprintf("CalDAV 返回 %d（%s）：%s %s", e.Status, http.StatusText(e.Status), e.Method, e.URL)
+}
+
+func isCalDAVRedirect(status int) bool {
+	switch status {
+	case http.StatusMovedPermanently, http.StatusFound, http.StatusSeeOther,
+		http.StatusTemporaryRedirect, http.StatusPermanentRedirect:
+		return true
+	}
+	return false
+}
+
+// sameHostRedirect 把 Location 解析成绝对地址，并拒绝跨主机跳转：跨主机既可能
+// 是地址填错，也会把 Basic 凭据带给第三方；遇到时直接提示用户填写最终地址。
+func sameHostRedirect(current, location string) (string, error) {
+	location = strings.TrimSpace(location)
+	if location == "" {
+		return "", errors.New("日历服务器返回了空的重定向地址")
+	}
+	base, err := url.Parse(current)
 	if err != nil {
-		return nil, fmt.Errorf("读取 CalDAV 响应失败: %w", err)
+		return "", errors.New("当前 CalDAV 地址无效")
 	}
-	switch {
-	case resp.StatusCode == http.StatusUnauthorized:
-		return nil, errors.New("账号或密码不正确")
-	case resp.StatusCode == http.StatusNotFound:
-		return nil, errors.New("日历地址不存在")
-	case resp.StatusCode >= 300:
-		// 只回状态码，不回响应体：否则这个接口会变成「读任意内网页面」的通道。
-		return nil, fmt.Errorf("CalDAV 返回 %d（%s）", resp.StatusCode, http.StatusText(resp.StatusCode))
+	ref, err := url.Parse(location)
+	if err != nil {
+		return "", errors.New("日历服务器返回了无效的重定向地址")
 	}
-	return payload, nil
+	target := base.ResolveReference(ref)
+	if !strings.EqualFold(target.Scheme, base.Scheme) || !strings.EqualFold(target.Host, base.Host) {
+		return "", fmt.Errorf("日历服务器重定向到了其他地址（%s://%s），请直接填写该地址", target.Scheme, target.Host)
+	}
+	return target.String(), nil
 }
 
 type davMultiStatus struct {
