@@ -143,12 +143,12 @@ func discoveryEntries(base string) []string {
 }
 
 // Discover walks principal → calendar-home → calendar collections and returns
-// the first calendar collection it finds. DingTalk's CalDAV dialog shows only a
-// server address and credentials, so the URL cannot be typed in by hand.
-func (c *caldavClient) Discover(ctx context.Context, server string) (string, error) {
+// every readable collection. DingTalk's CalDAV dialog shows only a server
+// address and credentials, so the URL cannot be typed in by hand.
+func (c *caldavClient) Discover(ctx context.Context, server string) ([]string, error) {
 	base, err := normalizeServerURL(server)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	principalBody := `<?xml version="1.0" encoding="utf-8"?>
@@ -168,7 +168,7 @@ func (c *caldavClient) Discover(ctx context.Context, server string) (string, err
 				lastErr = err
 				continue
 			}
-			return "", err
+			return nil, err
 		}
 		if href != "" {
 			principal = href
@@ -177,9 +177,9 @@ func (c *caldavClient) Discover(ctx context.Context, server string) (string, err
 	}
 	if principal == "" {
 		if lastErr != nil {
-			return "", lastErr
+			return nil, lastErr
 		}
-		return "", errors.New("该地址不是可用的 CalDAV 服务：未返回 current-user-principal")
+		return nil, errors.New("该地址不是可用的 CalDAV 服务：未返回 current-user-principal")
 	}
 	principalURL := resolveHref(base, principal)
 
@@ -190,25 +190,23 @@ func (c *caldavClient) Discover(ctx context.Context, server string) (string, err
 		return p.CalendarHomeSet.Href
 	})
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if home == "" {
-		return "", errors.New("该账号没有日历集合（calendar-home-set 为空）")
+		return nil, errors.New("该账号没有日历集合（calendar-home-set 为空）")
 	}
 	homeURL := resolveHref(base, home)
 
-	found, err := c.discoverCalendarCollection(ctx, homeURL)
+	collections, err := c.discoverCalendarCollections(ctx, homeURL)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	if found == "" {
-		return "", errors.New("没有找到可读取的日历")
+	if len(collections) == 0 {
+		return nil, errors.New("没有找到可读取的日历")
 	}
-	return found, nil
+	return collections, nil
 }
 
-// discoverHref issues a PROPFIND and returns the first non-empty href picker
-// result.
 // discoverHref issues a PROPFIND and returns the first non-empty href picker
 // result, resolved against the URL the response actually came from (after
 // redirects), so relative hrefs still land on the right host/path.
@@ -231,30 +229,40 @@ func (c *caldavClient) discoverHref(ctx context.Context, target, depth, body str
 	return "", nil
 }
 
-// discoverCalendarCollection lists children of the calendar home and returns the
-// first collection whose resourcetype contains <calendar/>.
-func (c *caldavClient) discoverCalendarCollection(ctx context.Context, homeURL string) (string, error) {
+// discoverCalendarCollections lists children of the calendar home and returns
+// every collection whose resourcetype contains <calendar/>.
+//
+// 必须全部返回：只取第一个的话，一个账号下的多个日历（个人/订阅/团队）只有
+// 一个会被导入，其余日历的日程整批缺失——用户看到的就是「钉钉里有、应用里没有」。
+func (c *caldavClient) discoverCalendarCollections(ctx context.Context, homeURL string) ([]string, error) {
 	body := `<?xml version="1.0" encoding="utf-8"?>
 <d:propfind xmlns:d="DAV:"><d:prop><d:resourcetype/></d:prop></d:propfind>`
 	payload, finalURL, err := c.request(ctx, "PROPFIND", homeURL, "1", body)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	multi, err := decodeMultiStatus(payload)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
+	found := make([]string, 0, 4)
+	seen := map[string]bool{}
 	for _, resp := range multi.Responses {
 		if strings.TrimSpace(resp.Href) == "" {
 			continue
 		}
 		for _, ps := range resp.Propstat {
-			if ps.Prop.ResourceType.Calendar != nil {
-				return resolveHref(finalURL, resp.Href), nil
+			if ps.Prop.ResourceType.Calendar == nil {
+				continue
+			}
+			href := resolveHref(finalURL, resp.Href)
+			if !seen[href] {
+				seen[href] = true
+				found = append(found, href)
 			}
 		}
 	}
-	return "", nil
+	return found, nil
 }
 
 // FetchEvents runs a calendar-query REPORT and returns the parsed VEVENTs.

@@ -71,12 +71,12 @@ func TestDiscoverFollowsWellKnownAndKeepsPropfindMethod(t *testing.T) {
 	// 复用生产客户端的配置（尤其是 CheckRedirect = ErrUseLastResponse），只替换传输层。
 	client := newCalDAVClient("u", "p")
 	client.http.Transport = roundTrip
-	calendarURL, err := client.Discover(context.Background(), "http://caldav.test")
+	collections, err := client.Discover(context.Background(), "http://caldav.test")
 	if err != nil {
 		t.Fatalf("Discover: %v", err)
 	}
-	if want := "http://caldav.test/dav/calendars/u1/main/"; calendarURL != want {
-		t.Fatalf("calendar url = %q, want %q", calendarURL, want)
+	if want := "http://caldav.test/dav/calendars/u1/main/"; len(collections) != 1 || collections[0] != want {
+		t.Fatalf("collections = %v, want exactly [%q]", collections, want)
 	}
 
 	mu.Lock()

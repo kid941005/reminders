@@ -2,10 +2,13 @@ package reminder
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"smallgo/server/logger"
 
 	"gorm.io/gorm"
 )
@@ -65,9 +68,16 @@ func SaveCalendarSync(db *gorm.DB, userID uint, in CalendarSyncInput) (CalendarS
 	client := newCalDAVClient(in.Username, password)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	calendarURL, err := client.Discover(ctx, in.Server)
+	collections, err := client.Discover(ctx, in.Server)
 	if err != nil {
 		return CalendarSync{}, err
+	}
+	if len(collections) == 0 {
+		return CalendarSync{}, errors.New("没有找到可读取的日历")
+	}
+	rawCollections, err := json.Marshal(collections)
+	if err != nil {
+		return CalendarSync{}, errors.New("日历列表处理失败")
 	}
 
 	sealed, err := encryptTarget(db, password)
@@ -85,7 +95,8 @@ func SaveCalendarSync(db *gorm.DB, userID uint, in CalendarSyncInput) (CalendarS
 		cfg.WindowForwardDays = 180
 		cfg.RemindBeforeMinutes = 15
 	}
-	cfg.CalendarURL = calendarURL
+	cfg.CalendarURL = collections[0]
+	cfg.Collections = string(rawCollections)
 	cfg.Username = in.Username
 	cfg.Password = sealed
 	if in.Enabled != nil {
@@ -185,111 +196,199 @@ func syncCalendar(db *gorm.DB, cfg CalendarSync) (int, error) {
 	}
 	from, to := cfg.window()
 
+	collections := cfg.collectionURLs()
+	if len(collections) == 0 {
+		return 0, errors.New("尚未记录日历地址，请重新保存 CalDAV 配置")
+	}
+
 	client := newCalDAVClient(cfg.Username, password)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	events, err := client.FetchEvents(ctx, cfg.CalendarURL, from, to)
-	if err != nil {
-		return 0, err
+	// 逐个日历集合拉取。某个集合失败（订阅日历、只读日历常常不支持 calendar-query）
+	// 时继续读其余的，但本轮**跳过清理**：少读一个集合就把它的日程当成「远端已
+	// 删除」删掉，是最容易造成「日程缺漏」的路径。
+	var events []ICalEvent
+	var fetchErrs []string
+	for _, collection := range collections {
+		fetched, err := client.FetchEvents(ctx, collection, from, to)
+		if err != nil {
+			fetchErrs = append(fetchErrs, fmt.Sprintf("%s: %v", collection, err))
+			continue
+		}
+		events = append(events, fetched...)
 	}
+	if len(fetchErrs) == len(collections) {
+		return 0, fmt.Errorf("读取日历失败: %s", strings.Join(fetchErrs, "; "))
+	}
+	allRead := len(fetchErrs) == 0
 
-	seen := make(map[string]bool, len(events))
-	imported := 0
-
+	var imported, pruned int
 	err = db.Transaction(func(tx *gorm.DB) error {
-		for _, event := range events {
-			uid := strings.TrimSpace(event.UID)
-			// 没有 UID 就没有去重依据：重复导入会不断产生副本。
-			if uid == "" || event.Status == "CANCELLED" {
-				continue
-			}
-			seen[uid] = true
-
-			title := strings.TrimSpace(event.Summary)
-			if title == "" {
-				title = "(无标题日程)"
-			}
-			title = truncateRunes(title, 200)
-			due := event.Start.In(shanghai())
-			if event.AllDay {
-				due = time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, shanghai())
-			}
-			// 与手工创建的提醒一样按 UTC 入库（见 service.go 的入库归一化）。
-			due = due.UTC()
-			notes := composeSyncNotes(event)
-
-			var existing Reminder
-			findErr := tx.Where("user_id = ? AND external_source = ? AND external_uid = ?",
-				cfg.UserID, ExternalSourceDingTalk, uid).First(&existing).Error
-
-			switch {
-			case errors.Is(findErr, gorm.ErrRecordNotFound):
-				created := Reminder{
-					UserID: cfg.UserID, ListID: cfg.ListID, Title: title, Notes: notes,
-					DueAt: &due, AllDay: event.AllDay, RepeatRule: event.RepeatRule,
-					Calendar: "solar", RemindBeforeMinutes: cfg.RemindBeforeMinutes,
-					ExternalSource: ExternalSourceDingTalk, ExternalUID: uid, Version: 1,
-				}
-				if err := tx.Create(&created).Error; err != nil {
-					return err
-				}
-				channels := []string{ChannelInApp}
-				if err := replaceChannels(tx, created, SaveReminderInput{Channels: channels}); err != nil {
-					return err
-				}
-				if err := rebuildJobs(tx, created, channels); err != nil {
-					return err
-				}
-				imported++
-			case findErr != nil:
-				return findErr
-			default:
-				// 已完成条目不覆盖：用户在本地处理过的日程不应该被远端重新激活。
-				if existing.CompletedAt != nil {
-					continue
-				}
-				existing.Title = title
-				existing.Notes = notes
-				existing.DueAt = &due
-				existing.AllDay = event.AllDay
-				existing.RepeatRule = event.RepeatRule
-				existing.SnoozedUntil = nil
-				existing.Version++
-				if err := tx.Save(&existing).Error; err != nil {
-					return err
-				}
-				channels := enabledChannelsOf(tx, existing)
-				if err := rebuildJobs(tx, existing, channels); err != nil {
-					return err
-				}
-				imported++
-			}
-		}
-
-		// 远端删掉的日程：仅在同一时间窗内清理，避免把窗口外的东西误删。
-		// seen 为空时直接跳过——一次空响应（例如凭据失效返回空集合）不应该清空本地。
-		if len(seen) == 0 {
-			return nil
-		}
-		uids := make([]string, 0, len(seen))
-		for uid := range seen {
-			uids = append(uids, uid)
-		}
-		// 不加时间窗条件：导入的来源只有这个窗口，窗口外的条目本来就不该由这里
-		// 管理。若加上 due_at 范围判断，反而会踩到「due_at 以本地偏移存储、谓词用
-		// 另一种时区」的字符串比较问题（见 CHANGELOG 的已知问题）。
-		now := time.Now()
-		return tx.Model(&Reminder{}).
-			Where("user_id = ? AND external_source = ? AND completed_at IS NULL AND deleted_at IS NULL",
-				cfg.UserID, ExternalSourceDingTalk).
-			Where("external_uid NOT IN ?", uids).
-			Update("deleted_at", now).Error
+		var applyErr error
+		imported, pruned, applyErr = applySyncEvents(tx, cfg, events, from, to, allRead)
+		return applyErr
 	})
 	if err != nil {
 		return imported, err
 	}
+	if len(fetchErrs) > 0 {
+		return imported, fmt.Errorf("部分日历读取失败（本轮未清理）: %s", strings.Join(fetchErrs, "; "))
+	}
+	// 排障用：把「拉了多少、导入了多少、清理了多少」写进运行日志，
+	// 出现缺漏时可以直接判断是没拉到、还是被清理了。
+	logger.Info("reminder: 钉钉日程同步 user=%d 集合=%d 拉取=%d 导入=%d 清理=%d",
+		cfg.UserID, len(collections), len(events), imported, pruned)
 	return imported, nil
+}
+
+// applySyncEvents 把一轮拉取的 VEVENT 落到本地提醒表，返回导入条数与清理条数。
+//
+// 单独抽出来是为了能在不联网的情况下覆盖这些容易出错的分支：多日历合并、
+// 循环日程的起始时间推进、例外实例的独立身份、以及「之前被清理过的条目复活」。
+// prune=false 表示本轮存在读取失败的集合，不能据此判断「远端已删除」。
+func applySyncEvents(tx *gorm.DB, cfg CalendarSync, events []ICalEvent, from, to time.Time, prune bool) (int, int, error) {
+	now := time.Now().UTC()
+	loc := shanghai()
+	// 全天日程按「本地今天零点」判断是否过期；定时日程按现在判断。
+	localNow := now.In(loc)
+	allDayFloor := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, loc).UTC()
+
+	seen := make(map[string]bool, len(events))
+	imported := 0
+
+	for _, event := range events {
+		uid := strings.TrimSpace(event.UID)
+		// 没有 UID 就没有去重依据：重复导入会不断产生副本。
+		if uid == "" || event.Status == "CANCELLED" {
+			continue
+		}
+		key := eventKey(event, uid)
+		seen[key] = true
+
+		title := strings.TrimSpace(event.Summary)
+		if title == "" {
+			title = "(无标题日程)"
+		}
+		title = truncateRunes(title, 200)
+		due := event.Start.In(loc)
+		if event.AllDay {
+			due = time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, loc)
+		}
+		// 与手工创建的提醒一样按 UTC 入库（见 service.go 的入库归一化）。
+		due = due.UTC()
+
+		rule := event.RepeatRule
+		if strings.TrimSpace(event.RecurrenceID) != "" {
+			// 例外实例是一次性的，不能继承主事件的重复规则。
+			rule = "none"
+		}
+		// CalDAV 只返回主事件、不展开实例，主事件的 DTSTART 可能停在很久以前。
+		// 直接落库会让这条提醒卡在过去，而「接下来的会议」在列表里完全看不到。
+		floor := now
+		if event.AllDay {
+			floor = allDayFloor
+		}
+		due = rollForward(due, rule, floor)
+
+		notes := composeSyncNotes(event)
+
+		var existing Reminder
+		findErr := tx.Where("user_id = ? AND external_source = ? AND external_uid = ?",
+			cfg.UserID, ExternalSourceDingTalk, key).First(&existing).Error
+
+		switch {
+		case errors.Is(findErr, gorm.ErrRecordNotFound):
+			created := Reminder{
+				UserID: cfg.UserID, ListID: cfg.ListID, Title: title, Notes: notes,
+				DueAt: &due, AllDay: event.AllDay, RepeatRule: rule,
+				Calendar: "solar", RemindBeforeMinutes: cfg.RemindBeforeMinutes,
+				ExternalSource: ExternalSourceDingTalk, ExternalUID: key, Version: 1,
+			}
+			if err := tx.Create(&created).Error; err != nil {
+				return imported, 0, err
+			}
+			channels := []string{ChannelInApp}
+			if err := replaceChannels(tx, created, SaveReminderInput{Channels: channels}); err != nil {
+				return imported, 0, err
+			}
+			if err := rebuildJobs(tx, created, channels); err != nil {
+				return imported, 0, err
+			}
+			imported++
+		case findErr != nil:
+			return imported, 0, findErr
+		default:
+			// 已完成条目不覆盖：用户在本地处理过的日程不应该被远端重新激活。
+			if existing.CompletedAt != nil {
+				continue
+			}
+			// 之前被清理过的条目必须复活：只更新字段而不清 deleted_at，这条记录
+			// 就永远回不来了（某次同步只拿到部分数据时确实发生过）。
+			existing.DeletedAt = nil
+			existing.Title = title
+			existing.Notes = notes
+			existing.DueAt = &due
+			existing.AllDay = event.AllDay
+			existing.RepeatRule = rule
+			existing.SnoozedUntil = nil
+			existing.Version++
+			if err := tx.Save(&existing).Error; err != nil {
+				return imported, 0, err
+			}
+			channels := enabledChannelsOf(tx, existing)
+			if err := rebuildJobs(tx, existing, channels); err != nil {
+				return imported, 0, err
+			}
+			imported++
+		}
+	}
+
+	// 清理：只处理「本次窗口内、未完成、本轮没看到」的条目。加窗口条件后，
+	// 窗口外或已被推进到窗口之后的日程不会被误删；本轮完全空响应时整体跳过
+	// （例如凭据失效返回空集合，绝不能据此清空本地）。
+	if len(seen) == 0 || !prune {
+		return imported, 0, nil
+	}
+	keys := make([]string, 0, len(seen))
+	for key := range seen {
+		keys = append(keys, key)
+	}
+	res := tx.Model(&Reminder{}).
+		Where("user_id = ? AND external_source = ? AND completed_at IS NULL AND deleted_at IS NULL",
+			cfg.UserID, ExternalSourceDingTalk).
+		Where("due_at IS NOT NULL AND due_at >= ? AND due_at < ?", from.UTC(), to.UTC()).
+		Where("external_uid NOT IN ?", keys).
+		Update("deleted_at", now)
+	if res.Error != nil {
+		return imported, 0, res.Error
+	}
+	return imported, int(res.RowsAffected), nil
+}
+
+// eventKey 生成去重键：普通事件用 UID；被单独改期的循环实例（RECURRENCE-ID）
+// 用「UID#实例时间」，否则同一 UID 的多个实例会互相覆盖、只剩一条。
+func eventKey(event ICalEvent, uid string) string {
+	if rid := strings.TrimSpace(event.RecurrenceID); rid != "" {
+		return uid + "#" + rid
+	}
+	return uid
+}
+
+// rollForward 把循环日程的起始时间推进到 floor 之后。CalDAV 返回的是主事件，
+// 不展开实例；主事件的 DTSTART 可能是几年前，直接落库会让提醒卡在过去。
+func rollForward(due time.Time, rule string, floor time.Time) time.Time {
+	if rule == "" || rule == "none" {
+		return due
+	}
+	for i := 0; i < 500 && due.Before(floor); i++ {
+		next := nextOccurrence(due, rule)
+		if !next.After(due) {
+			break
+		}
+		due = next
+	}
+	return due
 }
 
 func composeSyncNotes(event ICalEvent) string {

@@ -1,6 +1,10 @@
 package reminder
 
-import "time"
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
 
 // CalendarSync describes a one-way import of an external CalDAV calendar into
 // this app. One row per user: the product has a single user-facing "钉钉日程"
@@ -10,9 +14,14 @@ type CalendarSync struct {
 	ID     uint `gorm:"primarykey" json:"id"`
 	UserID uint `gorm:"not null;uniqueIndex" json:"-"`
 
-	// CalendarURL is the resolved calendar collection (after CalDAV discovery),
-	// not the bare server address the user types in.
+	// CalendarURL is the first resolved calendar collection (after CalDAV
+	// discovery), not the bare server address the user types in. It is kept for
+	// display and as a fallback for rows written before Collections existed.
 	CalendarURL string `gorm:"size:512;not null" json:"calendar_url"`
+	// Collections is a JSON array of every readable calendar collection. One
+	// account commonly exposes several (personal / subscribed / team); syncing
+	// only the first one silently dropped the rest.
+	Collections string `gorm:"type:text" json:"-"`
 	Username    string `gorm:"size:128;not null" json:"username"`
 	// Password is sealed with the same AES-GCM scheme as channel bindings; it is
 	// never returned by the API and never written to logs.
@@ -43,6 +52,21 @@ type CalendarSync struct {
 
 // ExternalSourceDingTalk marks reminders imported from the DingTalk calendar.
 const ExternalSourceDingTalk = "dingtalk"
+
+// collectionURLs returns the collections to sync. Rows saved before the
+// Collections column existed only have CalendarURL, so fall back to it.
+func (c CalendarSync) collectionURLs() []string {
+	if raw := strings.TrimSpace(c.Collections); raw != "" {
+		var urls []string
+		if err := json.Unmarshal([]byte(raw), &urls); err == nil && len(urls) > 0 {
+			return urls
+		}
+	}
+	if strings.TrimSpace(c.CalendarURL) != "" {
+		return []string{c.CalendarURL}
+	}
+	return nil
+}
 
 // CalendarSyncWindow returns the fetch window for a sync config, with sane
 // fallbacks for rows created before a field existed.

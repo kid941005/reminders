@@ -19,6 +19,10 @@ type ICalEvent struct {
 	// Status carries STATUS:CANCELLED so cancelled events can be skipped instead
 	// of imported as live reminders.
 	Status string
+	// RecurrenceID marks a single modified instance of a recurring event. Such
+	// an instance shares the master's UID, so it needs its own identity when the
+	// reminder is stored (otherwise it overwrites the whole series).
+	RecurrenceID string
 	// RepeatRule is already mapped onto this app's vocabulary
 	// (none/daily/weekly/monthly/yearly).
 	RepeatRule string
@@ -76,6 +80,8 @@ func ParseICalEvents(data string, loc *time.Location) []ICalEvent {
 			current.Location = unescapeICalText(value)
 		case "STATUS":
 			current.Status = strings.ToUpper(value)
+		case "RECURRENCE-ID":
+			current.RecurrenceID = unescapeICalText(value)
 		case "DTSTART":
 			if start, allDay, ok := parseICalTime(value, params, loc); ok {
 				current.Start = start
