@@ -98,6 +98,18 @@ docker compose up -d
 - **法定节假日与调休**：日历直接标出「休 / 班」，数据随二进制内置、离线可用；次年安排公布前会提示
   尚未公布，不会把未覆盖日期当作普通工作日。
 
+### 天气提醒
+
+- **和风天气每日推送**：在「偏好设置 → 天气提醒」选择城市与推送时间（默认 08:00），每天上午推送
+  当天天气与未来三天预报；有降雨、降雪或气象预警时，标题会标出「（有雨）/（有雪）/（有预警）」；
+- 内容包含当前实况、今日温度区间与降水概率、未来三天逐日天气（含带伞提示）以及当前生效的
+  气象预警（最多 3 条，自动过滤已取消/已过期）；
+- 城市支持搜索回填经纬度；站内通知始终开启，邮件、短信、飞书、QQ、钉钉、Bark 需先在
+  「通知方式」完成绑定；
+- 管理员在设置页统一填写和风天气 API Host 与 API Key（AES-GCM 加密，接口不回显），也可用
+  环境变量 `QWEATHER_API_HOST` / `QWEATHER_API_KEY` 提供；
+- 以本地日期做幂等，重启后不会重复推送（多实例部署为尽力而为）；推送时间后 4 小时内仍会补推，失败最多每 30 分钟重试一次。
+
 ### 账号与系统
 
 - 用户名密码登录，首个账号为管理员；管理员可关闭注册、重置密码、禁用账号、查看操作日志；
@@ -132,6 +144,10 @@ FEISHU_BASE_URL
 QQ_BOT_APP_ID
 QQ_BOT_APP_SECRET
 QQ_BOT_API_BASE
+
+# 和风天气（也可在管理员设置页填写）
+QWEATHER_API_HOST
+QWEATHER_API_KEY
 
 # 可选：单独的数据加密密钥
 REMINDER_DATA_KEY
@@ -202,9 +218,10 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 | 通知中心 | `GET /api/reminder/notifications`、`GET /api/reminder/notifications/unread-count`、`POST /api/reminder/notifications/:id/read`、`POST /api/reminder/notifications/read-all` |
 | 纪念日 | `GET/POST /api/reminder/countdowns`、`PUT/DELETE /api/reminder/countdowns/:id` |
 | 通知方式 | `GET /api/reminder/channels`、`PUT/PATCH/DELETE /api/reminder/channels/:channel`、`POST /api/reminder/channels/:channel/test`、`POST /api/reminder/channels/qq/bind-code` |
+| 天气 | `GET/PUT/DELETE /api/reminder/weather`、`POST /api/reminder/weather/run`、`GET /api/reminder/weather/preview`、`GET /api/reminder/weather/locations?q=` |
 | 日历 | `GET /api/reminder/feed`、`POST /api/reminder/feed/reset`、`GET /api/reminder/feed.ics?token=...`、`GET/PUT/DELETE /api/reminder/calendar-sync`、`POST /api/reminder/calendar-sync/run` |
 | 节假日与农历 | `GET /api/reminder/holidays`、`GET /api/reminder/lunar`、`GET /api/reminder/lunar/convert` |
-| 管理 | `GET /api/users`、`PUT/DELETE /api/users/:id`、`PUT /api/users/:id/status`、`PUT /api/users/:id/password`、`GET /api/audit-logs`、`GET /api/audit-logs/export`、`GET /api/reminder/admin/deliveries`、`GET /api/reminder/admin/providers`、`PUT /api/reminder/admin/providers/:provider` |
+| 管理 | `GET /api/users`、`PUT/DELETE /api/users/:id`、`PUT /api/users/:id/status`、`PUT /api/users/:id/password`、`GET /api/audit-logs`、`GET /api/audit-logs/export`、`GET /api/reminder/admin/deliveries`、`GET /api/reminder/admin/providers`、`PUT /api/reminder/admin/providers/:provider`、`GET/PUT /api/reminder/admin/weather` |
 
 `GET /api/reminder/feed.ics?token=...` 是免登录的日历订阅入口，token 由系统生成、可重置；
 其余接口都需要认证。
@@ -347,7 +364,7 @@ ghcr 包首次发布默认私有，请按「快速开始」的说明把包可见
 
 **数据会离开服务器吗？**
 默认不会。统计上报需要同时开启开关并配置 `STATS_ENDPOINT`，否则进程不发起任何外部请求；
-日历订阅与钉钉同步只在用户主动配置后访问对应服务。
+日历订阅、钉钉同步与天气提醒只在用户主动配置后访问对应服务。
 
 ## 安全建议
 

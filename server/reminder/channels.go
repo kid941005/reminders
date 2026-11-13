@@ -632,14 +632,58 @@ func stringValue(value []byte, err error) (string, error) {
 	return string(value), nil
 }
 
+// outboundMessage is the channel-neutral payload every sender consumes. A
+// reminder and a system message (today: weather) share the delivery machinery
+// but keep distinct wording, grouping and notification types.
+type outboundMessage struct {
+	Title            string
+	Body             string
+	Notes            string
+	Subject          string
+	Group            string
+	Kind             string
+	NotificationType string
+	ReminderID       *uint
+	DueAt            *time.Time
+}
+
+func reminderOutbound(item Reminder) outboundMessage {
+	msg := outboundMessage{
+		Title: item.Title, Body: notificationBody(item), Notes: item.Notes,
+		Subject: "提醒：" + item.Title, Group: "提醒事项",
+		Kind: "reminder", NotificationType: "reminder_due", DueAt: item.DueAt,
+	}
+	if item.ID > 0 {
+		msg.ReminderID = &item.ID
+	}
+	return msg
+}
+
+func weatherOutbound(title, body string) outboundMessage {
+	return outboundMessage{
+		Title: title, Body: body, Subject: title, Group: "天气提醒",
+		Kind: "weather", NotificationType: "weather",
+	}
+}
+
 // sendChannel delivers one reminder occurrence on one channel. targetIDs
 // narrows multi-target channels (email) to specific bindings; nil or empty
 // delivers to every active binding.
 func sendChannel(ctx context.Context, db *gorm.DB, channel string, userID uint, item Reminder, idempotencyKey string, targetIDs []uint) (sendResult, error) {
+	return deliverMessage(ctx, db, channel, userID, reminderOutbound(item), idempotencyKey, targetIDs)
+}
+
+// sendTextChannel delivers a non-reminder message (for example a weather
+// summary) through the same bindings and encryption path as reminders.
+func sendTextChannel(ctx context.Context, db *gorm.DB, channel string, userID uint, title, body, idempotencyKey string, targetIDs []uint) (sendResult, error) {
+	return deliverMessage(ctx, db, channel, userID, weatherOutbound(title, body), idempotencyKey, targetIDs)
+}
+
+func deliverMessage(ctx context.Context, db *gorm.DB, channel string, userID uint, msg outboundMessage, idempotencyKey string, targetIDs []uint) (sendResult, error) {
 	if channel == ChannelInApp {
-		n := Notification{UserID: userID, Type: "reminder_due", Title: item.Title, Body: notificationBody(item)}
-		if item.ID > 0 {
-			n.ReminderID = &item.ID
+		n := Notification{UserID: userID, Type: msg.NotificationType, Title: msg.Title, Body: truncateRunes(msg.Body, 499)}
+		if msg.ReminderID != nil && *msg.ReminderID > 0 {
+			n.ReminderID = msg.ReminderID
 		}
 		if err := db.Create(&n).Error; err != nil {
 			return sendResult{}, &deliveryError{Code: "INAPP_WRITE_FAILED", Message: "写入站内通知失败"}
@@ -670,17 +714,17 @@ func sendChannel(ctx context.Context, db *gorm.DB, channel string, userID uint, 
 		if len(recipients) == 0 {
 			return sendResult{}, &deliveryError{Code: "CHANNEL_NOT_BOUND", Message: "该通知渠道尚未绑定或已停用", Permanent: true}
 		}
-		return sendEmail(db, recipients, item)
+		return sendEmail(db, recipients, msg)
 	case ChannelSMS:
-		return sendSMSWebhook(ctx, db, target, item, idempotencyKey)
+		return sendSMSWebhook(ctx, db, target, msg, idempotencyKey)
 	case ChannelFeishu:
-		return sendFeishu(ctx, db, target, item, idempotencyKey)
+		return sendFeishu(ctx, db, target, msg, idempotencyKey)
 	case ChannelQQ:
-		return sendQQ(ctx, db, target, item, idempotencyKey)
+		return sendQQ(ctx, db, target, msg, idempotencyKey)
 	case ChannelDingTalk:
-		return sendDingTalk(ctx, db, target, item)
+		return sendDingTalk(ctx, db, target, msg)
 	case ChannelBark:
-		return sendBark(ctx, db, target, item)
+		return sendBark(ctx, db, target, msg)
 	default:
 		return sendResult{}, &deliveryError{Code: "CHANNEL_UNSUPPORTED", Message: "不支持的通知渠道", Permanent: true}
 	}
@@ -748,7 +792,7 @@ func activeEmailBindings(db *gorm.DB, userID uint, targetIDs []uint) ([]ChannelB
 	return bindings, err
 }
 
-func sendEmail(db *gorm.DB, recipients []string, item Reminder) (sendResult, error) {
+func sendEmail(db *gorm.DB, recipients []string, msg outboundMessage) (sendResult, error) {
 	values, err := providerSettings(db, ChannelEmail)
 	if err != nil || values["host"] == "" || values["from_address"] == "" {
 		return sendResult{}, &deliveryError{Code: "PROVIDER_CONFIG_INVALID", Message: "邮件服务尚未配置", Permanent: true}
@@ -763,10 +807,10 @@ func sendEmail(db *gorm.DB, recipients []string, item Reminder) (sendResult, err
 	if name == "" {
 		name = "提醒事项"
 	}
-	subject := "提醒：" + item.Title
-	body := notificationBody(item)
-	if item.Notes != "" {
-		body += "\r\n\r\n" + item.Notes
+	subject := msg.Subject
+	body := msg.Body
+	if msg.Notes != "" {
+		body += "\r\n\r\n" + msg.Notes
 	}
 	message := []byte("From: " + name + " <" + from + ">\r\n" +
 		"To: " + strings.Join(recipients, ", ") + "\r\n" +
@@ -833,15 +877,19 @@ func sendSMTP(host, port string, auth smtp.Auth, from string, recipients []strin
 	return writer.Close()
 }
 
-func sendSMSWebhook(ctx context.Context, db *gorm.DB, target string, item Reminder, key string) (sendResult, error) {
+func sendSMSWebhook(ctx context.Context, db *gorm.DB, target string, msg outboundMessage, key string) (sendResult, error) {
 	values, _ := providerSettings(db, ChannelSMS)
 	endpoint := values["webhook_url"]
 	if endpoint == "" {
 		return sendResult{}, &deliveryError{Code: "PROVIDER_CONFIG_INVALID", Message: "短信服务尚未配置", Permanent: true}
 	}
 	payload := map[string]interface{}{
-		"phone": target, "title": truncateRunes(item.Title, 32),
-		"due_at": item.DueAt, "idempotency_key": key,
+		"phone": target, "title": truncateRunes(msg.Title, 32),
+		// content carries the message body (weather summaries, reminder time)
+		// for gateways that render more than the title. Older gateways simply
+		// ignore the extra field.
+		"content": truncateRunes(msg.Body, 200), "kind": msg.Kind,
+		"due_at": msg.DueAt, "idempotency_key": key,
 	}
 	var out struct {
 		ID string `json:"id"`
@@ -855,7 +903,7 @@ func sendSMSWebhook(ctx context.Context, db *gorm.DB, target string, item Remind
 // sendDingTalk delivers to a user-owned custom group robot. The user creates
 // that robot in DingTalk and pastes only its official webhook; no app ID,
 // OAuth callback, or organisation-wide administrator configuration is needed.
-func sendDingTalk(ctx context.Context, db *gorm.DB, target string, item Reminder) (sendResult, error) {
+func sendDingTalk(ctx context.Context, db *gorm.DB, target string, msg outboundMessage) (sendResult, error) {
 	webhook, secret := parseDingTalkTarget(target)
 	if secret != "" {
 		webhook = signDingTalkWebhook(webhook, secret)
@@ -866,7 +914,7 @@ func sendDingTalk(ctx context.Context, db *gorm.DB, target string, item Reminder
 	}
 	if err := postJSON(ctx, webhook, "", map[string]interface{}{
 		"msgtype": "text",
-		"text":    map[string]string{"content": dingTalkNotificationText(db, item)},
+		"text":    map[string]string{"content": msg.dingTalkText(db)},
 	}, &result); err != nil {
 		return sendResult{}, doNotRetryExternalSend(err)
 	}
@@ -891,17 +939,21 @@ func sendDingTalk(ctx context.Context, db *gorm.DB, target string, item Reminder
 // 用 GET 而不是 POST：这是 Bark 唯一在官方服务与各版本自建服务上都成立的
 // 推送格式。正文因此必须控制长度——提醒标题与通知正文本来就短，这里再截断
 // 一次，避免中文经 URL 编码后把地址撑到服务器拒绝的长度。
-func sendBark(ctx context.Context, db *gorm.DB, base string, item Reminder) (sendResult, error) {
+func sendBark(ctx context.Context, db *gorm.DB, base string, msg outboundMessage) (sendResult, error) {
 	title := notificationBrand(db)
-	body := truncateRunes(item.Title, 100)
-	if detail := notificationBody(item); detail != "" {
-		body += "\n" + detail
+	body := truncateRunes(msg.Title, 100)
+	if msg.Body != "" {
+		body += "\n" + msg.Body
 	}
-	if item.Notes != "" {
-		body += "\n" + truncateRunes(item.Notes, 200)
+	if msg.Notes != "" {
+		body += "\n" + truncateRunes(msg.Notes, 200)
 	}
 	query := url.Values{}
-	query.Set("group", "提醒事项")
+	group := msg.Group
+	if group == "" {
+		group = "提醒事项"
+	}
+	query.Set("group", group)
 	query.Set("isArchive", "1")
 	endpoint := strings.TrimSuffix(base, "/") + "/" +
 		url.PathEscape(title) + "/" + url.PathEscape(body) + "?" + query.Encode()
@@ -924,12 +976,12 @@ func sendBark(ctx context.Context, db *gorm.DB, base string, item Reminder) (sen
 	return sendResult{}, nil
 }
 
-func sendFeishu(ctx context.Context, db *gorm.DB, openID string, item Reminder, idempotencyKey string) (sendResult, error) {
+func sendFeishu(ctx context.Context, db *gorm.DB, openID string, msg outboundMessage, idempotencyKey string) (sendResult, error) {
 	base, token, err := feishuTenantAccessToken(ctx, db)
 	if err != nil {
 		return sendResult{}, err
 	}
-	content, _ := json.Marshal(map[string]string{"text": robotNotificationText(db, item)})
+	content, _ := json.Marshal(map[string]string{"text": msg.robotText(db)})
 	var sendResp struct {
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
@@ -1082,6 +1134,8 @@ func providerSettings(db *gorm.DB, provider string) (map[string]string, error) {
 		values = map[string]string{"webhook_url": os.Getenv("SMS_WEBHOOK_URL"), "webhook_token": os.Getenv("SMS_WEBHOOK_TOKEN")}
 	case ChannelQQ:
 		values = map[string]string{"app_id": os.Getenv("QQ_BOT_APP_ID"), "app_secret": os.Getenv("QQ_BOT_APP_SECRET"), "api_base": os.Getenv("QQ_BOT_API_BASE")}
+	case qweatherProvider:
+		values = map[string]string{"host": os.Getenv("QWEATHER_API_HOST"), "api_key": os.Getenv("QWEATHER_API_KEY")}
 	}
 	return values, nil
 }
@@ -1094,21 +1148,39 @@ func notificationBrand(db *gorm.DB) string {
 	return "提醒事项"
 }
 
-func robotNotificationText(db *gorm.DB, item Reminder) string {
-	text := "【" + notificationBrand(db) + "】\n⏰ " + item.Title + "\n" + notificationBody(item)
-	if item.Notes != "" {
-		text += "\n" + item.Notes
+// robotText renders the message used by Feishu and QQ. Reminders keep the
+// clock marker; weather summaries stay plain so they do not read as a task.
+func (m outboundMessage) robotText(db *gorm.DB) string {
+	prefix := "【" + notificationBrand(db) + "】\n"
+	if m.Kind == "weather" {
+		text := prefix + m.Title + "\n" + m.Body
+		if m.Notes != "" {
+			text += "\n" + m.Notes
+		}
+		return text
+	}
+	text := prefix + "⏰ " + m.Title + "\n" + m.Body
+	if m.Notes != "" {
+		text += "\n" + m.Notes
 	}
 	return text
 }
 
-// DingTalk custom robots can use a simple keyword safety rule. Every message
+// DingTalk custom robots can use a simple keyword safety rule. Every reminder
 // deliberately includes “提醒”, allowing a user to set that exact keyword
-// without managing a signing secret.
-func dingTalkNotificationText(db *gorm.DB, item Reminder) string {
-	text := "【" + notificationBrand(db) + "】\n⏰ 提醒：" + item.Title + "\n" + notificationBody(item)
-	if item.Notes != "" {
-		text += "\n" + item.Notes
+// without managing a signing secret; weather titles carry it as well.
+func (m outboundMessage) dingTalkText(db *gorm.DB) string {
+	prefix := "【" + notificationBrand(db) + "】\n"
+	if m.Kind == "weather" {
+		text := prefix + m.Title + "\n" + m.Body
+		if m.Notes != "" {
+			text += "\n" + m.Notes
+		}
+		return text
+	}
+	text := prefix + "⏰ 提醒：" + m.Title + "\n" + m.Body
+	if m.Notes != "" {
+		text += "\n" + m.Notes
 	}
 	return text
 }
@@ -1124,7 +1196,7 @@ func doNotRetryExternalSend(err error) error {
 	return &deliveryError{Code: "PROVIDER_SEND_UNCERTAIN", Message: "机器人发送结果不确定（为避免重复发送，未自动重试）", Permanent: true}
 }
 
-func sendQQ(ctx context.Context, db *gorm.DB, openID string, item Reminder, _ string) (sendResult, error) {
+func sendQQ(ctx context.Context, db *gorm.DB, openID string, msg outboundMessage, _ string) (sendResult, error) {
 	values, err := providerSettings(db, ChannelQQ)
 	if err != nil || values["app_id"] == "" || values["app_secret"] == "" {
 		return sendResult{}, &deliveryError{Code: "PROVIDER_CONFIG_INVALID", Message: "QQ 机器人尚未配置", Permanent: true}
@@ -1133,7 +1205,7 @@ func sendQQ(ctx context.Context, db *gorm.DB, openID string, item Reminder, _ st
 	if err != nil {
 		return sendResult{}, err
 	}
-	result, err := sendQQMessage(ctx, token, values, openID, robotNotificationText(db, item))
+	result, err := sendQQMessage(ctx, token, values, openID, msg.robotText(db))
 	if err != nil {
 		return sendResult{}, doNotRetryExternalSend(err)
 	}

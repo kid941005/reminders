@@ -117,7 +117,7 @@ func TestSendDingTalkUsesKeywordCompatibleText(t *testing.T) {
 	}))
 	defer server.Close()
 
-	if _, err := sendDingTalk(context.Background(), nil, server.URL, Reminder{Title: "喝水"}); err != nil {
+	if _, err := sendDingTalk(context.Background(), nil, server.URL, reminderOutbound(Reminder{Title: "喝水"})); err != nil {
 		t.Fatal(err)
 	}
 }

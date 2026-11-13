@@ -32,7 +32,7 @@ func purgeUserData(tx *gorm.DB, userID uint) error {
 	}
 	for _, model := range []interface{}{
 		&DeliveryJob{}, &Notification{}, &Reminder{}, &List{}, &ChannelBinding{},
-		&Countdown{}, &CalendarFeed{}, &CalendarSync{}, &QQBindCode{},
+		&Countdown{}, &CalendarFeed{}, &CalendarSync{}, &WeatherConfig{}, &QQBindCode{},
 	} {
 		if err := tx.Where("user_id = ?", userID).Delete(model).Error; err != nil {
 			return err

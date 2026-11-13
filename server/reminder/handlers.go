@@ -47,6 +47,14 @@ func setupAuthRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group.DELETE("/calendar-sync", handleDeleteCalendarSync(db))
 	group.POST("/calendar-sync/run", handleRunCalendarSync(db))
 
+	// 和风天气：每用户配置、立即推送、文案预览与城市搜索。
+	group.GET("/weather", handleGetWeather(db))
+	group.PUT("/weather", handleSaveWeather(db))
+	group.DELETE("/weather", handleDeleteWeather(db))
+	group.POST("/weather/run", handleRunWeather(db))
+	group.GET("/weather/preview", handlePreviewWeather(db))
+	group.GET("/weather/locations", handleWeatherLocations(db))
+
 	group.GET("/notifications", handleNotifications(db))
 	group.GET("/notifications/unread-count", handleUnreadCount(db))
 	group.POST("/notifications/:id/read", handleReadNotification(db))
@@ -82,6 +90,8 @@ func setupAdminRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	api.PUT("/reminder/admin/notification-brand", handleNotificationBrand(db))
 	api.PUT("/reminder/admin/providers/feishu", handleSaveFeishuProvider(db))
 	api.PUT("/reminder/admin/providers/:provider", handleSaveProvider(db))
+	api.GET("/reminder/admin/weather", handleAdminGetWeather(db))
+	api.PUT("/reminder/admin/weather", handleAdminSaveWeather(db))
 	api.GET("/reminder/admin/deliveries", func(c *gin.Context) {
 		var jobs []DeliveryJob
 		if err := db.Order("id DESC").Limit(200).Find(&jobs).Error; err != nil {

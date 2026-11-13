@@ -74,7 +74,7 @@ func init() {
 	database.RegisterModels(
 		&List{}, &Reminder{}, &ReminderChannel{}, &Completion{},
 		&ChannelBinding{}, &ProviderConfig{}, &QQBindCode{}, &DeliveryJob{}, &DeliveryAttempt{}, &Notification{},
-		&Countdown{}, &CalendarFeed{}, &CalendarSync{},
+		&Countdown{}, &CalendarFeed{}, &CalendarSync{}, &WeatherConfig{},
 	)
 
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
@@ -129,6 +129,16 @@ func init() {
 		Run: func() {
 			if appDB != nil {
 				SyncAllCalendars(appDB)
+			}
+		},
+	})
+	scheduler.Register(scheduler.Job{
+		// 天气摘要每天上午推送一次。这里每分钟检查一次，用 LastPushDate 保证
+		// 重启后当天不会重复推送。
+		Name: "reminder-weather", Interval: time.Minute,
+		Run: func() {
+			if appDB != nil {
+				runDueWeatherPushes(appDB)
 			}
 		},
 	})

@@ -27,8 +27,9 @@
         :class="{ unread: !item.read_at }"
         @click="read(item)"
       >
-        <span class="notification-icon" :class="item.type === 'channel_failed' ? 'failure' : 'due'">
+        <span class="notification-icon" :class="item.type === 'channel_failed' ? 'failure' : item.type === 'weather' ? 'weather' : 'due'">
           <svg v-if="item.type === 'channel_failed'" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M12 9v4m0 4h.01M10.3 3.8 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <svg v-else-if="item.type === 'weather'" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.2 9.2 4.4 4.4 0 0 1 17 18H7Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <svg v-else viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
         <span class="min-w-0 flex-1 text-left">
@@ -48,7 +49,7 @@
         <svg viewBox="0 0 24 24" class="h-8 w-8 sm:h-9 sm:w-9" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke-width="1.6" stroke-linecap="round"/></svg>
       </span>
       <h2 class="mt-4 text-lg font-extrabold sm:mt-5">这里很安静</h2>
-      <p class="mt-1 text-sm text-muted-foreground">到期提醒和渠道状态会出现在这里。</p>
+      <p class="mt-1 text-sm text-muted-foreground">到期提醒、天气和渠道状态会出现在这里。</p>
     </div>
   </div>
 </template>
@@ -134,4 +135,5 @@ onBeforeUnmount(() => {
 .notification-icon { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 sm:rounded-2xl; }
 .notification-icon.due { @apply bg-blue-500/10 text-blue-500; }
 .notification-icon.failure { @apply bg-rose-500/10 text-rose-500; }
+.notification-icon.weather { @apply bg-sky-500/10 text-sky-500; }
 </style>

@@ -110,6 +110,146 @@
       </p>
     </div>
 
+    <!-- 天气提醒：管理员配好和风天气 API，用户选城市和时间，每天上午推送摘要 -->
+    <div class="surface mt-4 rounded-2xl p-4 sm:mt-6 sm:p-6">
+      <div class="flex items-start gap-3">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/12 text-sky-500">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.2 9.2 4.4 4.4 0 0 1 17 18H7Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M9 21h6" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3 class="text-sm font-bold text-foreground">天气提醒</h3>
+          <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+            每天上午推送当天天气，并提前告知未来三天内的降雨、降雪和其他恶劣天气。
+            天气数据来自和风天气，需要管理员先配置 API。
+          </p>
+        </div>
+      </div>
+
+      <div v-if="authStore.isAdmin" class="mt-4 rounded-xl border border-border/60 p-3">
+        <p class="text-xs font-semibold text-foreground">管理员配置</p>
+        <div class="mt-2 grid gap-2 sm:grid-cols-2">
+          <input v-model="weatherAdmin.host" class="compact-input" placeholder="API Host，如 abcxyz.qweatherapi.com" autocomplete="off" />
+          <input
+            v-model="weatherAdmin.api_key"
+            class="compact-input"
+            type="password"
+            autocomplete="new-password"
+            :placeholder="weatherAdminConfigured ? 'API Key 已配置，留空表示不修改' : '和风天气 API Key'"
+          />
+        </div>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" class="btn-ghost" :disabled="weatherAdminBusy" @click="saveWeatherAdminConfig">
+            {{ weatherAdminBusy ? '验证中…' : '保存 API 配置' }}
+          </button>
+          <span v-if="weatherAdminConfigured" class="text-[11px] text-emerald-500">
+            已配置<span v-if="weatherAdminHost"> · {{ weatherAdminHost }}</span>
+          </span>
+          <span v-else class="text-[11px] text-amber-500">尚未配置，天气提醒不可用</span>
+        </div>
+        <p class="mt-2 text-[11px] leading-5 text-muted-foreground">
+          API Key 加密保存在服务端，只用于调用和风天气，不会回传到浏览器。
+        </p>
+      </div>
+
+      <div v-if="weatherCfg && !weatherCfg.admin_configured" class="mt-3 rounded-xl bg-amber-400/10 px-3 py-2 text-xs text-amber-600">
+        管理员尚未配置和风天气 API，暂时无法保存天气提醒。
+      </div>
+
+      <div class="mt-4 grid gap-2 sm:grid-cols-[1fr_auto]">
+        <input
+          v-model="weatherCityQuery"
+          class="compact-input"
+          placeholder="搜索城市，如 北京 / 杭州"
+          @keyup.enter="searchWeatherCity"
+        />
+        <button type="button" class="btn-ghost whitespace-nowrap" :disabled="weatherCityBusy" @click="searchWeatherCity">
+          {{ weatherCityBusy ? '搜索中…' : '搜索城市' }}
+        </button>
+      </div>
+      <div v-if="weatherCityResults.length" class="mt-2 overflow-hidden rounded-xl border border-border/60">
+        <button
+          v-for="loc in weatherCityResults"
+          :key="loc.id"
+          type="button"
+          class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs hover:bg-muted"
+          @click="pickWeatherLocation(loc)"
+        >
+          <span class="font-semibold text-foreground">{{ loc.name }}</span>
+          <span class="text-muted-foreground">{{ loc.adm1 }} {{ loc.adm2 }} · {{ loc.lat }}, {{ loc.lon }}</span>
+        </button>
+      </div>
+
+      <div class="mt-3 grid gap-2 sm:grid-cols-4">
+        <input v-model="weatherForm.location_name" class="compact-input sm:col-span-2" placeholder="地点名称，如 杭州市" />
+        <input v-model="weatherForm.latitude" class="compact-input" inputmode="decimal" placeholder="纬度，如 30.27" />
+        <input v-model="weatherForm.longitude" class="compact-input" inputmode="decimal" placeholder="经度，如 120.15" />
+      </div>
+      <div class="mt-3 flex flex-wrap items-center gap-3">
+        <label class="flex items-center gap-2 text-xs text-muted-foreground">
+          推送时间
+          <input v-model="weatherForm.morning_time" type="time" class="compact-input w-32" />
+        </label>
+        <label class="flex items-center gap-2 text-xs text-muted-foreground">
+          <input v-model="weatherForm.enabled" type="checkbox" class="h-4 w-4 accent-sky-500" />
+          启用每日推送
+        </label>
+      </div>
+
+      <div class="mt-3">
+        <p class="text-xs font-semibold text-foreground">通知渠道</p>
+        <div class="mt-2 flex flex-wrap gap-2">
+          <label
+            v-for="ch in weatherChannelOptions"
+            :key="ch.channel"
+            class="flex items-center gap-2 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs"
+            :class="ch.channel === 'inapp' ? 'opacity-70' : ''"
+          >
+            <input
+              v-model="weatherForm.channels"
+              type="checkbox"
+              class="h-3.5 w-3.5 accent-sky-500"
+              :value="ch.channel"
+              :disabled="ch.channel === 'inapp'"
+            />
+            {{ ch.label }}
+          </label>
+        </div>
+        <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
+          站内通知始终开启；其他渠道需要先在「通知渠道」里完成绑定。
+        </p>
+      </div>
+
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="btn-brand" :disabled="weatherBusy || weatherCfg?.admin_configured === false" @click="saveWeather">
+          {{ weatherBusy ? '处理中…' : weatherCfg?.configured ? '保存天气设置' : '开启天气提醒' }}
+        </button>
+        <button type="button" class="btn-ghost" :disabled="weatherBusy || !weatherCfg?.configured" @click="previewWeatherNow">
+          预览
+        </button>
+        <button type="button" class="btn-ghost" :disabled="weatherBusy || !weatherCfg?.configured" @click="runWeatherNow">
+          立即推送
+        </button>
+        <button type="button" class="btn-ghost text-rose-500" :disabled="weatherBusy || !weatherCfg?.configured" @click="disableWeather">
+          关闭天气提醒
+        </button>
+      </div>
+
+      <p v-if="weatherMsg" class="mt-2 text-xs font-semibold" :class="weatherMsgType === 'error' ? 'text-rose-500' : 'text-emerald-500'">
+        {{ weatherMsg }}
+      </p>
+      <p v-if="weatherCfg?.configured" class="mt-2 text-[11px] leading-5 text-muted-foreground">
+        {{ weatherCfg.location_name }} · 每天 {{ weatherCfg.morning_time }} ·
+        上次推送 {{ weatherCfg.last_push_at ? new Date(weatherCfg.last_push_at).toLocaleString() : '尚未运行' }} ·
+        状态 {{ weatherCfg.last_status === 'ok' ? '正常' : weatherCfg.last_status === 'partial' ? '部分渠道失败' : weatherCfg.last_status === 'error' ? '失败' : '未知' }}<span v-if="weatherCfg.last_error">：{{ weatherCfg.last_error }}</span>
+      </p>
+      <pre v-if="weatherPreview" class="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-muted/60 p-3 text-xs leading-6 text-foreground">{{ weatherPreview.title }}
+
+{{ weatherPreview.body }}</pre>
+    </div>
+
     <!-- 支持作者（仅管理员可见，赞赏完全自愿）；本发行版默认关闭，见 stores/support.ts -->
     <div v-if="authStore.isAdmin && supportStore.enabled" class="surface rounded-2xl p-4 sm:p-6">
       <div class="flex flex-wrap items-center justify-between gap-4">
@@ -138,13 +278,24 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
 import ConfigGroupList from '../components/ConfigGroupList.vue'
 import { getUserConfigMeta, updateConfig } from '../api/config'
 import { getCalendarFeed, resetCalendarFeed } from '../api/countdown'
-import { deleteCalendarSync, getCalendarSync, runCalendarSync, saveCalendarSync } from '../api/reminder'
-import type { CalendarSyncConfig } from '../api/reminder'
+import { deleteCalendarSync, getCalendarSync, getChannelStatuses, runCalendarSync, saveCalendarSync } from '../api/reminder'
+import type { CalendarSyncConfig, ChannelStatus, ReminderChannel } from '../api/reminder'
+import {
+  deleteWeatherConfig,
+  getWeatherAdmin,
+  getWeatherConfig,
+  lookupWeatherLocations,
+  previewWeather,
+  runWeather,
+  saveWeatherAdmin,
+  saveWeatherConfig,
+} from '../api/weather'
+import type { WeatherConfig, WeatherLocation, WeatherMessage } from '../api/weather'
 import type { ConfigMeta } from '../api/config'
 import { useThemeStore } from '../stores/theme'
 import { useAuthStore } from '../stores/auth'
@@ -171,10 +322,43 @@ const syncBusy = ref(false)
 const syncMsg = ref('')
 const syncMsgType = ref<'success' | 'error'>('success')
 
+// 天气提醒：管理员保存和风天气的 host/key，用户保存城市、时间与渠道。
+const weatherCfg = ref<WeatherConfig | null>(null)
+const weatherForm = reactive({
+  location_name: '',
+  latitude: '',
+  longitude: '',
+  morning_time: '08:00',
+  channels: ['inapp'] as ReminderChannel[],
+  enabled: true,
+})
+const weatherAdmin = reactive({ host: '', api_key: '' })
+const weatherAdminConfigured = ref(false)
+const weatherAdminHost = ref('')
+const weatherAdminBusy = ref(false)
+const weatherBusy = ref(false)
+const weatherMsg = ref('')
+const weatherMsgType = ref<'success' | 'error'>('success')
+const weatherCityQuery = ref('')
+const weatherCityResults = ref<WeatherLocation[]>([])
+const weatherCityBusy = ref(false)
+const weatherPreview = ref<WeatherMessage | null>(null)
+const weatherChannelStatuses = ref<ChannelStatus[]>([])
+const weatherChannelOptions = computed(() => {
+  const usable = weatherChannelStatuses.value.filter(
+    (ch) => ch.channel === 'inapp' || (ch.configured && ch.bound),
+  )
+  // 渠道列表加载失败时至少保证站内通知可选。
+  return usable.length ? usable : [{ channel: 'inapp', label: '站内通知' } as ChannelStatus]
+})
+
 onMounted(() => {
   loadMeta()
   loadFeed()
   loadCalendarSync()
+  loadWeather()
+  loadWeatherAdmin()
+  loadChannelStatuses()
 })
 
 async function loadCalendarSync() {
@@ -310,6 +494,201 @@ async function askRotateFeed() {
     notifyFeed(err.response?.data?.message || '重置失败', 'error')
   } finally {
     feedBusy.value = false
+  }
+}
+
+async function loadWeather() {
+  try {
+    const res = await getWeatherConfig()
+    const data = (res.data?.data || null) as WeatherConfig | null
+    weatherCfg.value = data
+    if (data?.configured) {
+      weatherForm.location_name = data.location_name || ''
+      weatherForm.latitude = String(data.latitude ?? '')
+      weatherForm.longitude = String(data.longitude ?? '')
+      weatherForm.morning_time = data.morning_time || '08:00'
+      weatherForm.channels = Array.from(new Set(['inapp', ...(data.channels || [])])) as ReminderChannel[]
+      weatherForm.enabled = data.enabled
+    } else {
+      weatherForm.channels = ['inapp']
+      weatherForm.enabled = true
+    }
+  } catch {
+    weatherCfg.value = null
+  }
+}
+
+async function loadWeatherAdmin() {
+  if (!authStore.isAdmin) return
+  try {
+    const res = await getWeatherAdmin()
+    const data = res.data?.data || {}
+    weatherAdminConfigured.value = Boolean(data.configured)
+    weatherAdminHost.value = data.host || ''
+    if (!weatherAdmin.host && data.host) weatherAdmin.host = data.host
+  } catch {
+    weatherAdminConfigured.value = false
+  }
+}
+
+async function loadChannelStatuses() {
+  try {
+    const res = await getChannelStatuses()
+    const data = res.data?.data
+    weatherChannelStatuses.value = Array.isArray(data) ? data : []
+  } catch {
+    weatherChannelStatuses.value = []
+  }
+}
+
+function notifyWeather(message: string, type: 'success' | 'error' = 'success') {
+  weatherMsg.value = message
+  weatherMsgType.value = type
+  window.setTimeout(() => { weatherMsg.value = '' }, 4000)
+}
+
+async function saveWeatherAdminConfig() {
+  if (weatherAdminBusy.value) return
+  if (!weatherAdmin.host.trim()) {
+    notifyWeather('请填写和风天气 API Host', 'error')
+    return
+  }
+  weatherAdminBusy.value = true
+  try {
+    const res = await saveWeatherAdmin({
+      host: weatherAdmin.host.trim(),
+      api_key: weatherAdmin.api_key.trim() || undefined,
+    })
+    const data = res.data?.data || {}
+    weatherAdminConfigured.value = Boolean(data.configured)
+    weatherAdminHost.value = data.host || ''
+    weatherAdmin.host = data.host || weatherAdmin.host
+    weatherAdmin.api_key = ''
+    notifyWeather('API 配置已保存并通过验证')
+    await loadWeather()
+  } catch (err: any) {
+    notifyWeather(err.response?.data?.message || 'API 配置验证失败', 'error')
+  } finally {
+    weatherAdminBusy.value = false
+  }
+}
+
+async function searchWeatherCity() {
+  const q = weatherCityQuery.value.trim()
+  if (!q) {
+    notifyWeather('请输入城市名称', 'error')
+    return
+  }
+  weatherCityBusy.value = true
+  try {
+    const res = await lookupWeatherLocations(q)
+    const data = res.data?.data
+    weatherCityResults.value = Array.isArray(data) ? data : []
+    if (!weatherCityResults.value.length) notifyWeather('没有找到匹配的城市', 'error')
+  } catch (err: any) {
+    notifyWeather(err.response?.data?.message || '城市搜索失败', 'error')
+  } finally {
+    weatherCityBusy.value = false
+  }
+}
+
+function pickWeatherLocation(loc: WeatherLocation) {
+  weatherForm.location_name = loc.name
+  weatherForm.latitude = loc.lat
+  weatherForm.longitude = loc.lon
+  weatherCityResults.value = []
+}
+
+async function saveWeather() {
+  if (weatherBusy.value) return
+  const name = weatherForm.location_name.trim()
+  if (!name) {
+    notifyWeather('请填写地点名称', 'error')
+    return
+  }
+  const latitude = Number(weatherForm.latitude)
+  const longitude = Number(weatherForm.longitude)
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90) {
+    notifyWeather('纬度需在 -90 到 90 之间', 'error')
+    return
+  }
+  if (!Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    notifyWeather('经度需在 -180 到 180 之间', 'error')
+    return
+  }
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(weatherForm.morning_time)) {
+    notifyWeather('推送时间格式应为 HH:MM', 'error')
+    return
+  }
+  const channels = Array.from(new Set(['inapp', ...weatherForm.channels])) as ReminderChannel[]
+  weatherBusy.value = true
+  try {
+    const res = await saveWeatherConfig({
+      location_name: name,
+      latitude,
+      longitude,
+      morning_time: weatherForm.morning_time,
+      channels,
+      enabled: weatherForm.enabled,
+    })
+    const data = (res.data?.data || null) as WeatherConfig | null
+    if (data) {
+      weatherCfg.value = data
+      weatherForm.latitude = String(data.latitude ?? latitude)
+      weatherForm.longitude = String(data.longitude ?? longitude)
+    }
+    notifyWeather('天气提醒已保存')
+  } catch (err: any) {
+    notifyWeather(err.response?.data?.message || '保存失败', 'error')
+  } finally {
+    weatherBusy.value = false
+  }
+}
+
+async function previewWeatherNow() {
+  if (weatherBusy.value) return
+  weatherBusy.value = true
+  try {
+    const res = await previewWeather()
+    weatherPreview.value = (res.data?.data || null) as WeatherMessage | null
+    notifyWeather('已生成预览，未发送')
+  } catch (err: any) {
+    notifyWeather(err.response?.data?.message || '预览失败', 'error')
+  } finally {
+    weatherBusy.value = false
+  }
+}
+
+async function runWeatherNow() {
+  if (weatherBusy.value) return
+  weatherBusy.value = true
+  try {
+    const res = await runWeather()
+    const data = res.data?.data || {}
+    if (data.config) weatherCfg.value = data.config as WeatherConfig
+    if (data.message) weatherPreview.value = data.message as WeatherMessage
+    notifyWeather('已推送天气提醒')
+  } catch (err: any) {
+    notifyWeather(err.response?.data?.message || '推送失败', 'error')
+  } finally {
+    weatherBusy.value = false
+  }
+}
+
+async function disableWeather() {
+  if (weatherBusy.value) return
+  const ok = window.confirm('关闭后不再推送每日天气，已保存的地点配置会被删除。确定关闭吗？')
+  if (!ok) return
+  weatherBusy.value = true
+  try {
+    await deleteWeatherConfig()
+    weatherCfg.value = null
+    weatherPreview.value = null
+    notifyWeather('已关闭天气提醒')
+  } catch (err: any) {
+    notifyWeather(err.response?.data?.message || '关闭失败', 'error')
+  } finally {
+    weatherBusy.value = false
   }
 }
 
