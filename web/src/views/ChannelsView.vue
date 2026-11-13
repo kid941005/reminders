@@ -416,17 +416,35 @@ onBeforeUnmount(() => { if (qqRefreshTimer) window.clearInterval(qqRefreshTimer)
 </script>
 
 <style scoped>
-.channel-card { @apply rounded-[24px] border border-border/70 bg-surface/85 p-4 shadow-[0_16px_44px_-34px_rgba(15,23,42,.55)] backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-brand-500/15 sm:p-5; }
+/* 渠道卡：玻璃面板 + hover 微抬升 */
+.channel-card { @apply surface rounded-[26px] p-4 transition hover:-translate-y-0.5 hover:border-brand-500/20 sm:p-5; }
 .channel-icon { @apply flex h-10 w-10 shrink-0 items-center justify-center rounded-xl sm:h-12 sm:w-12 sm:rounded-2xl; }
 .channel-icon :deep(svg) { @apply h-5 w-5 sm:h-6 sm:w-6; }
 .channel-icon.inapp { @apply bg-blue-500/10 text-blue-500; }.channel-icon.email { @apply bg-violet-500/10 text-violet-500; }.channel-icon.sms { @apply bg-amber-500/10 text-amber-500; }.channel-icon.feishu { @apply bg-cyan-500/10 text-cyan-500; }.channel-icon.qq { @apply bg-rose-500/10 text-rose-500; }.channel-icon.dingtalk { @apply bg-sky-500/10 text-sky-500; }.channel-icon.bark { @apply bg-emerald-500/10 text-emerald-500; }
 .status-pill { @apply rounded-full px-2 py-0.5 text-[9px] font-extrabold; }.status-pill.success { @apply bg-emerald-500/10 text-emerald-500; }.status-pill.warning { @apply bg-amber-500/10 text-amber-500; }.status-pill.muted { @apply bg-muted text-muted-foreground; }
 .toggle { @apply relative h-7 w-12 shrink-0 rounded-full bg-muted transition; }.toggle span { @apply absolute left-1 top-1 h-5 w-5 rounded-full bg-white shadow transition; }.toggle.on { @apply bg-emerald-500; }.toggle.on span { transform: translateX(20px); }
-.bind-input { @apply h-10 min-w-0 flex-1 rounded-xl border border-border bg-surface px-3.5 text-sm outline-none focus:border-brand-500/40 focus:ring-4 focus:ring-brand-500/10 sm:h-11 sm:rounded-2xl; }
-.bind-button { @apply h-10 rounded-xl bg-brand-500 px-4 text-sm font-bold text-white disabled:opacity-50 sm:h-11 sm:rounded-2xl; }
-.channel-button { @apply flex-1 rounded-xl border border-border bg-surface px-3 py-2 text-xs font-bold text-foreground transition hover:bg-muted disabled:opacity-45; }.channel-button.primary { @apply border-brand-500/20 bg-brand-500/10 text-brand-600 dark:text-brand-300; }.channel-button.danger { @apply text-rose-500; }
+.bind-input {
+  @apply h-10 min-w-0 flex-1 rounded-xl border px-3.5 text-sm outline-none focus:border-brand-500/40 focus:ring-4 focus:ring-brand-500/10 sm:h-11 sm:rounded-2xl;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.04));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.16)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.1)));
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.06), inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+}
+.bind-button { @apply h-10 rounded-xl bg-brand-500 px-4 text-sm font-bold text-white transition hover:brightness-105 disabled:opacity-50 sm:h-11 sm:rounded-2xl; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35), inset 0 -1px 0 rgb(0 0 0 / 0.12), 0 8px 20px -12px rgb(var(--color-brand-500) / 0.7); }
+.channel-button {
+  @apply flex-1 rounded-xl border px-3 py-2 text-xs font-bold text-foreground transition hover:border-brand-500/25 disabled:opacity-45;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.08));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.2)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.14)));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+}
+.channel-button.primary { @apply border-brand-500/20 bg-brand-500/10 text-brand-600 dark:text-brand-300; }.channel-button.danger { @apply text-rose-500; }
 .provider-form { @apply mt-4 rounded-2xl border border-violet-500/15 bg-violet-500/[.05] p-4 sm:mt-5; }.provider-help { @apply mt-1 text-xs leading-5 text-muted-foreground; }
 .provider-field { @apply block; }.provider-field-label { @apply flex items-center gap-2 text-xs font-bold text-foreground; }.provider-badge { @apply rounded-full px-1.5 py-0.5 text-[9px] font-bold; }.provider-badge.required { @apply bg-rose-500/10 text-rose-500; }.provider-badge.recommended { @apply bg-emerald-500/10 text-emerald-600 dark:text-emerald-300; }.provider-badge.optional { @apply bg-muted text-muted-foreground; }.provider-field-help { @apply mt-1 text-[11px] leading-4 text-muted-foreground; }
-.modal-label { @apply block text-sm font-bold text-foreground; }.modal-label span { @apply text-rose-500; }.modal-label small { @apply ml-1 text-xs font-medium text-muted-foreground; }.modal-field { @apply h-11 w-full rounded-xl border border-border bg-surface px-3.5 text-sm font-normal outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 sm:h-12 sm:rounded-2xl sm:px-4; }
+.modal-label { @apply block text-sm font-bold text-foreground; }.modal-label span { @apply text-rose-500; }.modal-label small { @apply ml-1 text-xs font-medium text-muted-foreground; }
+.modal-field {
+  @apply h-11 w-full rounded-xl border px-3.5 text-sm font-normal outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 sm:h-12 sm:rounded-2xl sm:px-4;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.04));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.12)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.06)));
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.06), inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+}
 .modal-help { @apply mt-1 text-[11px] leading-4 text-muted-foreground; }
 </style>

@@ -41,7 +41,7 @@ const hasHeader = computed(() => !!(props.title || slots.header || slots.actions
 
 <style scoped>
 .ui-card {
-  @apply rounded-2xl bg-surface text-surface-foreground shadow-card transition-all;
+  @apply surface rounded-[24px] text-surface-foreground transition-all;
 }
 .ui-card--bordered { @apply border border-border; }
 .ui-card--interactive:hover { @apply -translate-y-0.5 shadow-soft; }

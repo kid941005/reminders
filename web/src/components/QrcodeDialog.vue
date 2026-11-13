@@ -2,8 +2,8 @@
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="modelValue" class="fixed inset-0 z-50 flex items-center justify-center" @click.self="handleClose">
-        <div class="absolute inset-0 bg-black bg-opacity-50"></div>
-        <div class="relative bg-surface text-foreground rounded-2xl shadow-xl p-6 w-full max-w-sm mx-4">
+        <div class="absolute inset-0 bg-slate-950/45 backdrop-blur-[2px]"></div>
+        <div class="surface-modal relative mx-4 w-full max-w-sm rounded-[26px] p-6 text-foreground">
           <div class="flex items-center justify-between mb-4">
             <h3 class="text-lg font-bold text-foreground">二维码</h3>
             <button @click="handleClose" class="text-muted-foreground hover:text-foreground transition-colors">
@@ -17,7 +17,7 @@
               alt="QR Code"
               class="w-64 h-64 rounded-lg"
             />
-            <div v-else class="w-64 h-64 flex items-center justify-center bg-muted rounded-lg">
+            <div v-else class="flex h-64 w-64 items-center justify-center rounded-2xl bg-foreground/[.06] dark:bg-white/[.08]">
               <span class="text-sm text-muted-foreground">加载中...</span>
             </div>
           </div>

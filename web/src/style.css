@@ -19,9 +19,12 @@ body {
   @apply text-foreground;
   min-width: 320px;
   background-color: rgb(var(--color-background));
+  /* 液态玻璃需要「可被折射的光」：三层错位光斑构成环境底色，
+     玻璃面板的 backdrop-blur/saturate 才有东西可采样。 */
   background-image:
-    radial-gradient(at 0% 0%, rgb(var(--color-brand-500) / 0.08) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgb(var(--color-accent) / 0.06) 0px, transparent 50%);
+    radial-gradient(58% 52% at 6% -8%, rgb(var(--mesh-1)) 0px, transparent 62%),
+    radial-gradient(46% 46% at 102% 2%, rgb(var(--mesh-2)) 0px, transparent 58%),
+    radial-gradient(52% 46% at 48% 112%, rgb(var(--mesh-3)) 0px, transparent 62%);
   background-attachment: fixed;
 }
 
@@ -34,9 +37,11 @@ textarea {
 }
 
 .dark body {
+  /* 深色模式的光斑由 --mesh-* 令牌接管，无需重复声明渐变。 */
   background-image:
-    radial-gradient(at 0% 0%, rgb(var(--color-brand-500) / 0.14) 0px, transparent 50%),
-    radial-gradient(at 100% 0%, rgb(var(--color-accent) / 0.1) 0px, transparent 50%);
+    radial-gradient(58% 52% at 6% -8%, rgb(var(--mesh-1)) 0px, transparent 62%),
+    radial-gradient(46% 46% at 102% 2%, rgb(var(--mesh-2)) 0px, transparent 58%),
+    radial-gradient(52% 46% at 48% 112%, rgb(var(--mesh-3)) 0px, transparent 62%);
 }
 
 @media (hover: none) and (pointer: coarse) {
@@ -76,20 +81,106 @@ textarea {
   /* 通用表单与空状态样式。这些类名在多个页面复用，必须放在全局层：
      Vue 的 scoped 样式带组件专属属性选择器，写在某个视图里对其它页面不生效。 */
   .field-label { @apply block text-[11px] font-bold text-muted-foreground; }
-  .compact-input { @apply mt-1.5 h-9 w-full rounded-xl border border-border bg-surface px-3 text-xs font-medium text-foreground outline-none focus:border-brand-500/50; }
-  .empty-state { @apply mt-4 flex min-h-[230px] flex-col items-center justify-center rounded-[28px] border border-dashed border-border bg-surface/35 px-6 text-center sm:min-h-[280px]; }
+  .compact-input {
+    @apply mt-1.5 h-9 w-full rounded-xl border px-3 text-xs font-medium text-foreground outline-none transition;
+    border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) + 0.01));
+    background-image: linear-gradient(
+      160deg,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.18)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.12)) 100%
+    );
+    box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.06), inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+  }
+  .compact-input:focus { border-color: rgb(var(--color-brand-500) / 0.55); }
+  .empty-state {
+    @apply mt-4 flex min-h-[230px] flex-col items-center justify-center rounded-[28px] border border-dashed px-6 text-center sm:min-h-[280px];
+    border-color: rgb(var(--glass-stroke) / 0.5);
+    background-image: linear-gradient(
+      160deg,
+      rgb(var(--glass-tint) / 0.36) 0%,
+      rgb(var(--glass-tint) / 0.18) 100%
+    );
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(150%);
+    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(150%);
+  }
   .icon-button { @apply flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground sm:h-10 sm:w-10; }
-  /* Glassy surface used for cards and panels — consumes semantic tokens so
-     it follows the active theme/brand automatically. */
+  /* ------------------------------------------------------------------
+   * Liquid Glass 基元
+   * .surface / .surface-modal 是所有页面的通用面板；其余 .glass-* 用于
+   * 需要单独控制的区域（导航条、行、输入框）。全部由 themes.css 的令牌驱动，
+   * 换主题/品牌只需改变量，组件不再出现魔法色值。
+   * ------------------------------------------------------------------ */
   .surface {
-    @apply bg-surface/90 dark:bg-surface/70 backdrop-blur-xl border border-border shadow-card;
+    @apply relative isolate border;
+    background-image: linear-gradient(
+      152deg,
+      rgb(var(--glass-tint) / var(--glass-alpha-top)) 0%,
+      rgb(var(--glass-tint) / var(--glass-alpha-bottom)) 100%
+    );
+    border-color: rgb(var(--glass-hairline) / var(--glass-hairline-alpha));
+    box-shadow:
+      var(--glass-shadow-1),
+      var(--glass-shadow-2),
+      var(--glass-shadow-3),
+      inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
+      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.16);
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+  }
+
+  /* 玻璃行/磁贴：列表项复用，hover 时抬升并加一层品牌色高光 */
+  .glass-row {
+    @apply relative isolate border transition-all;
+    border-radius: var(--glass-radius-md);
+    background-image: linear-gradient(
+      150deg,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.1)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.08)) 100%
+    );
+    border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) - 0.02));
+    box-shadow:
+      var(--glass-shadow-1),
+      inset 0 1px 0 rgb(var(--glass-inner) / calc(var(--glass-inner-alpha) - 0.1));
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+  }
+  .glass-row:hover {
+    border-color: rgb(var(--color-brand-500) / 0.28);
+    box-shadow:
+      var(--glass-shadow-1),
+      var(--glass-shadow-2),
+      inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha));
+  }
+
+  /* 导航栏（侧栏/顶栏/底部标签栏）：更低的透明度 + 更强的模糊 */
+  .glass-bar {
+    border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) - 0.03));
+    background-image: linear-gradient(
+      180deg,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) + 0.06)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) + 0.04)) 100%
+    );
+    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
   }
 
   /* 弹窗专用不透明表面：移动端禁用了 backdrop-blur（见上方媒体查询），
      半透明表面叠在明亮内容（如收款码）上会直接透底、无法阅读，
      因此浮层弹窗必须用不透明背景。 */
   .surface-modal {
-    @apply bg-surface border border-border shadow-card;
+    @apply border;
+    background-image: linear-gradient(
+      160deg,
+      rgb(var(--glass-sheet-tint) / var(--glass-sheet-alpha)) 0%,
+      rgb(var(--glass-sheet-tint) / calc(var(--glass-sheet-alpha) - 0.05)) 100%
+    );
+    border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) + 0.03));
+    box-shadow:
+      var(--glass-shadow-2),
+      var(--glass-shadow-3),
+      inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha));
+    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
   }
 
   /* Primary brand button — `bg-brand-gradient` is already var-driven in
@@ -100,11 +191,28 @@ textarea {
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium text-foreground bg-surface/70 dark:bg-surface/5 border border-border hover:bg-surface dark:hover:bg-surface/10 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all sm:px-4 sm:py-2.5;
+    @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium text-foreground border active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all sm:px-4 sm:py-2.5;
+    border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) + 0.01));
+    background-image: linear-gradient(
+      160deg,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.18)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.12)) 100%
+    );
+    box-shadow: var(--glass-shadow-1), inset 0 1px 0 rgb(var(--glass-inner) / 0.55);
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
   }
+  .btn-ghost:hover { border-color: rgb(var(--color-brand-500) / 0.3); }
 
   .input-field {
-    @apply w-full px-3 py-2 rounded-xl border border-input bg-surface/80 dark:bg-surface/5 text-foreground placeholder-muted-foreground focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 outline-none transition-all sm:px-4 sm:py-2.5;
+    @apply w-full px-3 py-2 rounded-xl border text-foreground placeholder-muted-foreground focus:ring-4 focus:ring-brand-500/15 focus:border-brand-500 outline-none transition-all sm:px-4 sm:py-2.5;
+    border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.02));
+    background-image: linear-gradient(
+      160deg,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.16)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.1)) 100%
+    );
+    box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.06), inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
   }
 
   .badge {
@@ -134,5 +242,64 @@ textarea {
   }
   .btn-premium:hover::after {
     left: 130%;
+  }
+}
+/* ------------------------------------------------------------------
+ * 兼容性回退
+ * 1) 不支持 backdrop-filter 的浏览器：玻璃层退化为接近不透明的同色底，
+ *    视觉层次减弱但文字对比度不下降。
+ * 2) 系统开启「降低透明度」：同样退化为实底，尊重可访问性偏好。
+ * 3) 移动端 / 触摸设备：模糊层在 WebView 里代价高且键盘动画期会重绘，
+ *    直接把令牌里的 blur 归零、alpha 提到 0.9+，等价于原生不透明导航栏。
+ * ------------------------------------------------------------------ */
+@supports not ((backdrop-filter: blur(2px)) or (-webkit-backdrop-filter: blur(2px))) {
+  .surface,
+  .glass-row,
+  .btn-ghost,
+  .empty-state,
+  .input-field,
+  .compact-input {
+    background-image: linear-gradient(
+      160deg,
+      rgb(var(--color-surface) / 0.99) 0%,
+      rgb(var(--color-surface) / 0.96) 100%
+    );
+  }
+  .surface-modal,
+  .glass-bar {
+    background-image: none;
+    background-color: rgb(var(--color-surface));
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .surface,
+  .glass-row,
+  .btn-ghost,
+  .empty-state,
+  .input-field,
+  .compact-input,
+  .surface-modal,
+  .glass-bar {
+    background-image: none;
+    background-color: rgb(var(--color-surface));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+@media (max-width: 767px), (hover: none) and (pointer: coarse) {
+  :root {
+    --glass-blur-md: 0px;
+    --glass-blur-lg: 0px;
+    --glass-alpha-top: 0.97;
+    --glass-alpha-bottom: 0.93;
+    --glass-sheet-alpha: 0.99;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .btn-premium::after {
+    transition: none;
   }
 }

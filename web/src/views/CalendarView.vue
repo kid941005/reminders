@@ -3,7 +3,7 @@
     <!-- 头部：范围标题 + 翻页 -->
     <section class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p class="text-[11px] font-bold uppercase tracking-[.16em] text-brand-500">{{ isWeek ? '周视图' : '月视图' }}</p>
+        <p class="text-[11px] font-bold uppercase tracking-[.16em] text-brand-600 dark:text-brand-300">{{ isWeek ? '周视图' : '月视图' }}</p>
         <h1 class="mt-1 text-2xl font-extrabold text-foreground sm:text-3xl">{{ rangeLabel }}</h1>
         <p class="mt-1 text-xs text-muted-foreground">
           共 {{ totalItems }} 项提醒<span v-if="completedCount">，已完成 {{ completedCount }} 项</span>
@@ -373,10 +373,10 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.cal-nav { @apply flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-surface text-lg font-bold text-foreground transition hover:bg-muted; }
-.cal-today { @apply h-9 rounded-xl border border-border bg-surface px-3 text-xs font-bold text-foreground transition hover:bg-muted; }
+.cal-nav { @apply flex h-9 w-9 items-center justify-center rounded-xl border border-white/45 bg-white/45 text-lg font-bold text-foreground transition hover:bg-white/70 dark:border-white/10 dark:bg-white/[.06] dark:hover:bg-white/[.1]; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5); }
+.cal-today { @apply h-9 rounded-xl border border-white/45 bg-white/45 px-3 text-xs font-bold text-foreground transition hover:bg-white/70 dark:border-white/10 dark:bg-white/[.06] dark:hover:bg-white/[.1]; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5); }
 
-.week-col { @apply cursor-pointer rounded-2xl border border-border/70 bg-surface/70 p-2 transition hover:border-brand-500/25 hover:bg-brand-500/[.04]; }
+.week-col { @apply glass-row cursor-pointer rounded-[20px] p-2 hover:border-brand-500/25; }
 .week-col-today { @apply border-brand-500/40 bg-brand-500/[.06]; }
 .week-head { @apply flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition hover:bg-muted/60; }
 .week-name { @apply text-[11px] font-bold leading-5 text-muted-foreground; }
@@ -387,12 +387,12 @@ onBeforeUnmount(() => {
 .week-fest { @apply mt-0.5 truncate px-1 text-[10px] font-bold leading-5 text-rose-500; }
 .week-fest-term { @apply text-emerald-600 dark:text-emerald-400; }
 
-.cal-chip { @apply flex w-full items-start gap-1 rounded-lg bg-muted/60 px-1.5 py-1.5 text-left transition hover:bg-brand-500/10; }
+.cal-chip { @apply flex w-full items-start gap-1 rounded-lg bg-foreground/[.055] px-1.5 py-1.5 text-left transition hover:bg-brand-500/10 dark:bg-white/[.07]; }
 .cal-chip-time { @apply shrink-0 text-[10px] font-bold leading-5 tabular-nums text-muted-foreground; }
 .cal-chip-title { @apply min-w-0 flex-1 truncate text-[12px] font-semibold leading-5 text-foreground; }
 .cal-chip-done .cal-chip-title { @apply text-muted-foreground line-through; }
 
-.month-wrap { @apply rounded-2xl border border-border/70 bg-surface/70 p-2 sm:p-3; }
+.month-wrap { @apply surface rounded-[24px] p-2 sm:p-3; }
 .month-weekdays { @apply mb-1.5 grid grid-cols-7 gap-1 text-center text-[11px] font-bold leading-6 text-muted-foreground; }
 .month-grid { @apply grid grid-cols-7 gap-1; }
 .month-cell { @apply relative flex min-h-[76px] flex-col items-start rounded-xl border border-transparent p-2 text-left transition hover:border-brand-500/25 hover:bg-brand-500/[.05] sm:min-h-28; }

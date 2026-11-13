@@ -2,7 +2,7 @@
   <div class="mx-auto max-w-5xl">
     <section class="mb-5 flex items-end justify-between gap-3 sm:mb-7">
       <div class="min-w-0">
-        <p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-brand-500">重要日子</p>
+        <p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-brand-600 dark:text-brand-300">重要日子</p>
         <h1 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">倒数纪念日</h1>
         <p class="mt-1 text-[13px] text-muted-foreground sm:text-sm">
           {{ items.length ? `共 ${items.length} 个日子，最近的一个还有 ${nearestDays} 天` : '记录生日、纪念日与倒计时' }}
@@ -280,7 +280,8 @@ onMounted(load)
 </script>
 
 <style scoped>
-.cd-card { @apply relative overflow-hidden rounded-2xl border border-border/70 bg-surface/80 p-4 transition hover:-translate-y-0.5 hover:shadow-lg; }
+/* 纪念日卡：玻璃磁贴，左侧 --cd 色条保留（::before） */
+.cd-card { @apply glass-row relative overflow-hidden rounded-[22px] p-4 hover:-translate-y-0.5; }
 .cd-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--cd); }
 .cd-card-past { @apply opacity-70; }
 .cd-days { @apply font-display text-4xl font-extrabold leading-none tabular-nums; color: var(--cd); }
@@ -288,6 +289,11 @@ onMounted(load)
 .cd-title { @apply mt-3 truncate text-base font-extrabold text-foreground; }
 .cd-meta { @apply mt-1 text-[11px] font-medium text-muted-foreground; }
 .cd-notes { @apply mt-2 line-clamp-2 text-xs leading-5 text-muted-foreground; }
-.cd-icon { @apply rounded-lg border border-border bg-surface px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:bg-muted hover:text-foreground; }
+.cd-icon {
+  @apply rounded-lg border px-2 py-1 text-[11px] font-semibold text-muted-foreground transition hover:text-foreground;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.1));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.22)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.16)));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.45);
+}
 .cd-icon-danger { @apply hover:border-rose-300 hover:text-rose-500; }
 </style>

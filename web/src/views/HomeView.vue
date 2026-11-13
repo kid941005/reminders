@@ -672,15 +672,41 @@ function onShortcut(e: KeyboardEvent) {
 </script>
 
 <style scoped>
-.search-box { @apply flex h-10 w-full items-center gap-2 rounded-2xl border border-border/80 bg-surface/80 px-3 text-muted-foreground shadow-sm backdrop-blur transition focus-within:border-brand-500/40 focus-within:ring-4 focus-within:ring-brand-500/10 sm:h-11 sm:w-64; }
+/* 搜索框：玻璃输入框，聚焦时描边点亮成品牌色 */
+.search-box {
+  @apply flex h-10 w-full items-center gap-2 rounded-2xl border px-3 text-muted-foreground transition focus-within:border-brand-500/45 focus-within:ring-4 focus-within:ring-brand-500/10 sm:h-11 sm:w-64;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.02));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.12)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.08)));
+  box-shadow: var(--glass-shadow-1), inset 0 1px 0 rgb(var(--glass-inner) / 0.6);
+  backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+}
 .search-box input { @apply min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/65; }
-.quick-card { @apply relative overflow-hidden rounded-[24px] border border-border/70 bg-surface/90 p-3 shadow-[0_20px_50px_-30px_rgba(15,23,42,.35)] backdrop-blur-xl transition-all sm:p-5; }
+/* 新建提醒卡：页面里最大的玻璃面板，左侧保留品牌色渐显条做视觉锚点 */
+.quick-card {
+  @apply surface relative overflow-hidden rounded-[26px] p-3 transition-all sm:p-5;
+}
 .quick-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(#3b82f6, #6366f1); opacity: .75; }
-.quick-chip { @apply inline-flex h-7 items-center gap-1.5 rounded-lg border border-border/70 bg-surface px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:border-brand-500/30 hover:text-brand-600 disabled:opacity-40 sm:h-8 sm:rounded-xl sm:px-3 sm:text-xs; }
+.quick-chip {
+  @apply inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:border-brand-500/30 hover:text-brand-600 disabled:opacity-40 sm:h-8 sm:rounded-xl sm:px-3 sm:text-xs;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.1));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.2)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.14)));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+}
 .quick-chip.active { @apply border-brand-500/25 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
-.channel-pill { @apply rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-semibold text-muted-foreground transition disabled:cursor-not-allowed disabled:opacity-35; }
+.channel-pill {
+  @apply rounded-xl border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition disabled:cursor-not-allowed disabled:opacity-35;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.1));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.2)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.14)));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+}
 .channel-pill.selected { @apply border-brand-500/30 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
-.reminder-row { @apply relative flex min-h-0 items-center gap-2.5 overflow-hidden rounded-2xl border border-border/65 bg-surface/85 px-3 py-2.5 shadow-[0_6px_24px_-20px_rgba(15,23,42,.5)] backdrop-blur transition-all hover:-translate-y-0.5 hover:border-brand-500/20 hover:shadow-[0_16px_36px_-26px_rgba(15,23,42,.65)] sm:gap-3 sm:px-4 sm:py-3.5; content-visibility: auto; contain-intrinsic-size: 64px; }
+/* 提醒行：玻璃磁贴，hover 微抬升 */
+.reminder-row {
+  @apply glass-row flex min-h-0 items-center gap-2.5 overflow-hidden px-3 py-2.5 hover:-translate-y-0.5 sm:gap-3 sm:px-4 sm:py-3.5;
+  content-visibility: auto;
+  contain-intrinsic-size: 64px;
+}
 .reminder-row::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 2px; background: transparent; }
 .reminder-overdue::before { background: #f43f5e; }
 .reminder-completed { @apply opacity-60; }
@@ -696,16 +722,38 @@ function onShortcut(e: KeyboardEvent) {
 .empty-ring { @apply absolute inset-2 rounded-full border border-brand-500/20 bg-brand-500/5; }
 .empty-check { @apply absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-[0_16px_35px_-12px_rgba(59,130,246,.65)]; }
 .empty-dot { @apply absolute h-2.5 w-2.5 rounded-full; }.dot-one { @apply left-0 top-5 bg-amber-400; }.dot-two { @apply right-1 top-1 bg-violet-400; }.dot-three { @apply bottom-0 right-6 bg-emerald-400; }
-.editor-panel { @apply relative z-10 flex h-full w-full max-w-[510px] flex-col border-l border-border bg-background/95 shadow-2xl backdrop-blur-2xl; }
+.editor-panel {
+  @apply relative z-10 flex h-full w-full max-w-[510px] flex-col border-l;
+  border-left-color: rgb(var(--glass-stroke) / 0.4);
+  background-image: linear-gradient(180deg, rgb(var(--glass-sheet-tint) / var(--glass-sheet-alpha)), rgb(var(--glass-sheet-tint) / calc(var(--glass-sheet-alpha) - 0.03)));
+  box-shadow: -32px 0 80px -48px rgb(15 23 42 / 0.5), inset 1px 0 0 rgb(var(--glass-inner) / 0.4);
+  backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+}
 .editor-field { @apply block text-xs font-bold text-muted-foreground; }
-.editor-field input, .editor-field textarea, .editor-field select { @apply mt-1.5 w-full rounded-xl border border-border bg-surface px-3 py-2 text-sm font-medium text-foreground outline-none transition placeholder:text-muted-foreground/55 focus:border-brand-500/45 focus:ring-4 focus:ring-brand-500/10 sm:mt-2 sm:rounded-2xl sm:px-4 sm:py-3; }
+.editor-field input, .editor-field textarea, .editor-field select {
+  @apply mt-1.5 w-full rounded-xl border px-3 py-2 text-sm font-medium text-foreground outline-none transition placeholder:text-muted-foreground/55 focus:border-brand-500/45 focus:ring-4 focus:ring-brand-500/10 sm:mt-2 sm:rounded-2xl sm:px-4 sm:py-3;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.04));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.16)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.1)));
+  box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.06), inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+}
 .editor-field textarea { @apply resize-none leading-6; }
-.channel-option { @apply flex items-center gap-3 rounded-2xl border border-border bg-surface p-2.5 text-muted-foreground transition disabled:opacity-35 sm:p-3; }
+.channel-option {
+  @apply flex items-center gap-3 rounded-2xl border p-2.5 text-muted-foreground transition disabled:opacity-35 sm:p-3;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.08));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.18)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.12)));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+}
 .channel-option.selected { @apply border-brand-500/30 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
 .channel-option strong { @apply block text-xs; }.channel-option small { @apply mt-0.5 block text-[10px] opacity-70; }
 .channel-check { @apply flex h-5 w-5 items-center justify-center rounded-full border border-current; }
 .btn-primary { @apply inline-flex h-10 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 px-5 text-sm font-bold text-white shadow-[0_12px_25px_-12px_rgba(59,130,246,.75)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-50 sm:h-11; }
-.btn-secondary { @apply inline-flex h-10 items-center justify-center rounded-2xl border border-border bg-surface px-5 text-sm font-bold text-foreground transition hover:bg-muted sm:h-11; }
+.btn-secondary {
+  @apply inline-flex h-10 items-center justify-center rounded-2xl border px-5 text-sm font-bold text-foreground transition hover:border-brand-500/30 sm:h-11;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.05));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.16)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.1)));
+  box-shadow: var(--glass-shadow-1), inset 0 1px 0 rgb(var(--glass-inner) / 0.55);
+}
 .expand-enter-active, .expand-leave-active { transition: all .2s ease; }.expand-enter-from, .expand-leave-to { opacity: 0; transform: translateY(-6px); }
 .drawer-enter-active, .drawer-leave-active { transition: opacity .22s ease; }.drawer-enter-active .editor-panel, .drawer-leave-active .editor-panel { transition: transform .28s cubic-bezier(.2,.8,.2,1); }.drawer-enter-from, .drawer-leave-to { opacity: 0; }.drawer-enter-from .editor-panel, .drawer-leave-to .editor-panel { transform: translateX(100%); }
 </style>

@@ -579,31 +579,100 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.ambient { position: fixed; inset: 0; z-index: -20; overflow: hidden; pointer-events: none; background: rgb(var(--color-background)); }
-.ambient-orb { position: absolute; border-radius: 999px; filter: blur(110px); opacity: .16; }
-.ambient-orb-one { width: 32rem; height: 32rem; left: 12%; top: -18rem; background: #60a5fa; }
-.ambient-orb-two { width: 28rem; height: 28rem; right: -10rem; bottom: -12rem; background: #a78bfa; opacity: .11; }
-.sidebar { @apply fixed inset-y-0 left-0 z-50 w-[292px] -translate-x-full border-r border-border/80 bg-surface/90 backdrop-blur-2xl transition-transform duration-300 lg:translate-x-0; }
+/* 环境层只负责叠加可被玻璃折射的色团，底色交给 body 的三层光斑，
+   避免透明面板后面是一块纯色板。 */
+.ambient { position: fixed; inset: 0; z-index: -20; overflow: hidden; pointer-events: none; background: transparent; }
+.ambient-orb { position: absolute; border-radius: 999px; filter: blur(120px); opacity: .18; will-change: transform; animation: ambient-drift 30s ease-in-out infinite alternate; }
+.ambient-orb-one { width: 34rem; height: 34rem; left: 10%; top: -18rem; background: radial-gradient(circle at 30% 30%, #60a5fa, transparent 70%); }
+.ambient-orb-two { width: 30rem; height: 30rem; right: -10rem; bottom: -13rem; background: radial-gradient(circle at 70% 70%, #a78bfa, transparent 70%); opacity: .13; animation-delay: -12s; }
+@keyframes ambient-drift {
+  from { transform: translate3d(0, 0, 0) scale(1); }
+  to   { transform: translate3d(3rem, 2rem, 0) scale(1.08); }
+}
+/* 侧栏：玻璃导航栏（比卡片更透、更强模糊），右缘一条 1px 亮线模拟玻璃切边。 */
+.sidebar {
+  @apply glass-bar fixed inset-y-0 left-0 z-50 w-[292px] -translate-x-full border-r transition-transform duration-300 lg:translate-x-0;
+  border-right-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.1));
+  box-shadow:
+    inset -1px 0 0 rgb(var(--glass-stroke) / 0.35),
+    inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
+    28px 0 72px -60px rgb(15 23 42 / 0.5);
+}
 .sidebar-open { @apply translate-x-0; }
-.logo-mark { @apply flex h-11 w-11 items-center justify-center rounded-[15px] bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-[0_10px_30px_-10px_rgba(59,130,246,.75)]; }
+.logo-mark {
+  @apply flex h-11 w-11 items-center justify-center rounded-[15px] bg-gradient-to-br from-blue-500 to-indigo-500 text-white;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.45),
+    inset 0 -1px 0 rgb(0 0 0 / 0.12),
+    0 10px 30px -10px rgb(59 130 246 / 0.75);
+}
 .version-badge { @apply rounded-full border border-brand-500/25 bg-brand-500/10 px-2 py-0.5 text-[11px] font-bold leading-none text-brand-600 dark:text-brand-300; }
-.new-reminder-button { @apply flex h-12 items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 px-3.5 text-sm font-bold text-white shadow-[0_14px_30px_-14px_rgba(59,130,246,.8)] transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0; }
+/* 主操作按钮：渐变 + 顶部内高光 + hover 掠过的一道高光，是最典型的液态玻璃按钮。 */
+.new-reminder-button {
+  @apply relative flex h-12 items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 px-3.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.4),
+    inset 0 -1px 0 rgb(0 0 0 / 0.14),
+    0 14px 30px -14px rgb(59 130 246 / 0.8);
+}
+.new-reminder-button::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(115deg, transparent 30%, rgb(255 255 255 / 0.28) 45%, transparent 60%);
+  transform: translateX(-120%);
+  transition: transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+.new-reminder-button:hover::after { transform: translateX(120%); }
 .nav-caption { @apply px-3 pb-2 text-[10px] font-extrabold uppercase tracking-[.18em] text-muted-foreground/75; }
-.nav-row { @apply my-0.5 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-foreground/80 transition-all hover:bg-muted hover:text-foreground; }
-.nav-row-active { @apply bg-brand-500/10 text-brand-600 shadow-[inset_3px_0_0_rgb(var(--color-brand-500))] dark:text-brand-300; }
-.nav-symbol { @apply flex h-8 w-8 items-center justify-center rounded-[10px]; }
+.nav-row { @apply my-0.5 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-foreground/80 transition-all hover:bg-foreground/[.04] hover:text-foreground dark:hover:bg-white/[.06]; }
+/* 选中态做成玻璃胶囊：品牌色淡染 + 顶部内高光 + 极细描边，替代旧版左侧色条。 */
+.nav-row-active {
+  @apply text-brand-600 dark:text-brand-300;
+  background-image: linear-gradient(135deg, rgb(var(--color-brand-500) / 0.16), rgb(var(--color-brand-500) / 0.07));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.55),
+    inset 0 0 0 1px rgb(var(--color-brand-500) / 0.18),
+    0 4px 12px -8px rgb(var(--color-brand-500) / 0.55);
+}
+.dark .nav-row-active {
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    inset 0 0 0 1px rgb(var(--color-brand-400) / 0.22),
+    0 4px 14px -8px rgb(0 0 0 / 0.6);
+}
+.nav-symbol { @apply flex h-8 w-8 items-center justify-center rounded-[10px]; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35); }
 .nav-symbol :deep(svg), .mobile-tab :deep(svg) { width: 18px; height: 18px; }
 .nav-count { @apply min-w-6 rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-bold text-muted-foreground; }
 .tiny-add { @apply flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground; }
 .sub-link { @apply ml-11 block rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground; }
-.topbar { @apply sticky top-0 z-30 flex h-12 items-center border-b border-border/70 bg-background/75 px-3.5 backdrop-blur-xl sm:h-16 sm:px-6 lg:h-[76px] lg:px-8 xl:px-10; }
-.avatar { @apply flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-indigo-500 text-sm font-extrabold text-white shadow-sm sm:h-9 sm:w-9; }
-.mobile-tabbar { @apply fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 items-center justify-around rounded-2xl border border-white/30 bg-surface/90 px-1.5 shadow-[0_14px_40px_-18px_rgba(15,23,42,.45)] backdrop-blur-2xl transition-all duration-200 lg:hidden; }
+.topbar {
+  @apply glass-bar sticky top-0 z-30 flex h-12 items-center border-b px-3.5 sm:h-16 sm:px-6 lg:h-[76px] lg:px-8 xl:px-10;
+  border-bottom-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.14));
+  box-shadow:
+    inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
+    0 12px 28px -24px rgb(15 23 42 / 0.4);
+}
+.avatar {
+  @apply flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-indigo-500 text-sm font-extrabold text-white sm:h-9 sm:w-9;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 4px 12px -6px rgb(56 189 248 / 0.7);
+}
+/* 底部标签栏：悬浮玻璃条 —— 圆角、亮描边、内高光、投射阴影。 */
+.mobile-tabbar {
+  @apply glass-bar fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 items-center justify-around rounded-2xl border px-1.5 transition-all duration-200 lg:hidden;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.15));
+  box-shadow:
+    inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
+    0 18px 44px -18px rgb(15 23 42 / 0.5);
+  background-color: rgb(var(--glass-tint) / 0.55);
+}
 .mobile-tabbar-hidden { @apply pointer-events-none translate-y-28 opacity-0; }
 .mobile-tab { @apply flex w-14 flex-col items-center gap-0.5 text-muted-foreground transition; }
 .mobile-tab span { @apply flex h-6 w-6 items-center justify-center; }
 .mobile-tab small { @apply text-[10px] font-semibold; }
-.mobile-tab.active { @apply text-brand-500; }
+.mobile-tab.active { @apply text-brand-600 dark:text-brand-300; }
 .mobile-add { @apply -mt-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-background bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-[0_12px_28px_-8px_rgba(59,130,246,.8)]; }
 .page-enter-active, .page-leave-active { transition: opacity .18s ease, transform .18s ease; }
 .page-enter-from { opacity: 0; transform: translateY(5px); }

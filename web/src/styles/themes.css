@@ -58,6 +58,66 @@
   --color-destructive:         248 113 113;
 }
 
+/* ------------------------------------------------------------------
+ * Liquid Glass 设计令牌（Apple HIG / Liquid Glass 视觉语言）
+ *
+ * 关键分层：
+ *   tint     玻璃本身的色素（浅色=白，深色=深蓝黑），配 alpha 形成半透明
+ *   stroke   外描边高光（1px 亮线，模拟玻璃边缘折射）
+ *   inner    顶部内高光（inset 0 1px，模拟受光面）
+ *   shadow   三级投影：贴地 1px、近场柔影、远场大范围扩散
+ *   blur/sat Card 用 md，浮层/导航用 lg，饱和提高让背后的色彩"透"出来
+ *   mesh     页面底色的环境光斑（玻璃需要有东西可折射才成立）
+ * ------------------------------------------------------------------ */
+:root {
+  --glass-tint:              255 255 255;
+  --glass-alpha-top:         0.74;
+  --glass-alpha-bottom:      0.54;
+  --glass-stroke:            255 255 255;
+  --glass-stroke-alpha:      0.72;
+  --glass-inner:             255 255 255;
+  --glass-inner-alpha:       0.92;
+  /* 玻璃边缘的"切割线"：浅色主题下白描边落在白底上看不见，
+     用极淡的深色发丝线勾出面板边界（深色主题改用白色）。 */
+  --glass-hairline:          15 23 42;
+  --glass-hairline-alpha:    0.09;
+  --glass-blur-md:           18px;
+  --glass-blur-lg:           30px;
+  --glass-saturate:          180%;
+  --glass-sheet-tint:        255 255 255;
+  --glass-sheet-alpha:       0.94;
+  --glass-shadow-1:          0 1px 2px rgb(15 23 42 / 0.05);
+  --glass-shadow-2:          0 12px 32px -16px rgb(15 23 42 / 0.18);
+  --glass-shadow-3:          0 40px 90px -48px rgb(15 23 42 / 0.3);
+  --glass-radius-lg:         26px;
+  --glass-radius-md:         18px;
+  --glass-radius-sm:         12px;
+  /* 页面环境光斑 */
+  --mesh-1:                  49 130 246 / 0.26;
+  --mesh-2:                  168 85 247 / 0.21;
+  --mesh-3:                  34 211 238 / 0.15;
+}
+
+.dark {
+  --glass-tint:              22 30 48;
+  --glass-alpha-top:         0.66;
+  --glass-alpha-bottom:      0.46;
+  --glass-stroke:            255 255 255;
+  --glass-stroke-alpha:      0.12;
+  --glass-inner:             255 255 255;
+  --glass-inner-alpha:       0.09;
+  --glass-hairline:          255 255 255;
+  --glass-hairline-alpha:    0.12;
+  --glass-sheet-tint:        18 24 40;
+  --glass-sheet-alpha:       0.95;
+  --glass-shadow-1:          0 1px 1px rgb(0 0 0 / 0.3);
+  --glass-shadow-2:          0 14px 34px -18px rgb(0 0 0 / 0.65);
+  --glass-shadow-3:          0 44px 96px -48px rgb(0 0 0 / 0.8);
+  --mesh-1:                  59 130 246 / 0.24;
+  --mesh-2:                  168 85 247 / 0.2;
+  --mesh-3:                  34 211 238 / 0.12;
+}
+
 /* White-label brand overrides.
  *
  * Drop a brand by adding `.brand-<id>` here and shipping the resulting CSS.

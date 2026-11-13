@@ -2,7 +2,7 @@
   <div class="mx-auto max-w-4xl">
     <div class="mb-4 flex items-end justify-between sm:mb-7">
       <div class="min-w-0">
-        <p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-brand-500 sm:mb-2">消息与动态</p>
+        <p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-brand-600 dark:text-brand-300 sm:mb-2">消息与动态</p>
         <h1 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">通知中心</h1>
         <p class="mt-0.5 text-[13px] text-muted-foreground sm:mt-2 sm:text-sm">{{ unread }} 条未读通知</p>
       </div>
@@ -19,7 +19,7 @@
       <button class="rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-foreground transition hover:bg-muted" @click="load()">重试</button>
     </div>
 
-    <div v-else-if="notifications.length" class="overflow-hidden rounded-[24px] border border-border/70 bg-surface/85 shadow-card backdrop-blur-xl">
+    <div v-else-if="notifications.length" class="surface overflow-hidden rounded-[26px]">
       <button
         v-for="item in notifications"
         :key="item.id"
@@ -128,7 +128,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.notification-row { @apply relative flex w-full items-center gap-3 border-b border-border/60 px-4 py-3 transition last:border-b-0 hover:bg-muted/50 sm:gap-4 sm:px-5 sm:py-5; }
+.notification-row { @apply relative flex w-full items-center gap-3 border-b px-4 py-3 transition last:border-b-0 hover:bg-foreground/[.035] dark:hover:bg-white/[.05] sm:gap-4 sm:px-5 sm:py-5; border-bottom-color: rgb(var(--color-border) / 0.6); }
 .notification-row.unread { @apply bg-brand-500/[.035]; }
 .notification-row.unread::before { content: ''; position: absolute; inset: 12px auto 12px 0; width: 3px; border-radius: 0 4px 4px 0; background: rgb(var(--color-brand-500)); }
 .notification-icon { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 sm:rounded-2xl; }

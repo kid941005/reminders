@@ -7,8 +7,10 @@
       >
         <div
           :class="[
-            'px-4 py-3 rounded-lg shadow-lg flex items-center space-x-3',
-            type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+            'flex items-center space-x-3 rounded-2xl border px-4 py-3 text-white shadow-[0_18px_44px_-20px_rgba(15,23,42,.6)] backdrop-blur-xl',
+            type === 'success'
+              ? 'border-emerald-300/30 bg-emerald-600/95'
+              : 'border-rose-300/30 bg-rose-600/95'
           ]"
         >
           <svg v-if="type === 'success'" class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>
