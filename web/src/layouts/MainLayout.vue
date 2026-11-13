@@ -5,7 +5,7 @@
       <span class="ambient-orb ambient-orb-two"></span>
     </div>
 
-    <aside class="sidebar" :class="{ 'sidebar-open': mobileOpen }">
+    <aside class="sidebar glass-bar" :class="{ 'sidebar-open': mobileOpen }">
       <div class="flex h-full flex-col">
         <div class="flex items-center justify-between px-5 pb-5 pt-6">
           <RouterLink to="/admin" class="group flex items-center gap-3" @click="mobileOpen = false">
@@ -106,7 +106,7 @@
     <div v-if="mobileOpen" class="fixed inset-0 z-40 bg-slate-950/30 backdrop-blur-sm lg:hidden" @click="mobileOpen = false"></div>
 
     <div class="min-h-screen lg:pl-[292px]">
-      <header class="topbar">
+      <header class="topbar glass-bar">
         <button class="icon-button mobile-only" aria-label="打开菜单" @click="mobileOpen = true">
           <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h16" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
@@ -149,7 +149,7 @@
       </main>
     </div>
 
-    <nav class="mobile-tabbar" :class="{ 'mobile-tabbar-hidden': keyboardOpen }">
+    <nav class="mobile-tabbar glass-bar" :class="{ 'mobile-tabbar-hidden': keyboardOpen }">
       <RouterLink to="/admin" class="mobile-tab" :class="{ active: route.path === '/admin' }"><span v-html="icons.today"></span><small>今天</small></RouterLink>
       <RouterLink to="/admin/planned" class="mobile-tab" :class="{ active: route.path === '/admin/planned' }"><span v-html="icons.planned"></span><small>计划</small></RouterLink>
       <button class="mobile-add" aria-label="新建提醒" @click="openQuickAdd"><svg viewBox="0 0 24 24" class="h-6 w-6" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" stroke-width="2.2" stroke-linecap="round"/></svg></button>
@@ -591,7 +591,7 @@ onBeforeUnmount(() => {
 }
 /* 侧栏：玻璃导航栏（比卡片更透、更强模糊），右缘一条 1px 亮线模拟玻璃切边。 */
 .sidebar {
-  @apply glass-bar fixed inset-y-0 left-0 z-50 w-[292px] -translate-x-full border-r transition-transform duration-300 lg:translate-x-0;
+  @apply fixed inset-y-0 left-0 z-50 w-[292px] -translate-x-full border-r transition-transform duration-300 lg:translate-x-0;
   border-right-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.1));
   box-shadow:
     inset -1px 0 0 rgb(var(--glass-stroke) / 0.35),
@@ -649,7 +649,7 @@ onBeforeUnmount(() => {
 .tiny-add { @apply flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground; }
 .sub-link { @apply ml-11 block rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground; }
 .topbar {
-  @apply glass-bar sticky top-0 z-30 flex h-12 items-center border-b px-3.5 sm:h-16 sm:px-6 lg:h-[76px] lg:px-8 xl:px-10;
+  @apply sticky top-0 z-30 flex h-12 items-center border-b px-3.5 sm:h-16 sm:px-6 lg:h-[76px] lg:px-8 xl:px-10;
   border-bottom-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.14));
   box-shadow:
     inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
@@ -661,7 +661,7 @@ onBeforeUnmount(() => {
 }
 /* 底部标签栏：悬浮玻璃条 —— 圆角、亮描边、内高光、投射阴影。 */
 .mobile-tabbar {
-  @apply glass-bar fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 items-center justify-around rounded-2xl border px-1.5 transition-all duration-200 lg:hidden;
+  @apply fixed inset-x-2 bottom-[calc(0.5rem+env(safe-area-inset-bottom))] z-40 flex h-14 items-center justify-around rounded-2xl border px-1.5 transition-all duration-200 lg:hidden;
   border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.15));
   box-shadow:
     inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),

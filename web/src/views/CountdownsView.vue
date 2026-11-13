@@ -19,7 +19,7 @@
       <article
         v-for="item in sorted"
         :key="item.id"
-        class="cd-card group"
+        class="cd-card glass-row group"
         :class="{ 'cd-card-past': item.days_left < 0 }"
         :style="{ '--cd': colorHex(item.color) }"
       >
@@ -281,7 +281,7 @@ onMounted(load)
 
 <style scoped>
 /* 纪念日卡：玻璃磁贴，左侧 --cd 色条保留（::before） */
-.cd-card { @apply glass-row relative overflow-hidden rounded-[22px] p-4 hover:-translate-y-0.5; }
+.cd-card { @apply relative overflow-hidden rounded-[22px] p-4 hover:-translate-y-0.5; }
 .cd-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--cd); }
 .cd-card-past { @apply opacity-70; }
 .cd-days { @apply font-display text-4xl font-extrabold leading-none tabular-nums; color: var(--cd); }

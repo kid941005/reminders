@@ -29,7 +29,7 @@
       <article
         v-for="day in days"
         :key="day.key"
-        class="week-col"
+        class="week-col glass-row"
         :class="{ 'week-col-today': day.isToday }"
         @click="onWeekColumnClick($event, day)"
       >
@@ -69,7 +69,7 @@
     </section>
 
     <!-- 月视图：6×7 网格 -->
-    <section v-else class="month-wrap">
+    <section v-else class="month-wrap surface">
       <div class="month-weekdays">
         <span v-for="label in weekdayLabels" :key="label">{{ label }}</span>
       </div>
@@ -376,7 +376,7 @@ onBeforeUnmount(() => {
 .cal-nav { @apply flex h-9 w-9 items-center justify-center rounded-xl border border-white/45 bg-white/45 text-lg font-bold text-foreground transition hover:bg-white/70 dark:border-white/10 dark:bg-white/[.06] dark:hover:bg-white/[.1]; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5); }
 .cal-today { @apply h-9 rounded-xl border border-white/45 bg-white/45 px-3 text-xs font-bold text-foreground transition hover:bg-white/70 dark:border-white/10 dark:bg-white/[.06] dark:hover:bg-white/[.1]; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.5); }
 
-.week-col { @apply glass-row cursor-pointer rounded-[20px] p-2 hover:border-brand-500/25; }
+.week-col { @apply cursor-pointer rounded-[20px] p-2 hover:border-brand-500/25; }
 .week-col-today { @apply border-brand-500/40 bg-brand-500/[.06]; }
 .week-head { @apply flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition hover:bg-muted/60; }
 .week-name { @apply text-[11px] font-bold leading-5 text-muted-foreground; }
@@ -392,7 +392,7 @@ onBeforeUnmount(() => {
 .cal-chip-title { @apply min-w-0 flex-1 truncate text-[12px] font-semibold leading-5 text-foreground; }
 .cal-chip-done .cal-chip-title { @apply text-muted-foreground line-through; }
 
-.month-wrap { @apply surface rounded-[24px] p-2 sm:p-3; }
+.month-wrap { @apply rounded-[24px] p-2 sm:p-3; }
 .month-weekdays { @apply mb-1.5 grid grid-cols-7 gap-1 text-center text-[11px] font-bold leading-6 text-muted-foreground; }
 .month-grid { @apply grid grid-cols-7 gap-1; }
 .month-cell { @apply relative flex min-h-[76px] flex-col items-start rounded-xl border border-transparent p-2 text-left transition hover:border-brand-500/25 hover:bg-brand-500/[.05] sm:min-h-28; }

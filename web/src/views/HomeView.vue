@@ -19,7 +19,7 @@
       </label>
     </section>
 
-    <section v-if="view !== 'completed'" class="quick-card" :class="{ 'quick-card-expanded': quickExpanded }">
+    <section v-if="view !== 'completed'" class="quick-card surface" :class="{ 'quick-card-expanded': quickExpanded }">
       <div class="flex items-start gap-3">
         <button class="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 border-brand-500/25 text-brand-500" aria-label="新提醒">
           <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" stroke-width="2" stroke-linecap="round"/></svg>
@@ -106,7 +106,7 @@
       <article
         v-for="item in items"
         :key="item.id"
-        class="reminder-row group"
+        class="reminder-row glass-row group"
         :class="{ 'reminder-completed': !!item.completed_at, 'reminder-overdue': isOverdue(item) }"
       >
         <button class="complete-button" :aria-label="item.completed_at ? '恢复提醒' : '完成提醒'" @click.stop="toggleComplete(item)">
@@ -684,7 +684,7 @@ function onShortcut(e: KeyboardEvent) {
 .search-box input { @apply min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/65; }
 /* 新建提醒卡：页面里最大的玻璃面板，左侧保留品牌色渐显条做视觉锚点 */
 .quick-card {
-  @apply surface relative overflow-hidden rounded-[26px] p-3 transition-all sm:p-5;
+  @apply relative overflow-hidden rounded-[26px] p-3 transition-all sm:p-5;
 }
 .quick-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(#3b82f6, #6366f1); opacity: .75; }
 .quick-chip {
@@ -703,7 +703,7 @@ function onShortcut(e: KeyboardEvent) {
 .channel-pill.selected { @apply border-brand-500/30 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
 /* 提醒行：玻璃磁贴，hover 微抬升 */
 .reminder-row {
-  @apply glass-row flex min-h-0 items-center gap-2.5 overflow-hidden px-3 py-2.5 hover:-translate-y-0.5 sm:gap-3 sm:px-4 sm:py-3.5;
+  @apply flex min-h-0 items-center gap-2.5 overflow-hidden px-3 py-2.5 hover:-translate-y-0.5 sm:gap-3 sm:px-4 sm:py-3.5;
   content-visibility: auto;
   contain-intrinsic-size: 64px;
 }

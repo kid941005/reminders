@@ -1,5 +1,5 @@
 <template>
-  <div :class="['ui-card', { 'ui-card--bordered': bordered }, { 'ui-card--interactive': interactive }]">
+  <div :class="['ui-card', 'surface', { 'ui-card--bordered': bordered }, { 'ui-card--interactive': interactive }]">
     <header v-if="hasHeader" class="ui-card__header">
       <div class="ui-card__heading">
         <slot name="header">
@@ -41,7 +41,7 @@ const hasHeader = computed(() => !!(props.title || slots.header || slots.actions
 
 <style scoped>
 .ui-card {
-  @apply surface rounded-[24px] text-surface-foreground transition-all;
+  @apply rounded-[24px] text-surface-foreground transition-all;
 }
 .ui-card--bordered { @apply border border-border; }
 .ui-card--interactive:hover { @apply -translate-y-0.5 shadow-soft; }
