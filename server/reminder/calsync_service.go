@@ -254,6 +254,39 @@ func applySyncEvents(tx *gorm.DB, cfg CalendarSync, events []ICalEvent, from, to
 	localNow := now.In(loc)
 	allDayFloor := time.Date(localNow.Year(), localNow.Month(), localNow.Day(), 0, 0, 0, 0, loc).UTC()
 
+	// CalDAV 会把循环日程拆成「主事件 + 每个被改过的实例」。实例与主事件共享
+	// UID，但带 RECURRENCE-ID；如果实例只是改了地点/描述、时间没变，再存一条
+	// 独立提醒就会让同一个时间点出现两条待办、发两次通知。这里先把这种「同时间
+	// 例外」识别出来，合并到主事件里，而不是各自成行。
+	masters := make(map[string]ICalEvent, len(events))
+	for _, event := range events {
+		uid := strings.TrimSpace(event.UID)
+		if uid == "" || event.Status == "CANCELLED" || strings.TrimSpace(event.RecurrenceID) != "" {
+			continue
+		}
+		masters[uid] = event
+	}
+	skipExceptions := make(map[string]bool)
+	mergedNotes := make(map[string]string)
+	for _, event := range events {
+		uid := strings.TrimSpace(event.UID)
+		if uid == "" || strings.TrimSpace(event.RecurrenceID) == "" || event.Status == "CANCELLED" {
+			continue
+		}
+		master, ok := masters[uid]
+		if !ok {
+			continue
+		}
+		masterDue := rollForward(syncEventDue(master, loc), master.RepeatRule, syncEventFloor(master, now, allDayFloor))
+		if !syncOccurrenceContains(masterDue, master.RepeatRule, syncEventDue(event, loc), to) {
+			continue
+		}
+		skipExceptions[eventKey(event, uid)] = true
+		if notes := composeSyncNotes(event); notes != "" {
+			mergedNotes[uid] = notes
+		}
+	}
+
 	seen := make(map[string]bool, len(events))
 	imported := 0
 
@@ -264,6 +297,17 @@ func applySyncEvents(tx *gorm.DB, cfg CalendarSync, events []ICalEvent, from, to
 			continue
 		}
 		key := eventKey(event, uid)
+		if skipExceptions[key] {
+			// 旧版本可能已经把这条同时间例外存成了独立提醒；这里顺手清掉，
+			// 但保留用户已经完成的记录，避免删除历史。
+			if err := tx.Model(&Reminder{}).
+				Where("user_id = ? AND external_source = ? AND external_uid = ? AND completed_at IS NULL",
+					cfg.UserID, ExternalSourceDingTalk, key).
+				Update("deleted_at", now).Error; err != nil {
+				return imported, 0, err
+			}
+			continue
+		}
 		seen[key] = true
 
 		title := strings.TrimSpace(event.Summary)
@@ -271,12 +315,8 @@ func applySyncEvents(tx *gorm.DB, cfg CalendarSync, events []ICalEvent, from, to
 			title = "(无标题日程)"
 		}
 		title = truncateRunes(title, 200)
-		due := event.Start.In(loc)
-		if event.AllDay {
-			due = time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, loc)
-		}
 		// 与手工创建的提醒一样按 UTC 入库（见 service.go 的入库归一化）。
-		due = due.UTC()
+		due := syncEventDue(event, loc)
 
 		rule := event.RepeatRule
 		if strings.TrimSpace(event.RecurrenceID) != "" {
@@ -285,13 +325,12 @@ func applySyncEvents(tx *gorm.DB, cfg CalendarSync, events []ICalEvent, from, to
 		}
 		// CalDAV 只返回主事件、不展开实例，主事件的 DTSTART 可能停在很久以前。
 		// 直接落库会让这条提醒卡在过去，而「接下来的会议」在列表里完全看不到。
-		floor := now
-		if event.AllDay {
-			floor = allDayFloor
-		}
-		due = rollForward(due, rule, floor)
+		due = rollForward(due, rule, syncEventFloor(event, now, allDayFloor))
 
 		notes := composeSyncNotes(event)
+		if merged := mergedNotes[uid]; merged != "" && strings.TrimSpace(notes) == "" {
+			notes = merged
+		}
 
 		var existing Reminder
 		findErr := tx.Where("user_id = ? AND external_source = ? AND external_uid = ?",
@@ -308,7 +347,9 @@ func applySyncEvents(tx *gorm.DB, cfg CalendarSync, events []ICalEvent, from, to
 			if err := tx.Create(&created).Error; err != nil {
 				return imported, 0, err
 			}
-			channels := []string{ChannelInApp}
+			// 导入日程默认不推送：用户通常已经在日程来源里收到过提醒，
+			// 站内消息需要用户在该条提醒里主动开启。
+			channels := []string{}
 			if err := replaceChannels(tx, created, SaveReminderInput{Channels: channels}); err != nil {
 				return imported, 0, err
 			}
@@ -375,6 +416,51 @@ func eventKey(event ICalEvent, uid string) string {
 	return uid
 }
 
+// syncEventDue 把 VEVENT 的 DTSTART 归一成入库用的 UTC 时刻；全天日程统一
+// 落到本地零点，和手工创建的全天提醒保持一致。
+func syncEventDue(event ICalEvent, loc *time.Location) time.Time {
+	due := event.Start.In(loc)
+	if event.AllDay {
+		due = time.Date(due.Year(), due.Month(), due.Day(), 0, 0, 0, 0, loc)
+	}
+	return due.UTC()
+}
+
+// syncEventFloor 返回循环推进的下界：定时日程按当前时刻，全天日程按本地今天
+// 零点，这样「今天的全天日程」不会因为已经过了 00:00 就被推到下周。
+func syncEventFloor(event ICalEvent, now, allDayFloor time.Time) time.Time {
+	if event.AllDay {
+		return allDayFloor
+	}
+	return now
+}
+
+// syncOccurrenceContains 判断 target 是否是「从 due 开始、limit 之前」的某个
+// 循环实例。只比较下一次实例不够：DingTalk 可能为未来某一周的实例单独返回
+// RECURRENCE-ID，如果那时才去重，用户会在那一天重新收到两条提醒。
+func syncOccurrenceContains(due time.Time, rule string, target, limit time.Time) bool {
+	if rule == "" || rule == "none" {
+		return due.Equal(target)
+	}
+	if target.Before(due) {
+		return false
+	}
+	for i := 0; i < 500; i++ {
+		if due.Equal(target) {
+			return true
+		}
+		if due.After(target) || due.After(limit) {
+			return false
+		}
+		next := nextOccurrence(due, rule)
+		if !next.After(due) {
+			return false
+		}
+		due = next
+	}
+	return false
+}
+
 // rollForward 把循环日程的起始时间推进到 floor 之后。CalDAV 返回的是主事件，
 // 不展开实例；主事件的 DTSTART 可能是几年前，直接落库会让提醒卡在过去。
 func rollForward(due time.Time, rule string, floor time.Time) time.Time {
@@ -402,19 +488,18 @@ func composeSyncNotes(event ICalEvent) string {
 	return notes
 }
 
-// enabledChannelsOf reads the channels currently linked to a reminder. Imported
-// rows always have in-app enabled, but a user may have added more.
+// enabledChannelsOf reads the channels currently linked to a reminder.
+// Imported rows start with none: the source calendar already notifies the user,
+// so in-app delivery is opt-in per reminder. A read failure also returns no
+// channels rather than silently resurrecting the old in-app default.
 func enabledChannelsOf(tx *gorm.DB, item Reminder) []string {
 	var rows []ReminderChannel
 	if err := tx.Where("reminder_id = ? AND user_id = ? AND enabled = ?", item.ID, item.UserID, true).Find(&rows).Error; err != nil {
-		return []string{ChannelInApp}
+		return nil
 	}
 	channels := make([]string, 0, len(rows))
 	for _, row := range rows {
 		channels = append(channels, row.Channel)
-	}
-	if len(channels) == 0 {
-		return []string{ChannelInApp}
 	}
 	return channels
 }

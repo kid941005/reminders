@@ -122,7 +122,7 @@
         <div class="min-w-0 flex-1">
           <h3 class="text-sm font-bold text-foreground">天气提醒</h3>
           <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
-            每天上午推送当天天气，并提前告知未来三天内的降雨、降雪和其他恶劣天气。
+            每天早上推送当天天气，晚上推送次日天气；每条只保留对应时段的预报和预警。
             天气数据来自和风天气，需要管理员先配置 API。
           </p>
         </div>
@@ -189,14 +189,21 @@
       </div>
       <div class="mt-3 flex flex-wrap items-center gap-3">
         <label class="flex items-center gap-2 text-xs text-muted-foreground">
-          推送时间
+          早间推送
           <input v-model="weatherForm.morning_time" type="time" class="compact-input w-32" />
+        </label>
+        <label class="flex items-center gap-2 text-xs text-muted-foreground">
+          晚间推送
+          <input v-model="weatherForm.evening_time" type="time" class="compact-input w-32" />
         </label>
         <label class="flex items-center gap-2 text-xs text-muted-foreground">
           <input v-model="weatherForm.enabled" type="checkbox" class="h-4 w-4 accent-sky-500" />
           启用每日推送
         </label>
       </div>
+      <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
+        早间推送当天天气，晚间推送次日天气；两个时间不能相同，且晚间应晚于早间。
+      </p>
 
       <div class="mt-3">
         <p class="text-xs font-semibold text-foreground">通知渠道</p>
@@ -205,21 +212,40 @@
             v-for="ch in weatherChannelOptions"
             :key="ch.channel"
             class="flex items-center gap-2 rounded-lg border border-border/60 px-2.5 py-1.5 text-xs"
-            :class="ch.channel === 'inapp' ? 'opacity-70' : ''"
+
           >
             <input
               v-model="weatherForm.channels"
               type="checkbox"
               class="h-3.5 w-3.5 accent-sky-500"
               :value="ch.channel"
-              :disabled="ch.channel === 'inapp'"
             />
             {{ ch.label }}
           </label>
         </div>
         <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
-          站内通知始终开启；其他渠道需要先在「通知渠道」里完成绑定。
+          站内通知默认不开启；所有渠道都需要先勾选，其他渠道还需在「通知渠道」里完成绑定。
         </p>
+      </div>
+
+      <div class="mt-3 flex flex-wrap items-center gap-2">
+        <span class="text-xs text-muted-foreground">预览 / 推送时段</span>
+        <button
+          type="button"
+          class="btn-ghost"
+          :class="weatherSlot === 'morning' ? 'ring-2 ring-sky-400/60' : ''"
+          @click="weatherSlot = 'morning'"
+        >
+          早间 · 今天
+        </button>
+        <button
+          type="button"
+          class="btn-ghost"
+          :class="weatherSlot === 'evening' ? 'ring-2 ring-sky-400/60' : ''"
+          @click="weatherSlot = 'evening'"
+        >
+          晚间 · 次日
+        </button>
       </div>
 
       <div class="mt-3 flex flex-wrap gap-2">
@@ -241,8 +267,8 @@
         {{ weatherMsg }}
       </p>
       <p v-if="weatherCfg?.configured" class="mt-2 text-[11px] leading-5 text-muted-foreground">
-        {{ weatherCfg.location_name }} · 每天 {{ weatherCfg.morning_time }} ·
-        上次推送 {{ weatherCfg.last_push_at ? new Date(weatherCfg.last_push_at).toLocaleString() : '尚未运行' }} ·
+        {{ weatherCfg.location_name }} · 每天 {{ weatherCfg.morning_time }} / {{ weatherCfg.evening_time }} ·
+        上次推送 {{ weatherCfg.last_push_at ? new Date(weatherCfg.last_push_at).toLocaleString() : '尚未运行' }}<span v-if="weatherCfg.last_slot">（{{ weatherCfg.last_slot === 'evening' ? '晚间' : '早间' }}）</span> ·
         状态 {{ weatherCfg.last_status === 'ok' ? '正常' : weatherCfg.last_status === 'partial' ? '部分渠道失败' : weatherCfg.last_status === 'error' ? '失败' : '未知' }}<span v-if="weatherCfg.last_error">：{{ weatherCfg.last_error }}</span>
       </p>
       <pre v-if="weatherPreview" class="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-xl bg-muted/60 p-3 text-xs leading-6 text-foreground">{{ weatherPreview.title }}
@@ -295,7 +321,7 @@ import {
   saveWeatherAdmin,
   saveWeatherConfig,
 } from '../api/weather'
-import type { WeatherConfig, WeatherLocation, WeatherMessage } from '../api/weather'
+import type { WeatherConfig, WeatherLocation, WeatherMessage, WeatherSlot } from '../api/weather'
 import type { ConfigMeta } from '../api/config'
 import { useThemeStore } from '../stores/theme'
 import { useAuthStore } from '../stores/auth'
@@ -329,7 +355,8 @@ const weatherForm = reactive({
   latitude: '',
   longitude: '',
   morning_time: '08:00',
-  channels: ['inapp'] as ReminderChannel[],
+  evening_time: '20:00',
+  channels: [] as ReminderChannel[],
   enabled: true,
 })
 const weatherAdmin = reactive({ host: '', api_key: '' })
@@ -343,6 +370,7 @@ const weatherCityQuery = ref('')
 const weatherCityResults = ref<WeatherLocation[]>([])
 const weatherCityBusy = ref(false)
 const weatherPreview = ref<WeatherMessage | null>(null)
+const weatherSlot = ref<WeatherSlot>('morning')
 const weatherChannelStatuses = ref<ChannelStatus[]>([])
 const weatherChannelOptions = computed(() => {
   const usable = weatherChannelStatuses.value.filter(
@@ -507,10 +535,11 @@ async function loadWeather() {
       weatherForm.latitude = String(data.latitude ?? '')
       weatherForm.longitude = String(data.longitude ?? '')
       weatherForm.morning_time = data.morning_time || '08:00'
-      weatherForm.channels = Array.from(new Set(['inapp', ...(data.channels || [])])) as ReminderChannel[]
+      weatherForm.evening_time = data.evening_time || '20:00'
+      weatherForm.channels = [...(data.channels || [])] as ReminderChannel[]
       weatherForm.enabled = data.enabled
     } else {
-      weatherForm.channels = ['inapp']
+      weatherForm.channels = []
       weatherForm.enabled = true
     }
   } catch {
@@ -617,10 +646,26 @@ async function saveWeather() {
     return
   }
   if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(weatherForm.morning_time)) {
-    notifyWeather('推送时间格式应为 HH:MM', 'error')
+    notifyWeather('早间推送时间格式应为 HH:MM', 'error')
     return
   }
-  const channels = Array.from(new Set(['inapp', ...weatherForm.channels])) as ReminderChannel[]
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(weatherForm.evening_time)) {
+    notifyWeather('晚间推送时间格式应为 HH:MM', 'error')
+    return
+  }
+  if (weatherForm.morning_time === weatherForm.evening_time) {
+    notifyWeather('早间和晚间推送时间不能相同', 'error')
+    return
+  }
+  if (weatherForm.morning_time > weatherForm.evening_time) {
+    notifyWeather('晚间推送时间应晚于早间推送时间', 'error')
+    return
+  }
+  const channels = Array.from(new Set(weatherForm.channels)) as ReminderChannel[]
+  if (weatherForm.enabled && channels.length === 0) {
+    notifyWeather('请至少选择一个天气通知渠道', 'error')
+    return
+  }
   weatherBusy.value = true
   try {
     const res = await saveWeatherConfig({
@@ -628,6 +673,7 @@ async function saveWeather() {
       latitude,
       longitude,
       morning_time: weatherForm.morning_time,
+      evening_time: weatherForm.evening_time,
       channels,
       enabled: weatherForm.enabled,
     })
@@ -649,9 +695,10 @@ async function previewWeatherNow() {
   if (weatherBusy.value) return
   weatherBusy.value = true
   try {
-    const res = await previewWeather()
-    weatherPreview.value = (res.data?.data || null) as WeatherMessage | null
-    notifyWeather('已生成预览，未发送')
+    const res = await previewWeather(weatherSlot.value)
+    const data = res.data?.data || {}
+    weatherPreview.value = (data.message || null) as WeatherMessage | null
+    notifyWeather(weatherSlot.value === 'morning' ? '已生成今日预览，未发送' : '已生成明日预览，未发送')
   } catch (err: any) {
     notifyWeather(err.response?.data?.message || '预览失败', 'error')
   } finally {
@@ -663,11 +710,11 @@ async function runWeatherNow() {
   if (weatherBusy.value) return
   weatherBusy.value = true
   try {
-    const res = await runWeather()
+    const res = await runWeather(weatherSlot.value)
     const data = res.data?.data || {}
     if (data.config) weatherCfg.value = data.config as WeatherConfig
     if (data.message) weatherPreview.value = data.message as WeatherMessage
-    notifyWeather('已推送天气提醒')
+    notifyWeather(weatherSlot.value === 'morning' ? '已推送今日天气' : '已推送明日天气')
   } catch (err: any) {
     notifyWeather(err.response?.data?.message || '推送失败', 'error')
   } finally {

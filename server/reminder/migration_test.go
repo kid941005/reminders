@@ -110,6 +110,91 @@ func TestTimestampNormalizationUpgrade(t *testing.T) {
 	}
 }
 
+// 站内消息改为按需开启后，存量导入日程上遗留的 inapp 渠道必须清掉，
+// 否则用户升级后仍会继续收到没有意义的站内推送；手动创建的提醒不受影响。
+func TestDisableInAppForImportedRemindersUpgrade(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	manual := Reminder{UserID: 61, ListID: 1, Title: "手动提醒", RepeatRule: "none", Calendar: "solar", Version: 1}
+	imported := Reminder{UserID: 61, ListID: 1, Title: "导入日程", RepeatRule: "none", Calendar: "solar", Version: 1,
+		ExternalSource: ExternalSourceDingTalk, ExternalUID: "imported-1"}
+	for _, item := range []*Reminder{&manual, &imported} {
+		if err := appDB.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	channels := []ReminderChannel{
+		{ReminderID: manual.ID, UserID: 61, Channel: ChannelInApp},
+		{ReminderID: imported.ID, UserID: 61, Channel: ChannelInApp},
+		{ReminderID: imported.ID, UserID: 61, Channel: ChannelEmail},
+	}
+	if err := appDB.Create(&channels).Error; err != nil {
+		t.Fatal(err)
+	}
+	// 升级前已经排队的站内投递任务：导入条目上的应被取消，手动条目上的保留。
+	runAt := time.Now().Add(time.Hour)
+	jobs := []DeliveryJob{
+		{UserID: 61, ReminderID: manual.ID, Channel: ChannelInApp, ScheduledFor: runAt, RunAt: runAt,
+			Status: "pending", IdempotencyKey: "manual-inapp"},
+		{UserID: 61, ReminderID: imported.ID, Channel: ChannelInApp, ScheduledFor: runAt, RunAt: runAt,
+			Status: "pending", IdempotencyKey: "imported-inapp"},
+	}
+	if err := appDB.Create(&jobs).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var upgrade *database.Upgrade
+	for i := range database.Upgrades {
+		if database.Upgrades[i].Name == "disable_inapp_for_imported_reminders" {
+			upgrade = &database.Upgrades[i]
+			break
+		}
+	}
+	if upgrade == nil {
+		t.Fatal("未注册 disable_inapp_for_imported_reminders 迁移")
+	}
+	for round := 0; round < 2; round++ { // 第二轮验证幂等
+		if err := upgrade.Upgrade(appDB); err != nil {
+			t.Fatalf("run upgrade (round %d): %v", round, err)
+		}
+	}
+
+	var manualInApp, importedInApp, importedEmail int64
+	if err := appDB.Model(&ReminderChannel{}).Where("reminder_id = ? AND channel = ?", manual.ID, ChannelInApp).Count(&manualInApp).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Model(&ReminderChannel{}).Where("reminder_id = ? AND channel = ?", imported.ID, ChannelInApp).Count(&importedInApp).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Model(&ReminderChannel{}).Where("reminder_id = ? AND channel = ?", imported.ID, ChannelEmail).Count(&importedEmail).Error; err != nil {
+		t.Fatal(err)
+	}
+	if manualInApp != 1 {
+		t.Fatalf("手动提醒的站内渠道被误删: %d", manualInApp)
+	}
+	if importedInApp != 0 {
+		t.Fatalf("导入日程的站内渠道未清理: %d", importedInApp)
+	}
+	if importedEmail != 1 {
+		t.Fatalf("导入日程的其它渠道被误删: %d", importedEmail)
+	}
+
+	var manualJob, importedJob DeliveryJob
+	if err := appDB.Where("idempotency_key = ?", "manual-inapp").First(&manualJob).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Where("idempotency_key = ?", "imported-inapp").First(&importedJob).Error; err != nil {
+		t.Fatal(err)
+	}
+	if manualJob.Status != "pending" {
+		t.Fatalf("手动提醒的投递任务被误取消: %s", manualJob.Status)
+	}
+	if importedJob.Status != "cancelled" {
+		t.Fatalf("导入日程的站内投递任务未取消: %s", importedJob.Status)
+	}
+}
+
 func containsString(values []string, want string) bool {
 	for _, value := range values {
 		if value == want {

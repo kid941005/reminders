@@ -92,15 +92,14 @@
                 v-for="opt in defaultChannelOptions"
                 :key="opt.value"
                 type="button"
-                :disabled="getSaving(item) || opt.locked"
-                :title="opt.locked ? '站内消息是所有提醒的兜底通道，不能取消' : ''"
+                :disabled="getSaving(item)"
                 @click="toggleDefaultChannel(item, opt.value)"
                 :class="[
                   'rounded-lg border px-2.5 py-1.5 text-xs font-semibold transition-colors',
                   isDefaultChannelOn(item, opt.value)
                     ? 'border-brand-500 bg-brand-500/10 text-brand-600 dark:text-brand-300'
                     : 'border-border text-muted-foreground hover:bg-muted',
-                  opt.locked ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer',
+                  'cursor-pointer',
                   getSaving(item) ? 'opacity-60' : '',
                 ]"
               >
@@ -168,16 +167,16 @@ const selectOptionLabelMap: Record<string, Record<string, string>> = {
   },
 }
 
-// 默认提醒渠道的可选项。顺序即保存后的书写顺序，站内固定在最前。
-// inapp 不需要绑定、也不消耗外部配额，是所有提醒的兜底通道，因此不可取消。
+// 默认提醒渠道的可选项。站内消息同样可以取消：新建提醒默认不推送，
+// 需要时由用户主动勾选。
 const defaultChannelOptions = [
-  { value: 'inapp', label: '站内', locked: true },
-  { value: 'email', label: '邮件', locked: false },
-  { value: 'sms', label: '短信', locked: false },
-  { value: 'feishu', label: '飞书', locked: false },
-  { value: 'qq', label: 'QQ', locked: false },
-  { value: 'dingtalk', label: '钉钉', locked: false },
-  { value: 'bark', label: 'Bark', locked: false },
+  { value: 'inapp', label: '站内' },
+  { value: 'email', label: '邮件' },
+  { value: 'sms', label: '短信' },
+  { value: 'feishu', label: '飞书' },
+  { value: 'qq', label: 'QQ' },
+  { value: 'dingtalk', label: '钉钉' },
+  { value: 'bark', label: 'Bark' },
 ]
 
 function parseChannelList(raw: string): string[] {
@@ -188,15 +187,14 @@ function isDefaultChannelOn(item: ConfigMeta, value: string): boolean {
   return parseChannelList(getEditValue(item)).includes(value)
 }
 
-// 切换一个渠道后重新拼成逗号分隔字符串。始终保留站内并把它排在最前，
-// 避免用户取消全部渠道后新建的提醒一条通知都没有。
+// 切换一个渠道后重新拼成逗号分隔字符串。允许全部取消，表示新建提醒
+// 默认不推送；保存后的顺序就是用户点选的顺序。
 function toggleDefaultChannel(item: ConfigMeta, value: string) {
   const current = parseChannelList(getEditValue(item))
-  if (value === 'inapp') return
   const next = current.includes(value)
     ? current.filter(entry => entry !== value)
     : [...current, value]
-  setEditValue(item, ['inapp', ...next.filter(entry => entry !== 'inapp')].join(','))
+  setEditValue(item, next.join(','))
 }
 
 function groupTitle(key: string): string {

@@ -3,7 +3,7 @@
     <div class="mb-4 sm:mb-7">
       <p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-violet-500 sm:mb-2">随时触达</p>
       <h1 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">通知方式</h1>
-      <p class="mt-0.5 max-w-2xl text-[13px] leading-5 text-muted-foreground sm:mt-2 sm:text-sm sm:leading-6">站内消息默认可用。已开通的方式，绑定一次即可在每条提醒中自由选择。</p>
+      <p class="mt-0.5 max-w-2xl text-[13px] leading-5 text-muted-foreground sm:mt-2 sm:text-sm sm:leading-6">站内消息默认关闭，需要时在单条提醒里勾选。已开通的方式，绑定一次即可在每条提醒中自由选择。</p>
     </div>
 
     <div class="mb-4 rounded-2xl border border-blue-500/15 bg-blue-500/[.06] px-3.5 py-2.5 text-xs leading-5 text-blue-700 dark:text-blue-200 sm:mb-5 sm:px-4 sm:py-3">
@@ -49,7 +49,7 @@
         </button>
 
         <div v-if="channel.channel === 'inapp'" class="mt-4 sm:mt-5 rounded-2xl bg-emerald-500/[.07] px-4 py-3 text-xs font-semibold text-emerald-600 dark:text-emerald-300">
-          ✓ 已启用，提醒会保存在通知中心
+          按需开启：在新建或编辑提醒时勾选后，才会写入通知中心。
         </div>
 
         <div v-else-if="channel.channel === 'email' && channel.bound" class="mt-4 sm:mt-5">
@@ -386,7 +386,7 @@ function startRebind(channel: ChannelStatus) {
 }
 function show(message: string, type: 'success' | 'error' = 'success') { toast.message = ''; setTimeout(() => Object.assign(toast, { message, type }), 0) }
 function statusText(channel: ChannelStatus) {
-  if (channel.channel === 'inapp') return '始终可用'
+  if (channel.channel === 'inapp') return '按需开启'
   if (!channel.configured) return '待配置'
   if (!channel.bound) return '未绑定'
   return channel.status === 'active' ? '已连接' : channel.status === 'disabled' ? '已停用' : '异常'

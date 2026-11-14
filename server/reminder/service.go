@@ -126,9 +126,8 @@ func validateReminderInput(in *SaveReminderInput) error {
 	if in.RepeatNotifyMinutes < 0 || in.RepeatNotifyMinutes > 60*24*31 {
 		return errors.New("过期提醒频率无效，最长 31 天")
 	}
-	if len(in.Channels) == 0 {
-		in.Channels = []string{ChannelInApp}
-	}
+	// 不选择任何通知方式也是合法状态：提醒仍会出现在列表和日历中，只是不
+	// 主动推送。站内消息不再作为兜底渠道默认开启，需要用户显式勾选。
 	seen := map[string]bool{}
 	clean := make([]string, 0, len(in.Channels))
 	for _, ch := range in.Channels {

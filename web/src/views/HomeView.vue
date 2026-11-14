@@ -80,6 +80,7 @@
                   {{ channel.label }}
                 </button>
               </div>
+              <p v-if="!quick.channels?.length" class="mt-2 text-[10px] leading-4 text-muted-foreground">未选择通知方式：提醒仍会出现在列表和日历中，但不会主动推送。</p>
             </div>
             <!-- 底部提交按钮：手机端填完下方字段后无需滚回顶部再点添加 -->
             <div class="sm:col-span-2 lg:col-span-4">
@@ -195,6 +196,7 @@
                     <span class="text-left"><strong>{{ channel.label }}</strong><small>{{ channel.bound || channel.channel === 'inapp' ? '可用' : '未绑定' }}</small></span>
                   </button>
                 </div>
+                <p v-if="!editing.channels?.length" class="mt-3 text-[10px] leading-4 text-muted-foreground">未选择通知方式：提醒仍会出现在列表和日历中，但不会主动推送。</p>
                 <RouterLink to="/admin/channels" class="mt-3 inline-flex text-xs font-semibold text-brand-600 hover:underline dark:text-brand-300">管理通知方式 →</RouterLink>
                 <div v-if="isEditingChannelSelected('email') && emailBindings.length > 1" class="mt-4 rounded-2xl bg-muted/65 p-3">
                   <p class="mb-2 text-xs font-bold text-muted-foreground">这个提醒发送到</p>
@@ -266,7 +268,7 @@ const toast = reactive<{ message: string; type: 'success' | 'error' }>({ message
 
 const blankInput = (): SaveReminderInput => ({
   title: '', notes: '', list_id: 0, priority: 0, due_at: null,
-  all_day: false, repeat_rule: 'none', calendar: 'solar', repeat_notify_minutes: 0, channels: ['inapp'],
+  all_day: false, repeat_rule: 'none', calendar: 'solar', repeat_notify_minutes: 0, channels: [],
   // 新提醒默认提前 15 分钟提醒；过期重复默认不限次数（保持历史行为）。
   remind_before_minutes: 15, repeat_notify_times: 0,
 })
@@ -279,13 +281,12 @@ const defaultChannels = ref<string[]>([])
 
 // 把「配置的默认渠道 ∩ 当前可用渠道」写进新建表单。只保留已绑定且启用的
 // 渠道：配置里写了但没绑定的必须丢掉，否则新建的提醒会带上一个永远发不出去
-// 的渠道；交集为空时回退站内，与后端该项的默认值一致。
+// 的渠道。站内消息不再是兜底项，交集为空就是不推送。
 function applyDefaultChannels() {
-  const picked = selectableChannels.value
+  quick.channels = selectableChannels.value
     .filter(channel => channel.channel === 'inapp' || (channel.bound && channel.status === 'active'))
     .map(channel => channel.channel)
     .filter(channel => defaultChannels.value.includes(channel))
-  quick.channels = picked.length ? picked : ['inapp']
 }
 
 const view = computed(() => String(route.meta.reminderView || 'today'))
@@ -503,13 +504,11 @@ function toggleQuickChannel(channel: ReminderChannel) {
   quickChannelsTouched = true
   const list = quick.channels || []
   quick.channels = list.includes(channel) ? list.filter(x => x !== channel) : [...list, channel]
-  if (!quick.channels.length) quick.channels = ['inapp']
 }
 function isQuickChannelSelected(channel: ReminderChannel) { return (quick.channels || []).includes(channel) }
 function toggleEditingChannel(channel: ReminderChannel) {
   const list = editing.channels || []
   editing.channels = list.includes(channel) ? list.filter(x => x !== channel) : [...list, channel]
-  if (!editing.channels.length) editing.channels = ['inapp']
   if (!editing.channels.includes('email')) editing.channel_targets = undefined
 }
 function isEditingChannelSelected(channel: ReminderChannel) { return (editing.channels || []).includes(channel) }

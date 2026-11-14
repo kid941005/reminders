@@ -1,9 +1,44 @@
 package reminder
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
+
+// 导入的日程不应该默认产生站内提醒：用户通常已经在日程来源里收到通知，
+// 没有主动勾选渠道时只进列表，不创建渠道与投递任务。
+func TestApplySyncEventsImportsWithoutChannels(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	cfg := CalendarSync{UserID: 507, ListID: 1, RemindBeforeMinutes: 15}
+	due := time.Now().AddDate(0, 0, 2).Truncate(time.Minute)
+	events := []ICalEvent{{UID: "no-channel-1", Summary: "静默日程", Start: due, RepeatRule: "none"}}
+
+	imported, _, err := applySyncEvents(appDB, cfg, events, time.Now().AddDate(0, 0, -7), time.Now().AddDate(0, 0, 180), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported != 1 {
+		t.Fatalf("imported=%d", imported)
+	}
+
+	var item Reminder
+	if err := appDB.Where("external_uid = ?", "no-channel-1").First(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	var channelCount, jobCount int64
+	if err := appDB.Model(&ReminderChannel{}).Where("reminder_id = ?", item.ID).Count(&channelCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Model(&DeliveryJob{}).Where("reminder_id = ?", item.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if channelCount != 0 || jobCount != 0 {
+		t.Fatalf("导入日程不应默认创建渠道或投递任务: channels=%d jobs=%d", channelCount, jobCount)
+	}
+}
 
 // 多日历、循环日程推进、例外实例、清理窗口与「复活」是这次缺漏修复的核心，
 // 这里全部用真实 SQLite 覆盖（不需要网络）。
@@ -79,6 +114,133 @@ func TestApplySyncEventsKeepsRecurrenceExceptions(t *testing.T) {
 	}
 	if !foundException {
 		t.Fatalf("例外实例没有独立成行: %+v", rows)
+	}
+}
+
+// 同一个循环日程如果只改地点/描述、时间不变，CalDAV 会同时返回主事件和
+// RECURRENCE-ID 例外。旧实现把例外也存成独立提醒，导致同一时刻出现两条待办、
+// 推送两次。这里验证例外被合并进主事件，而不是各自成行。
+func TestApplySyncEventsMergesSameTimeRecurrenceException(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	cfg := CalendarSync{UserID: 506, ListID: 1, RemindBeforeMinutes: 15}
+	loc := shanghai()
+	due := time.Now().In(loc).AddDate(0, 0, 7).Truncate(time.Minute)
+	events := []ICalEvent{
+		{UID: "series-merge", Summary: "微泵项目进度讨论", Start: due, RepeatRule: "weekly"},
+		{UID: "series-merge", Summary: "微泵项目进度讨论", Start: due, RepeatRule: "weekly",
+			RecurrenceID: due.Format(time.RFC3339), Location: "https://meeting.dingtalk.com/j/abc"},
+	}
+
+	imported, _, err := applySyncEvents(appDB, cfg, events, time.Now().AddDate(0, 0, -7), time.Now().AddDate(0, 0, 180), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported != 1 {
+		t.Fatalf("同时间例外不应单独导入，imported=%d", imported)
+	}
+	var rows []Reminder
+	if err := appDB.Where("user_id = ? AND external_source = ?", 506, ExternalSourceDingTalk).Find(&rows).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("期望 1 条，实际 %d: %+v", len(rows), rows)
+	}
+	row := rows[0]
+	if row.ExternalUID != "series-merge" || row.RepeatRule != "weekly" {
+		t.Fatalf("主事件被改坏: uid=%q rule=%q", row.ExternalUID, row.RepeatRule)
+	}
+	if !strings.Contains(row.Notes, "meeting.dingtalk.com") {
+		t.Fatalf("例外里的地点没有合并进主事件: %q", row.Notes)
+	}
+}
+
+// 例外可能指向未来的某一周，而不是「下一次」实例；只在下一实例上比对会漏掉，
+// 等系列推进到那一周时又会冒出第二条。这里验证窗口内任意实例都能匹配。
+func TestApplySyncEventsMergesFutureSameTimeRecurrenceException(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	cfg := CalendarSync{UserID: 508, ListID: 1}
+	loc := shanghai()
+	masterDue := time.Now().In(loc).AddDate(0, 0, 7).Truncate(time.Minute)
+	exceptionDue := masterDue.AddDate(0, 0, 14)
+	events := []ICalEvent{
+		{UID: "series-future", Summary: "周会", Start: masterDue, RepeatRule: "weekly"},
+		{UID: "series-future", Summary: "周会", Start: exceptionDue, RepeatRule: "weekly",
+			RecurrenceID: exceptionDue.Format(time.RFC3339), Location: "会议室 A"},
+	}
+	imported, _, err := applySyncEvents(appDB, cfg, events, time.Now().AddDate(0, 0, -7), time.Now().AddDate(0, 0, 180), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported != 1 {
+		t.Fatalf("未来实例的同时间例外也不应单独导入，imported=%d", imported)
+	}
+	var count int64
+	if err := appDB.Model(&Reminder{}).Where("user_id = ? AND external_source = ?", 508, ExternalSourceDingTalk).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("期望 1 条，实际 %d", count)
+	}
+}
+
+// 旧版本已经导入过的同时间例外，需要在下一次同步时被清掉（只清未完成的），
+// 否则用户升级后仍会看到两条并收到两次推送。
+func TestApplySyncEventsCleansLegacySameTimeException(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	const userID = 507
+	loc := shanghai()
+	due := time.Now().In(loc).AddDate(0, 0, 7).Truncate(time.Minute).UTC()
+	rid := due.Format(time.RFC3339)
+	master := Reminder{UserID: userID, ListID: 1, Title: "微泵项目进度讨论", DueAt: &due,
+		RepeatRule: "weekly", Calendar: "solar", Version: 1,
+		ExternalSource: ExternalSourceDingTalk, ExternalUID: "series-legacy"}
+	duplicate := Reminder{UserID: userID, ListID: 1, Title: "微泵项目进度讨论", DueAt: &due,
+		RepeatRule: "none", Calendar: "solar", Version: 1, Notes: "地点：https://meeting.dingtalk.com/j/abc",
+		ExternalSource: ExternalSourceDingTalk, ExternalUID: "series-legacy#" + rid}
+	if err := appDB.Create(&master).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Create(&duplicate).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	events := []ICalEvent{
+		{UID: "series-legacy", Summary: "微泵项目进度讨论", Start: due, RepeatRule: "weekly"},
+		{UID: "series-legacy", Summary: "微泵项目进度讨论", Start: due, RepeatRule: "weekly",
+			RecurrenceID: rid, Location: "https://meeting.dingtalk.com/j/abc"},
+	}
+	// prune=false 模拟部分日历读取失败：合并本身不依赖清理，仍应生效。
+	imported, pruned, err := applySyncEvents(appDB, CalendarSync{UserID: userID, ListID: 1}, events,
+		time.Now().AddDate(0, 0, -7), time.Now().AddDate(0, 0, 180), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported != 1 || pruned != 0 {
+		t.Fatalf("imported=%d pruned=%d", imported, pruned)
+	}
+
+	var active, deleted int64
+	if err := appDB.Model(&Reminder{}).Where("user_id = ? AND external_source = ? AND deleted_at IS NULL", userID, ExternalSourceDingTalk).Count(&active).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Model(&Reminder{}).Where("user_id = ? AND external_source = ? AND deleted_at IS NOT NULL", userID, ExternalSourceDingTalk).Count(&deleted).Error; err != nil {
+		t.Fatal(err)
+	}
+	if active != 1 || deleted != 1 {
+		t.Fatalf("active=%d deleted=%d", active, deleted)
+	}
+	var row Reminder
+	if err := appDB.Where("user_id = ? AND external_source = ? AND deleted_at IS NULL", userID, ExternalSourceDingTalk).First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(row.Notes, "meeting.dingtalk.com") {
+		t.Fatalf("清理重复行时没有保留地点: %q", row.Notes)
 	}
 }
 

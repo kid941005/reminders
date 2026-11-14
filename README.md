@@ -79,7 +79,7 @@ docker compose up -d
 
 ### 通知渠道
 
-- **站内通知**：始终可用，通知中心保存全部消息，支持未读计数与一键已读；
+- **站内通知**：默认关闭、按需开启，在单条提醒中勾选后才推送；通知中心保存全部消息，支持未读计数与一键已读；
 - **SMTP 邮件**：可绑定多个接收邮箱，适合重要事项与长内容；
 - **短信 HTTP 网关**：对接自有短信服务商，无需打开应用即可收到；
 - **飞书企业自建应用**：机器人单聊，填写工作邮箱或手机号即可，无需查找 OpenID；
@@ -100,15 +100,17 @@ docker compose up -d
 
 ### 天气提醒
 
-- **和风天气每日推送**：在「偏好设置 → 天气提醒」选择城市与推送时间（默认 08:00），每天上午推送
-  当天天气与未来三天预报；有降雨、降雪或气象预警时，标题会标出「（有雨）/（有雪）/（有预警）」；
-- 内容包含当前实况、今日温度区间与降水概率、未来三天逐日天气（含带伞提示）以及当前生效的
-  气象预警（最多 3 条，自动过滤已取消/已过期）；
-- 城市支持搜索回填经纬度；站内通知始终开启，邮件、短信、飞书、QQ、钉钉、Bark 需先在
-  「通知方式」完成绑定；
+- **和风天气早晚推送**：在「偏好设置 → 天气提醒」选择城市与时间，早间（默认 08:00）只推当天，
+  晚间（默认 20:00）只推次日；标题以天气 emoji 开头（☀️ 晴、⛅ 多云、☁️ 阴、🌫️ 雾霾、
+  🌬️ 大风、🌧️ 雨、❄️ 雪、⛈️ 雷、⚠️ 预警），并标注「今日/明日天气 · 城市」；
+- 每条只包含目标日的一条温度区间、降水概率与带伞/防滑提示，以及最多 2 条当天生效的气象预警
+  （自动过滤已取消、已过期和不落在目标日的预警）；
+- 城市支持搜索回填经纬度；天气推送默认不开启站内通知，启用时至少勾选一个渠道；邮件、短信、
+  飞书、QQ、钉钉、Bark 需先在「通知方式」完成绑定；
 - 管理员在设置页统一填写和风天气 API Host 与 API Key（AES-GCM 加密，接口不回显），也可用
   环境变量 `QWEATHER_API_HOST` / `QWEATHER_API_KEY` 提供；
-- 以本地日期做幂等，重启后不会重复推送（多实例部署为尽力而为）；推送时间后 4 小时内仍会补推，失败最多每 30 分钟重试一次。
+- 以本地日期 + 时段做幂等，早间成功不会吞掉晚间推送，重启后也不会重复推送（多实例部署为尽力而为）；
+  每个时段在计划时间后 4 小时内仍会补推，失败最多每 30 分钟重试一次。
 
 ### 账号与系统
 
@@ -119,8 +121,8 @@ docker compose up -d
 
 ## 通知渠道配置
 
-站内通知无需配置。邮件、短信、飞书、QQ 需要在服务端提供渠道凭证（环境变量），用户在「通知方式」
-页面绑定自己的接收目标后才能启用。
+站内通知无需配置，但默认不开启，需要在单条提醒或天气推送中主动勾选。邮件、短信、飞书、QQ 需要
+在服务端提供渠道凭证（环境变量），用户在「通知方式」页面绑定自己的接收目标后才能启用。
 
 ```text
 # 邮件（SMTP）
@@ -218,7 +220,7 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 | 通知中心 | `GET /api/reminder/notifications`、`GET /api/reminder/notifications/unread-count`、`POST /api/reminder/notifications/:id/read`、`POST /api/reminder/notifications/read-all` |
 | 纪念日 | `GET/POST /api/reminder/countdowns`、`PUT/DELETE /api/reminder/countdowns/:id` |
 | 通知方式 | `GET /api/reminder/channels`、`PUT/PATCH/DELETE /api/reminder/channels/:channel`、`POST /api/reminder/channels/:channel/test`、`POST /api/reminder/channels/qq/bind-code` |
-| 天气 | `GET/PUT/DELETE /api/reminder/weather`、`POST /api/reminder/weather/run`、`GET /api/reminder/weather/preview`、`GET /api/reminder/weather/locations?q=` |
+| 天气 | `GET/PUT/DELETE /api/reminder/weather`、`POST /api/reminder/weather/run?slot=morning\|evening`、`GET /api/reminder/weather/preview?slot=morning\|evening`、`GET /api/reminder/weather/locations?q=` |
 | 日历 | `GET /api/reminder/feed`、`POST /api/reminder/feed/reset`、`GET /api/reminder/feed.ics?token=...`、`GET/PUT/DELETE /api/reminder/calendar-sync`、`POST /api/reminder/calendar-sync/run` |
 | 节假日与农历 | `GET /api/reminder/holidays`、`GET /api/reminder/lunar`、`GET /api/reminder/lunar/convert` |
 | 管理 | `GET /api/users`、`PUT/DELETE /api/users/:id`、`PUT /api/users/:id/status`、`PUT /api/users/:id/password`、`GET /api/audit-logs`、`GET /api/audit-logs/export`、`GET /api/reminder/admin/deliveries`、`GET /api/reminder/admin/providers`、`PUT /api/reminder/admin/providers/:provider`、`GET/PUT /api/reminder/admin/weather` |

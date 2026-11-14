@@ -11,8 +11,10 @@ export interface WeatherConfig {
   latitude: number
   longitude: number
   morning_time: string
+  evening_time: string
   channels: ReminderChannel[]
   last_push_date: string
+  last_slot: string
   last_push_at: string | null
   last_status: string
   last_error: string
@@ -23,9 +25,13 @@ export interface WeatherConfigInput {
   latitude: number
   longitude: number
   morning_time: string
+  evening_time: string
   channels: ReminderChannel[]
   enabled?: boolean
 }
+
+/** 早间推送当天天气，晚间推送次日天气。 */
+export type WeatherSlot = 'morning' | 'evening'
 
 export interface WeatherLocation {
   name: string
@@ -51,8 +57,10 @@ export const getWeatherConfig = () => request.get('/api/reminder/weather')
 export const saveWeatherConfig = (data: WeatherConfigInput) =>
   request.put('/api/reminder/weather', data)
 export const deleteWeatherConfig = () => request.delete('/api/reminder/weather')
-export const runWeather = () => request.post('/api/reminder/weather/run')
-export const previewWeather = () => request.get('/api/reminder/weather/preview')
+export const runWeather = (slot: WeatherSlot = 'morning') =>
+  request.post('/api/reminder/weather/run', null, { params: { slot } })
+export const previewWeather = (slot: WeatherSlot = 'morning') =>
+  request.get('/api/reminder/weather/preview', { params: { slot } })
 export const lookupWeatherLocations = (q: string) =>
   request.get('/api/reminder/weather/locations', { params: { q } })
 

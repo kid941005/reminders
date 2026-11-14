@@ -71,6 +71,26 @@ func init() {
 		},
 	})
 
+	database.Upgrades = append(database.Upgrades, database.Upgrade{
+		Version: "0.14.2", Name: "disable_inapp_for_imported_reminders",
+		// 导入的日程以前默认带站内通知，和日程来源自身的提醒重复，实际没有
+		// 作用。这里只清理导入条目；手动创建的提醒保留用户当时的选择。
+		Upgrade: func(db *gorm.DB) error {
+			imported := `SELECT id FROM reminders WHERE external_source IS NOT NULL AND external_source <> ''`
+			if err := db.Exec(`DELETE FROM reminder_channels
+				WHERE channel = ? AND reminder_id IN (`+imported+`)`, ChannelInApp).Error; err != nil {
+				return err
+			}
+			// 已经排队的站内投递任务也要取消，否则升级后仍会收到旧日程的
+			// 一次性站内推送。已完成的投递记录保留。
+			return db.Exec(`UPDATE delivery_jobs
+				SET status = 'cancelled', last_error_code = 'CHANNEL_DISABLED',
+					last_error_message = '站内通知已改为按需开启'
+				WHERE channel = ? AND status IN ('pending', 'retry', 'processing')
+				AND reminder_id IN (`+imported+`)`, ChannelInApp).Error
+		},
+	})
+
 	database.RegisterModels(
 		&List{}, &Reminder{}, &ReminderChannel{}, &Completion{},
 		&ChannelBinding{}, &ProviderConfig{}, &QQBindCode{}, &DeliveryJob{}, &DeliveryAttempt{}, &Notification{},
@@ -79,8 +99,8 @@ func init() {
 
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
 		Key: "reminder_default_channels", Scope: sysconfig.ScopeUser, Type: sysconfig.TypeString,
-		Default: "inapp", Group: "notification", Label: "默认提醒渠道",
-		Description: "新建提醒时默认勾选的通知方式；未绑定的渠道会自动跳过，站内消息始终保留",
+		Default: "", Group: "notification", Label: "默认提醒渠道",
+		Description: "新建提醒时默认勾选的通知方式；留空表示不默认开启任何渠道，站内消息也需要手动选择",
 	})
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
 		Key: "ics_include_holidays", Scope: sysconfig.ScopeUser, Type: sysconfig.TypeBool,

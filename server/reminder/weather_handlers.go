@@ -45,26 +45,47 @@ func handleDeleteWeather(db *gorm.DB) gin.HandlerFunc {
 	}
 }
 
+// weatherSlotFromRequest reads the optional slot query parameter. An empty
+// value keeps the morning behaviour that older clients expect.
+func weatherSlotFromRequest(c *gin.Context) (weatherSlot, bool) {
+	raw := strings.TrimSpace(c.Query("slot"))
+	if raw == "" {
+		return weatherSlotMorning, true
+	}
+	slot := weatherSlot(raw)
+	return slot, slot.valid()
+}
+
 func handleRunWeather(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		slot, ok := weatherSlotFromRequest(c)
+		if !ok {
+			response.ErrorBadRequest(c, "时段参数无效，应为 morning 或 evening")
+			return
+		}
 		userID := currentUserID(c)
 		cfg, ok := getWeatherConfig(db, userID)
 		if !ok {
 			response.ErrorBadRequest(c, "尚未配置天气提醒")
 			return
 		}
-		msg, err := pushWeather(db, cfg, true)
+		msg, err := pushWeather(db, cfg, true, slot)
 		if err != nil {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
 		cfg, ok = getWeatherConfig(db, userID)
-		response.Success(c, gin.H{"message": msg, "config": weatherConfigDTO(db, cfg, ok)})
+		response.Success(c, gin.H{"slot": slot, "message": msg, "config": weatherConfigDTO(db, cfg, ok)})
 	}
 }
 
 func handlePreviewWeather(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		slot, ok := weatherSlotFromRequest(c)
+		if !ok {
+			response.ErrorBadRequest(c, "时段参数无效，应为 morning 或 evening")
+			return
+		}
 		cfg, ok := getWeatherConfig(db, currentUserID(c))
 		if !ok {
 			response.ErrorBadRequest(c, "尚未配置天气提醒")
@@ -78,22 +99,12 @@ func handlePreviewWeather(db *gorm.DB) gin.HandlerFunc {
 		client := weatherClientFactory(host, apiKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		current, err := client.Current(ctx, cfg.Latitude, cfg.Longitude)
+		daily, alerts, err := weatherForecast(ctx, client, cfg)
 		if err != nil {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
-		daily, err := client.Daily(ctx, cfg.Latitude, cfg.Longitude, 4)
-		if err != nil {
-			response.ErrorBadRequest(c, err.Error())
-			return
-		}
-		alerts, err := client.Alerts(ctx, cfg.Latitude, cfg.Longitude)
-		if err != nil {
-			response.ErrorBadRequest(c, err.Error())
-			return
-		}
-		response.Success(c, buildWeatherMessage(cfg, current, daily, alerts, time.Now()))
+		response.Success(c, gin.H{"slot": slot, "message": buildWeatherMessage(cfg, slot, daily, alerts, time.Now())})
 	}
 }
 

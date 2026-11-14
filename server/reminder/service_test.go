@@ -63,6 +63,33 @@ func TestCreateAndUpdateReminderRebuildsJobIdempotently(t *testing.T) {
 	}
 }
 
+func TestCreateReminderWithoutChannelsCreatesNoDeliveryJobs(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	due := time.Now().Add(2 * time.Hour).Truncate(time.Second)
+	created, err := createReminder(appDB, 43, SaveReminderInput{
+		Title: "只看列表", DueAt: &due, RepeatRule: "none",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Channels) != 0 {
+		t.Fatalf("未选择渠道时不应写入任何渠道，got %v", created.Channels)
+	}
+
+	var channelCount, jobCount int64
+	if err := appDB.Model(&ReminderChannel{}).Where("reminder_id = ?", created.ID).Count(&channelCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Model(&DeliveryJob{}).Where("reminder_id = ?", created.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if channelCount != 0 || jobCount != 0 {
+		t.Fatalf("未选择渠道时不应创建渠道或投递任务: channels=%d jobs=%d", channelCount, jobCount)
+	}
+}
+
 func TestCompleteRecurringReminderAdvancesFromScheduledTime(t *testing.T) {
 	cleanup := testDB(t)
 	defer cleanup()
