@@ -72,7 +72,7 @@ func init() {
 	})
 
 	database.Upgrades = append(database.Upgrades, database.Upgrade{
-		Version: "0.14.2", Name: "disable_inapp_for_imported_reminders",
+		Version: "0.15.0", Name: "disable_inapp_for_imported_reminders",
 		// 导入的日程以前默认带站内通知，和日程来源自身的提醒重复，实际没有
 		// 作用。这里只清理导入条目；手动创建的提醒保留用户当时的选择。
 		Upgrade: func(db *gorm.DB) error {
