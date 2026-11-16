@@ -232,11 +232,13 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 
 仓库自带 `reminder-mcp/` 适配器，把上面的 REST API 包装成小智设备可用的 MCP 工具，
 支持语音新增、查询、完成和推迟待办；ESP32 固件与 Reminder 后端都不需要改。
+镜像由 GitHub Actions 构建并推送到 `ghcr.io/kid941005/reminders-mcp:latest`。
 
 ```bash
 cp reminder-mcp/.env.example reminder-mcp/.env
 # 编辑 reminder-mcp/.env：填 Reminder API Key 与小智 MCP 接入点
-docker compose --profile mcp up -d --build
+docker compose --profile mcp pull
+docker compose --profile mcp up -d
 ```
 
 适配器默认不随 `docker compose up -d` 启动。接入点地址、工具行为和常见问题见

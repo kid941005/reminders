@@ -2,6 +2,14 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## 未发布
+
+### 构建
+
+- **reminder-mcp 镜像改由 GitHub Actions 构建**：新增 `mcp-image.yml`，把镜像推送到
+  `ghcr.io/kid941005/reminders-mcp`；`docker-compose.yml` 的 `reminder-mcp`
+  服务改为直接拉取该镜像，不再要求本地 `--build`。
+
 ## v0.16.0（2026-11-16）
 
 ### 新增

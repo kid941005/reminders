@@ -34,6 +34,9 @@ ESP32 小智 --语音--> 小智服务端 / LLM --MCP(WebSocket)--> mcp_pipe.py
 
 仓库根目录的 `docker-compose.yml` 已包含一个 **默认不启动** 的 `reminder-mcp` 服务（profile `mcp`）。
 
+镜像由 GitHub Actions 构建并推送到 `ghcr.io/kid941005/reminders-mcp:latest`，
+不再在本地执行 `--build`。如果 GHCR 包仍是私有，拉取前需要先 `docker login ghcr.io`。
+
 1. 准备配置：
 
 ```bash
@@ -53,10 +56,11 @@ REMINDER_API_KEY=你的APIKey
 MCP_ENDPOINT=ws://192.168.50.100:38004/mcp_endpoint/mcp/?token=你的token
 ```
 
-2. 启动 Reminder + 适配器：
+2. 拉取镜像并启动 Reminder + 适配器：
 
 ```bash
-docker compose --profile mcp up -d --build
+docker compose --profile mcp pull
+docker compose --profile mcp up -d
 ```
 
 只启动 Reminder 时仍用原来的命令，不受影响：
@@ -70,6 +74,12 @@ docker compose up -d
 ```bash
 docker logs -f reminder-mcp
 ```
+
+### 镜像构建
+
+`.github/workflows/mcp-image.yml` 在 `reminder-mcp/**` 变更、推送 `v*` 标签或手动触发时，
+构建并推送 `ghcr.io/kid941005/reminders-mcp`。主分支构建 `latest` 与 `sha-*`，
+版本标签构建 `x.y.z`、`x.y` 与 `latest`。
 
 ## 配置说明
 
