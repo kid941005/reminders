@@ -3,10 +3,10 @@ name: MCP Image
 on:
   push:
     branches: [main]
+    tags: ["v*"]
     paths:
       - "reminder-mcp/**"
       - ".github/workflows/mcp-image.yml"
-  tags: ["v*"]
   workflow_dispatch:
 
 permissions:
