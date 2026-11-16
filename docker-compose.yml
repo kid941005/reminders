@@ -6,8 +6,8 @@ services:
     ports:
       - "8906:8906"
     volumes:
-      # 数据库、上传文件、日志和配置均持久化在此卷中。
-      - kid941005-reminders-data:/app/data
+      # 数据库、上传文件、日志和配置均持久化到此目录。
+      - ./data:/app/data
     environment:
       - ENV=release
       - DATA_DIR=/app/data
@@ -30,6 +30,3 @@ services:
     depends_on:
       - kid941005-reminders
     restart: unless-stopped
-
-volumes:
-  kid941005-reminders-data:
