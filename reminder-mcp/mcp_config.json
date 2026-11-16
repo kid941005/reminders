@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "reminder": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["server.py"]
+    }
+  }
+}

@@ -15,5 +15,21 @@ services:
     command: ["-data-dir", "/app/data", "-web-dir", "./static/dist", "-device-type", "docker"]
     restart: unless-stopped
 
+  # 可选：小智语音 MCP 适配器，默认不启动。
+  # 用法：cp reminder-mcp/.env.example reminder-mcp/.env && docker compose --profile mcp up -d --build
+  reminder-mcp:
+    profiles: ["mcp"]
+    build:
+      context: ./reminder-mcp
+    image: xiaozhi-reminder-mcp:latest
+    container_name: reminder-mcp
+    env_file:
+      - ./reminder-mcp/.env
+    environment:
+      - TZ=Asia/Shanghai
+    depends_on:
+      - kid941005-reminders
+    restart: unless-stopped
+
 volumes:
   kid941005-reminders-data:

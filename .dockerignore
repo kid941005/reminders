@@ -6,3 +6,9 @@ build/
 *.tar.gz
 *.zip
 *.fpk
+
+# 小智 MCP 适配器：构建上下文只保留源码，不带本地环境与密钥
+reminder-mcp/.venv/
+reminder-mcp/.env
+reminder-mcp/__pycache__/
+reminder-mcp/*.pyc

@@ -2,6 +2,15 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## 未发布
+
+### 新增
+
+- **小智语音 MCP 适配器**：新增 `reminder-mcp/`，把 Reminder REST API 包装成
+  `get_current_time`、`list_todos`、`create_todo`、`complete_todo`、`snooze_todo`
+  五个 MCP 工具，ESP32 小智设备可通过语音新增、查询、完成和推迟待办。
+  适配器以可选 Compose profile（`mcp`）提供，默认不启动；ESP32 固件与 Go 后端无需改动。
+
 ## v0.15.0（2026-11-14）
 
 ### 变更

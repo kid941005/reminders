@@ -228,6 +228,20 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 `GET /api/reminder/feed.ics?token=...` 是免登录的日历订阅入口，token 由系统生成、可重置；
 其余接口都需要认证。
 
+### 小智语音助手（MCP，可选）
+
+仓库自带 `reminder-mcp/` 适配器，把上面的 REST API 包装成小智设备可用的 MCP 工具，
+支持语音新增、查询、完成和推迟待办；ESP32 固件与 Reminder 后端都不需要改。
+
+```bash
+cp reminder-mcp/.env.example reminder-mcp/.env
+# 编辑 reminder-mcp/.env：填 Reminder API Key 与小智 MCP 接入点
+docker compose --profile mcp up -d --build
+```
+
+适配器默认不随 `docker compose up -d` 启动。接入点地址、工具行为和常见问题见
+[reminder-mcp/README.md](./reminder-mcp/README.md)。
+
 ## 配置参考
 
 ### 命令行参数

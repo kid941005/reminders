@@ -26,6 +26,7 @@
 | `server/middleware/` | 日志、CORS、限流、gzip、静态缓存、认证中间件 |
 | `server/stats/` | 匿名统计与赞赏计数（本分支默认关闭） |
 | `server/audit/` | 操作审计日志与导出 |
+| `reminder-mcp/` | 可选的小智 MCP 适配器（Python），把 REST API 暴露为 MCP 工具；不参与 Go 二进制构建 |
 | `web/src/api/` | 所有 HTTP 调用集中在此，页面不直接写 `axios` |
 | `web/src/stores/` | Pinia：`auth`、`theme`、`support` |
 | `web/src/utils/` | 启动引导、存储键、密码规则等纯逻辑 |
@@ -125,6 +126,7 @@ dark → light → system → dark
 - 涉及安全的改动必须补测试：越权访问、信息泄露、路径穿越、限流、密码规则。
 - 断言错误时同时校验 **HTTP 状态码与 `code` 字段**，因为前端按 `code` 分支。
 - 前端目前没有测试；新增纯逻辑（`utils/`）时优先补 vitest，组件测试暂不作为门槛。
+- `reminder-mcp/` 的纯逻辑用 `python -m unittest -v test_server.py`，不依赖网络与 API Key。
 
 ## 6. 提交规范
 
