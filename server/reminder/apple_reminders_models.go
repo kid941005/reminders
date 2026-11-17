@@ -45,7 +45,7 @@ type AppleReminderLink struct {
 	ReminderID    uint      `gorm:"uniqueIndex;not null" json:"reminder_id"`
 	RemoteUID     string    `gorm:"size:255" json:"remote_uid"`
 	RemoteURL     string    `gorm:"size:512" json:"remote_url"`
-	ETag          string    `gorm:"size:255" json:"etag"`
+	ETag          string    `gorm:"column:e_tag;size:255" json:"etag"`
 	CollectionURL string    `gorm:"size:512" json:"collection_url"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`

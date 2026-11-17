@@ -292,3 +292,30 @@ func TestAppleRedirectWhitelist(t *testing.T) {
 		t.Fatal("isAppleCloudHost must only accept icloud.com and its subdomains")
 	}
 }
+
+func TestSaveAppleReminderLinkStoresAndUpdatesETag(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	item := mustCreateReminder(t, Reminder{UserID: 12, Title: "Apple link"})
+	if err := saveAppleReminderLink(appDB, item, "uid-1", "https://caldav.icloud.com/1.ics", "https://caldav.icloud.com/", "etag-1"); err != nil {
+		t.Fatal(err)
+	}
+	var link AppleReminderLink
+	if err := appDB.Where("reminder_id = ?", item.ID).First(&link).Error; err != nil {
+		t.Fatal(err)
+	}
+	if link.ETag != "etag-1" {
+		t.Fatalf("expected etag-1, got %q", link.ETag)
+	}
+
+	if err := saveAppleReminderLink(appDB, item, "uid-1", "https://caldav.icloud.com/1.ics", "https://caldav.icloud.com/", "etag-2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Where("reminder_id = ?", item.ID).First(&link).Error; err != nil {
+		t.Fatal(err)
+	}
+	if link.ETag != "etag-2" {
+		t.Fatalf("expected etag-2 after upsert, got %q", link.ETag)
+	}
+}

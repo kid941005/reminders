@@ -445,7 +445,7 @@ func saveAppleReminderLink(db *gorm.DB, item Reminder, uid, remoteURL, collectio
 			"user_id":        item.UserID,
 			"remote_uid":     uid,
 			"remote_url":     remoteURL,
-			"etag":           etag,
+			"e_tag":          etag,
 			"collection_url": collection,
 			"updated_at":     time.Now().UTC(),
 		}),
