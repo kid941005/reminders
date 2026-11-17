@@ -206,3 +206,49 @@ export const getCalendarSync = () => request.get('/api/reminder/calendar-sync')
 export const saveCalendarSync = (data: CalendarSyncInput) => request.put('/api/reminder/calendar-sync', data)
 export const deleteCalendarSync = () => request.delete('/api/reminder/calendar-sync')
 export const runCalendarSync = () => request.post('/api/reminder/calendar-sync/run')
+
+// Apple 提醒事项单向推送：本地新建/修改/完成/删除同步到 iCloud。密码同样只写不读。
+export interface AppleReminderSyncConfig {
+  id: number
+  server: string
+  apple_id: string
+  collection_url: string
+  collection_name: string
+  enabled: boolean
+  last_sync_at: string | null
+  last_status: string
+  last_error: string
+  last_pushed: number
+  pending_count: number
+  linked_count: number
+}
+export interface AppleReminderCollection {
+  url: string
+  name: string
+}
+export interface AppleReminderSyncInput {
+  server: string
+  apple_id: string
+  password?: string
+  collection_url: string
+  collection_name?: string
+  enabled?: boolean
+}
+export interface AppleReminderDiscoverInput {
+  server: string
+  apple_id: string
+  password?: string
+}
+export interface AppleReminderSyncResult {
+  pushed: number
+  failed: number
+  pending: number
+  error?: string
+}
+export const getAppleReminders = () => request.get('/api/reminder/apple-reminders')
+export const discoverAppleReminders = (data: AppleReminderDiscoverInput) =>
+  request.post('/api/reminder/apple-reminders/discover', data)
+export const saveAppleReminders = (data: AppleReminderSyncInput) =>
+  request.put('/api/reminder/apple-reminders', data)
+export const deleteAppleReminders = () => request.delete('/api/reminder/apple-reminders')
+export const runAppleReminders = () => request.post('/api/reminder/apple-reminders/run')

@@ -47,6 +47,13 @@ func setupAuthRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group.DELETE("/calendar-sync", handleDeleteCalendarSync(db))
 	group.POST("/calendar-sync/run", handleRunCalendarSync(db))
 
+	// Apple 提醒事项：单向推送（本地新建/修改/完成/删除 → iCloud 列表）。
+	group.GET("/apple-reminders", handleGetAppleReminders(db))
+	group.PUT("/apple-reminders", handleSaveAppleReminders(db))
+	group.DELETE("/apple-reminders", handleDeleteAppleReminders(db))
+	group.POST("/apple-reminders/discover", handleDiscoverAppleReminders(db))
+	group.POST("/apple-reminders/run", handleRunAppleReminders(db))
+
 	// 和风天气：每用户配置、立即推送、文案预览与城市搜索。
 	group.GET("/weather", handleGetWeather(db))
 	group.PUT("/weather", handleSaveWeather(db))

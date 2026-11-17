@@ -95,6 +95,7 @@ func init() {
 		&List{}, &Reminder{}, &ReminderChannel{}, &Completion{},
 		&ChannelBinding{}, &ProviderConfig{}, &QQBindCode{}, &DeliveryJob{}, &DeliveryAttempt{}, &Notification{},
 		&Countdown{}, &CalendarFeed{}, &CalendarSync{}, &WeatherConfig{},
+		&AppleReminderSync{}, &AppleReminderLink{}, &AppleReminderOutbox{},
 	)
 
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
@@ -159,6 +160,15 @@ func init() {
 		Run: func() {
 			if appDB != nil {
 				runDueWeatherPushes(appDB)
+			}
+		},
+	})
+	scheduler.Register(scheduler.Job{
+		// Apple 提醒事项单向推送。每分钟检查一次队列，失败按退避重试。
+		Name: "reminder-apple-reminders", Interval: time.Minute,
+		Run: func() {
+			if appDB != nil {
+				runDueAppleReminderSyncs(appDB)
 			}
 		},
 	})

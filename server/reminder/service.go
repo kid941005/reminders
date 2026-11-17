@@ -216,6 +216,9 @@ func createReminder(db *gorm.DB, userID uint, in SaveReminderInput) (ReminderDTO
 		if err := replaceChannels(tx, created, in); err != nil {
 			return err
 		}
+		if err := enqueueAppleSync(tx, userID, created.ID, appleReminderActionUpsert); err != nil {
+			return err
+		}
 		return rebuildJobs(tx, created, in.Channels)
 	})
 	if err != nil {
@@ -266,6 +269,9 @@ func updateReminder(db *gorm.DB, userID, reminderID uint, in SaveReminderInput) 
 			return err
 		}
 		if err := replaceChannels(tx, existing, in); err != nil {
+			return err
+		}
+		if err := enqueueAppleSync(tx, userID, existing.ID, appleReminderActionUpsert); err != nil {
 			return err
 		}
 		return rebuildJobs(tx, existing, in.Channels)
@@ -530,7 +536,10 @@ func deleteReminder(db *gorm.DB, userID, reminderID uint) error {
 		if err := retireDueNotifications(tx, userID, reminderID, now); err != nil {
 			return err
 		}
-		return tx.Model(&item).Update("deleted_at", &now).Error
+		if err := tx.Model(&item).Update("deleted_at", &now).Error; err != nil {
+			return err
+		}
+		return enqueueAppleSync(tx, userID, reminderID, appleReminderActionDelete)
 	})
 }
 
@@ -574,6 +583,9 @@ func completeReminder(db *gorm.DB, userID, reminderID uint) (ReminderDTO, error)
 		if err := retireDueNotifications(tx, userID, reminderID, now); err != nil {
 			return err
 		}
+		if err := enqueueAppleSync(tx, userID, item.ID, appleReminderActionUpsert); err != nil {
+			return err
+		}
 		return rebuildJobs(tx, item, channels)
 	})
 	if err != nil {
@@ -600,6 +612,9 @@ func restoreReminder(db *gorm.DB, userID, reminderID uint) (ReminderDTO, error) 
 		channels := make([]string, 0, len(channelRows))
 		for _, row := range channelRows {
 			channels = append(channels, row.Channel)
+		}
+		if err := enqueueAppleSync(tx, userID, item.ID, appleReminderActionUpsert); err != nil {
+			return err
 		}
 		return rebuildJobs(tx, item, channels)
 	})
@@ -633,6 +648,9 @@ func snoozeReminder(db *gorm.DB, userID, reminderID uint, until time.Time) (Remi
 			channels = append(channels, row.Channel)
 		}
 		if err := retireDueNotifications(tx, userID, reminderID, time.Now()); err != nil {
+			return err
+		}
+		if err := enqueueAppleSync(tx, userID, item.ID, appleReminderActionUpsert); err != nil {
 			return err
 		}
 		return rebuildJobs(tx, item, channels)

@@ -110,6 +110,80 @@
       </p>
     </div>
 
+    <!-- Apple 提醒事项：本地单向推送到 iCloud，改动不会从 Apple 回写 -->
+    <div class="surface mt-4 rounded-2xl p-4 sm:mt-6 sm:p-6">
+      <div class="flex items-start gap-3">
+        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-500/12 text-slate-500">
+          <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M12 20V5m0 0 5 5m-5-5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
+            <path d="M5 20h14" stroke-width="1.8" stroke-linecap="round" />
+          </svg>
+        </div>
+        <div class="min-w-0 flex-1">
+          <h3 class="text-sm font-bold text-foreground">Apple 提醒事项（单向推送）</h3>
+          <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+            用 Apple ID 和应用专用密码连接 iCloud，本地新建、修改、完成、删除的提醒会同步到所选列表。
+            只单向推送：在 Apple 端做的改动不会回写本地。
+          </p>
+        </div>
+      </div>
+
+      <div class="mt-4 grid gap-2 sm:grid-cols-2">
+        <input v-model="appleForm.apple_id" class="compact-input" placeholder="Apple ID（邮箱）" autocomplete="username" />
+        <input
+          v-model="appleForm.password"
+          class="compact-input"
+          type="password"
+          autocomplete="new-password"
+          :placeholder="appleCfg ? 'App 专用密码（留空表示不修改）' : 'App 专用密码'"
+        />
+      </div>
+
+      <div class="mt-2 flex flex-wrap items-center gap-2">
+        <button type="button" class="btn-ghost" :disabled="appleBusy" @click="discoverAppleLists">
+          {{ appleDiscovering ? '正在读取列表…' : '加载提醒列表' }}
+        </button>
+        <button type="button" class="text-[11px] font-semibold text-muted-foreground hover:text-foreground" @click="appleShowServer = !appleShowServer">
+          {{ appleShowServer ? '收起服务器设置' : '服务器设置' }}
+        </button>
+      </div>
+
+      <input
+        v-if="appleShowServer"
+        v-model="appleForm.server"
+        class="compact-input mt-2"
+        placeholder="CalDAV 服务器，默认 caldav.icloud.com"
+        autocomplete="off"
+      />
+
+      <div class="mt-2">
+        <select v-model="appleForm.collection_url" class="compact-input" :disabled="appleCollections.length === 0">
+          <option value="" disabled>请先加载并选择一个提醒事项列表</option>
+          <option v-for="list in appleCollections" :key="list.url" :value="list.url">{{ list.name }}</option>
+        </select>
+      </div>
+
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button type="button" class="btn-brand" :disabled="appleBusy" @click="saveAppleSync">
+          {{ appleBusy ? '处理中…' : appleCfg ? '保存并立即同步' : '保存并开始同步' }}
+        </button>
+        <button type="button" class="btn-ghost" :disabled="appleBusy || !appleCfg" @click="runAppleSync()">立即同步</button>
+        <button type="button" class="btn-ghost text-rose-500" :disabled="appleBusy || !appleCfg" @click="disableAppleSync">关闭同步</button>
+      </div>
+
+      <p v-if="appleMsg" class="mt-2 text-xs font-semibold" :class="appleMsgType === 'error' ? 'text-rose-500' : 'text-emerald-500'">
+        {{ appleMsg }}
+      </p>
+      <p v-if="appleCfg" class="mt-2 text-[11px] leading-5 text-muted-foreground">
+        列表「{{ appleCfg.collection_name || '已选择' }}」· 待推送 {{ appleCfg.pending_count }} 条 · 已映射 {{ appleCfg.linked_count }} 条 ·
+        上次同步 {{ appleCfg.last_sync_at ? new Date(appleCfg.last_sync_at).toLocaleString() : '尚未运行' }} ·
+        状态 {{ appleCfg.last_status === 'ok' ? '正常' : appleCfg.last_status === 'error' ? '失败' : '未知' }}<span v-if="appleCfg.last_error">：{{ appleCfg.last_error }}</span>
+      </p>
+      <p class="mt-2 text-[11px] leading-5 text-muted-foreground">
+        应用专用密码在「Apple ID 账户管理 → 登录与安全」生成，仅加密保存在本地，不会回传前端。同步每分钟检查一次队列，失败会自动退避重试。
+      </p>
+    </div>
+
     <!-- 天气提醒：管理员配好和风天气 API，用户选城市和时间，每天上午推送摘要 -->
     <div class="surface mt-4 rounded-2xl p-4 sm:mt-6 sm:p-6">
       <div class="flex items-start gap-3">
@@ -309,8 +383,25 @@ import PageHeader from '../components/PageHeader.vue'
 import ConfigGroupList from '../components/ConfigGroupList.vue'
 import { getUserConfigMeta, updateConfig } from '../api/config'
 import { getCalendarFeed, resetCalendarFeed } from '../api/countdown'
-import { deleteCalendarSync, getCalendarSync, getChannelStatuses, runCalendarSync, saveCalendarSync } from '../api/reminder'
-import type { CalendarSyncConfig, ChannelStatus, ReminderChannel } from '../api/reminder'
+import {
+  deleteAppleReminders,
+  deleteCalendarSync,
+  discoverAppleReminders,
+  getAppleReminders,
+  getCalendarSync,
+  getChannelStatuses,
+  runAppleReminders,
+  runCalendarSync,
+  saveAppleReminders,
+  saveCalendarSync,
+} from '../api/reminder'
+import type {
+  AppleReminderCollection,
+  AppleReminderSyncConfig,
+  CalendarSyncConfig,
+  ChannelStatus,
+  ReminderChannel,
+} from '../api/reminder'
 import {
   deleteWeatherConfig,
   getWeatherAdmin,
@@ -348,6 +439,16 @@ const syncBusy = ref(false)
 const syncMsg = ref('')
 const syncMsgType = ref<'success' | 'error'>('success')
 
+// Apple 提醒事项：只做本地到 iCloud 的单向推送，密码只写不读。
+const appleCfg = ref<AppleReminderSyncConfig | null>(null)
+const appleForm = reactive({ server: 'caldav.icloud.com', apple_id: '', password: '', collection_url: '' })
+const appleCollections = ref<AppleReminderCollection[]>([])
+const appleShowServer = ref(false)
+const appleBusy = ref(false)
+const appleDiscovering = ref(false)
+const appleMsg = ref('')
+const appleMsgType = ref<'success' | 'error'>('success')
+
 // 天气提醒：管理员保存和风天气的 host/key，用户保存城市、时间与渠道。
 const weatherCfg = ref<WeatherConfig | null>(null)
 const weatherForm = reactive({
@@ -384,6 +485,7 @@ onMounted(() => {
   loadMeta()
   loadFeed()
   loadCalendarSync()
+  loadAppleReminders()
   loadWeather()
   loadWeatherAdmin()
   loadChannelStatuses()
@@ -473,6 +575,141 @@ async function disableSync() {
     notifySync(err.response?.data?.message || '关闭失败', 'error')
   } finally {
     syncBusy.value = false
+  }
+}
+
+
+async function loadAppleReminders() {
+  try {
+    const res = await getAppleReminders()
+    const data = (res.data?.data || null) as AppleReminderSyncConfig | null
+    appleCfg.value = data
+    if (data) {
+      appleForm.server = data.server || 'caldav.icloud.com'
+      appleForm.apple_id = data.apple_id || ''
+      appleForm.collection_url = data.collection_url || ''
+      appleCollections.value = data.collection_url
+        ? [{ url: data.collection_url, name: data.collection_name || '已选择的列表' }]
+        : []
+    } else {
+      appleForm.server = 'caldav.icloud.com'
+      appleCollections.value = []
+      appleForm.collection_url = ''
+    }
+    appleForm.password = ''
+  } catch {
+    // 未配置时后端返回 null；读取失败同样按未配置处理。
+    appleCfg.value = null
+  }
+}
+
+function notifyApple(message: string, type: 'success' | 'error' = 'success') {
+  appleMsg.value = message
+  appleMsgType.value = type
+  window.setTimeout(() => { appleMsg.value = '' }, 5000)
+}
+
+async function discoverAppleLists() {
+  if (appleBusy.value || appleDiscovering.value) return
+  if (!appleForm.apple_id.trim()) {
+    notifyApple('请填写 Apple ID', 'error')
+    return
+  }
+  if (!appleCfg.value && !appleForm.password) {
+    notifyApple('首次配置请填写 App 专用密码', 'error')
+    return
+  }
+  appleDiscovering.value = true
+  try {
+    const res = await discoverAppleReminders({
+      server: appleForm.server.trim() || 'caldav.icloud.com',
+      apple_id: appleForm.apple_id.trim(),
+      password: appleForm.password || undefined,
+    })
+    const lists = (res.data?.data?.lists || []) as AppleReminderCollection[]
+    appleCollections.value = lists
+    if (!lists.some((item) => item.url === appleForm.collection_url)) {
+      appleForm.collection_url = lists[0]?.url || ''
+    }
+    notifyApple('已加载 ' + lists.length + ' 个提醒事项列表')
+  } catch (err: any) {
+    notifyApple(err.response?.data?.message || '加载列表失败', 'error')
+  } finally {
+    appleDiscovering.value = false
+  }
+}
+
+async function saveAppleSync() {
+  if (appleBusy.value) return
+  if (!appleForm.apple_id.trim()) {
+    notifyApple('请填写 Apple ID', 'error')
+    return
+  }
+  if (!appleCfg.value && !appleForm.password) {
+    notifyApple('首次配置请填写 App 专用密码', 'error')
+    return
+  }
+  if (!appleForm.collection_url) {
+    notifyApple('请先加载并选择提醒事项列表', 'error')
+    return
+  }
+  appleBusy.value = true
+  try {
+    const res = await saveAppleReminders({
+      server: appleForm.server.trim() || 'caldav.icloud.com',
+      apple_id: appleForm.apple_id.trim(),
+      password: appleForm.password || undefined,
+      collection_url: appleForm.collection_url,
+      collection_name: appleCollections.value.find((item) => item.url === appleForm.collection_url)?.name || '',
+      enabled: true,
+    })
+    const data = (res.data?.data || null) as AppleReminderSyncConfig | null
+    appleCfg.value = data
+    appleForm.password = ''
+    notifyApple('已保存，正在同步…')
+    await runAppleSync(true)
+  } catch (err: any) {
+    notifyApple(err.response?.data?.message || '保存失败', 'error')
+  } finally {
+    appleBusy.value = false
+  }
+}
+
+async function runAppleSync(silent = false) {
+  if (!appleCfg.value) {
+    if (!silent) notifyApple('请先保存配置', 'error')
+    return
+  }
+  appleBusy.value = true
+  try {
+    const res = await runAppleReminders()
+    const data = res.data?.data || {}
+    if (data.config) appleCfg.value = data.config as AppleReminderSyncConfig
+    const result = data.result || { pushed: 0, failed: 0, pending: 0 }
+    const suffix = result.error ? ('：' + result.error) : ''
+    notifyApple('已推送 ' + result.pushed + ' 条，失败 ' + result.failed + ' 条，待处理 ' + result.pending + ' 条' + suffix, result.failed > 0 ? 'error' : 'success')
+  } catch (err: any) {
+    notifyApple(err.response?.data?.message || '同步失败', 'error')
+  } finally {
+    appleBusy.value = false
+  }
+}
+
+async function disableAppleSync() {
+  if (appleBusy.value) return
+  const ok = window.confirm('关闭后不再把本地提醒推送到 Apple，已推送的条目会保留在 iCloud。确定关闭吗？')
+  if (!ok) return
+  appleBusy.value = true
+  try {
+    await deleteAppleReminders()
+    appleCfg.value = null
+    appleCollections.value = []
+    appleForm.collection_url = ''
+    notifyApple('已关闭同步')
+  } catch (err: any) {
+    notifyApple(err.response?.data?.message || '关闭失败', 'error')
+  } finally {
+    appleBusy.value = false
   }
 }
 

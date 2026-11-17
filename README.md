@@ -7,7 +7,7 @@
 - **单进程、单端口**：Go 后端内嵌 Vue 前端，一个二进制、一个 8906 端口即可运行。
 - **零外部依赖**：SQLite（WAL）存全部数据，不需要 MySQL、Redis 或消息队列。
 - **通知不丢**：提醒先落库为投递任务，调度器幂等领取，失败分类并最多重试三次。
-- **日历打通**：支持 ICS 订阅下发到系统日历；钉钉日程通过 CalDAV 单向导入。
+- **日历打通**：支持 ICS 订阅下发到系统日历；钉钉日程通过 CalDAV 单向导入，本地提醒可单向推送到 Apple 提醒事项。
 - **隐私默认优先**：匿名统计与赞赏入口默认关闭，不向任何服务器上报数据。
 
 版本功能与修复记录见 [CHANGELOG.md](./CHANGELOG.md)，开发约定与目录职责见 [AGENTS.md](./AGENTS.md)。
@@ -95,6 +95,9 @@ docker compose up -d
   订阅地址可随时重置（旧地址立即失效）；
 - **钉钉日程单向导入（CalDAV）**：填写钉钉「日历设置 → CalDAV 同步」生成的账号密码，日程会导入到
   「钉钉日程」清单；只读，本地改动不会写回钉钉；每 30 分钟同步一次，窗口默认前 7 天、后 180 天；
+- **Apple 提醒事项单向推送（CalDAV）**：填写 Apple ID 和应用专用密码后，本地新建、修改、完成、
+  删除的提醒会同步到所选的 iCloud 提醒事项列表；只单向推送，Apple 端改动不回写本地；使用确定性
+  UID 与 ETag 条件请求避免重复和覆盖冲突，失败自动退避重试；
 - **法定节假日与调休**：日历直接标出「休 / 班」，数据随二进制内置、离线可用；次年安排公布前会提示
   尚未公布，不会把未覆盖日期当作普通工作日。
 
@@ -222,6 +225,7 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 | 通知方式 | `GET /api/reminder/channels`、`PUT/PATCH/DELETE /api/reminder/channels/:channel`、`POST /api/reminder/channels/:channel/test`、`POST /api/reminder/channels/qq/bind-code` |
 | 天气 | `GET/PUT/DELETE /api/reminder/weather`、`POST /api/reminder/weather/run?slot=morning\|evening`、`GET /api/reminder/weather/preview?slot=morning\|evening`、`GET /api/reminder/weather/locations?q=` |
 | 日历 | `GET /api/reminder/feed`、`POST /api/reminder/feed/reset`、`GET /api/reminder/feed.ics?token=...`、`GET/PUT/DELETE /api/reminder/calendar-sync`、`POST /api/reminder/calendar-sync/run` |
+| Apple 提醒事项 | `GET/PUT/DELETE /api/reminder/apple-reminders`、`POST /api/reminder/apple-reminders/discover`、`POST /api/reminder/apple-reminders/run` |
 | 节假日与农历 | `GET /api/reminder/holidays`、`GET /api/reminder/lunar`、`GET /api/reminder/lunar/convert` |
 | 管理 | `GET /api/users`、`PUT/DELETE /api/users/:id`、`PUT /api/users/:id/status`、`PUT /api/users/:id/password`、`GET /api/audit-logs`、`GET /api/audit-logs/export`、`GET /api/reminder/admin/deliveries`、`GET /api/reminder/admin/providers`、`PUT /api/reminder/admin/providers/:provider`、`GET/PUT /api/reminder/admin/weather` |
 

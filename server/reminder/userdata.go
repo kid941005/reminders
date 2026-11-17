@@ -31,6 +31,7 @@ func purgeUserData(tx *gorm.DB, userID uint) error {
 		}
 	}
 	for _, model := range []interface{}{
+		&AppleReminderOutbox{}, &AppleReminderLink{}, &AppleReminderSync{},
 		&DeliveryJob{}, &Notification{}, &Reminder{}, &List{}, &ChannelBinding{},
 		&Countdown{}, &CalendarFeed{}, &CalendarSync{}, &WeatherConfig{}, &QQBindCode{},
 	} {
