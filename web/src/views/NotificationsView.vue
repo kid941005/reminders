@@ -37,7 +37,7 @@
             <strong class="truncate text-sm">{{ item.title }}</strong>
             <span v-if="!item.read_at" class="h-2 w-2 shrink-0 rounded-full bg-brand-500"></span>
           </span>
-          <span class="mt-0.5 block text-xs leading-5 text-muted-foreground sm:mt-1">{{ item.body }}</span>
+          <span class="mt-0.5 block whitespace-pre-line text-xs leading-5 text-muted-foreground sm:mt-1">{{ item.body }}</span>
           <span class="mt-1 block text-[11px] font-medium text-muted-foreground/70 sm:mt-2">{{ formatTime(item.created_at) }}</span>
         </span>
         <svg class="h-4 w-4 text-muted-foreground/40 opacity-0 transition group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m9 5 7 7-7 7" stroke-width="2" stroke-linecap="round"/></svg>

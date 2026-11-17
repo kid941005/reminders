@@ -99,12 +99,12 @@ func handlePreviewWeather(db *gorm.DB) gin.HandlerFunc {
 		client := weatherClientFactory(host, apiKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
-		daily, alerts, err := weatherForecast(ctx, client, cfg)
+		current, daily, alerts, err := weatherForecast(ctx, client, cfg)
 		if err != nil {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
-		response.Success(c, gin.H{"slot": slot, "message": buildWeatherMessage(cfg, slot, daily, alerts, time.Now())})
+		response.Success(c, gin.H{"slot": slot, "message": buildWeatherMessageWithCurrent(cfg, slot, current, daily, alerts, time.Now())})
 	}
 }
 

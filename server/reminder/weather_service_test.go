@@ -140,10 +140,12 @@ func TestBuildWeatherMessageMorningCoversTodayOnly(t *testing.T) {
 	if msg.Title != "🌧️ 今日天气 · 杭州" {
 		t.Fatalf("title = %q", msg.Title)
 	}
-	if !strings.Contains(msg.Body, "今天小雨，12~20℃。") {
-		t.Fatalf("body = %q", msg.Body)
+	for _, want := range []string{"今天 · 11月14日 周六 · 小雨", "🌡 12~20℃", "📅 未来：11/15 中雨 10~16℃｜11/16 多云 9~18℃"} {
+		if !strings.Contains(msg.Body, want) {
+			t.Fatalf("body missing %q: %s", want, msg.Body)
+		}
 	}
-	for _, unwanted := range []string{"明天", "11-15", "11-16", "未来三天", "湿度"} {
+	for _, unwanted := range []string{"明天 ·", "11-15", "11-16", "未来三天", "湿度"} {
 		if strings.Contains(msg.Body, unwanted) {
 			t.Fatalf("morning body should not contain %q: %s", unwanted, msg.Body)
 		}
@@ -162,10 +164,12 @@ func TestBuildWeatherMessageEveningCoversTomorrowOnly(t *testing.T) {
 	if msg.Title != "🌧️ 明日天气 · 杭州" {
 		t.Fatalf("title = %q", msg.Title)
 	}
-	if !strings.Contains(msg.Body, "明天中雨，10~16℃。") {
-		t.Fatalf("body = %q", msg.Body)
+	for _, want := range []string{"明天 · 11月15日 周日 · 中雨", "🌡 10~16℃", "📅 未来：11/16 多云 9~18℃"} {
+		if !strings.Contains(msg.Body, want) {
+			t.Fatalf("body missing %q: %s", want, msg.Body)
+		}
 	}
-	for _, unwanted := range []string{"今天", "11-16", "未来三天"} {
+	for _, unwanted := range []string{"今天 ·", "11-16", "未来三天"} {
 		if strings.Contains(msg.Body, unwanted) {
 			t.Fatalf("evening body should not contain %q: %s", unwanted, msg.Body)
 		}
@@ -212,10 +216,10 @@ func TestBuildWeatherMessageUsesNightCondition(t *testing.T) {
 	day := weatherTestDay("2026-11-14", "多云", 14, 22)
 	day.Nighttime = qweatherDayPart{Condition: qweatherCondition{Text: "小雨"}, Precipitation: qweatherPrecipitation{Probability: 0.8, Type: "rain"}}
 	msg := buildWeatherMessage(WeatherConfig{LocationName: "杭州"}, weatherSlotMorning, []qweatherDay{day}, nil, now)
-	if !strings.Contains(msg.Body, "今天多云转小雨，14~22℃。") {
+	if !strings.Contains(msg.Body, "今天 · 11月14日 周六 · 多云转小雨") || !strings.Contains(msg.Body, "🌡 14~22℃") {
 		t.Fatalf("body = %q", msg.Body)
 	}
-	if !strings.Contains(msg.Body, "降水概率 80%，记得带伞。") {
+	if !strings.Contains(msg.Body, "💧 降水概率 80%") || !strings.Contains(msg.Body, "☂️ 记得带伞") {
 		t.Fatalf("body = %q", msg.Body)
 	}
 	if !strings.HasPrefix(msg.Title, "🌧️ ") {
@@ -448,7 +452,7 @@ func TestBuildWeatherMessageAcceptsPercentUnits(t *testing.T) {
 	day := weatherTestDay("2026-11-14", "小雨", 12, 20)
 	day.Daytime.Precipitation = qweatherPrecipitation{Probability: 70, Type: "rain"}
 	msg := buildWeatherMessage(WeatherConfig{LocationName: "杭州"}, weatherSlotMorning, []qweatherDay{day}, nil, now)
-	if !strings.Contains(msg.Body, "降水概率 70%，记得带伞。") {
+	if !strings.Contains(msg.Body, "降水概率 70%") || !strings.Contains(msg.Body, "记得带伞") {
 		t.Fatalf("probability should stay 70%%: %s", msg.Body)
 	}
 }
@@ -466,10 +470,54 @@ func TestBuildWeatherMessageParsesMinutePrecisionTimestamps(t *testing.T) {
 	}
 	expired := weatherTestAlert("大风", "blue", "2026-11-13T20:00+08:00", "", "已过期的大风")
 	msg := buildWeatherMessage(WeatherConfig{LocationName: "杭州"}, weatherSlotEvening, daily, []qweatherAlert{expired}, now)
-	if !strings.Contains(msg.Body, "明天小雨，10~16℃。") {
+	if !strings.Contains(msg.Body, "明天 · 11月15日 周日 · 小雨") || !strings.Contains(msg.Body, "🌡 10~16℃") {
 		t.Fatalf("minute-precision forecast should be parsed: %s", msg.Body)
 	}
 	if strings.Contains(msg.Body, "已过期的大风") {
 		t.Fatalf("expired alert should be filtered: %s", msg.Body)
+	}
+}
+
+func TestBuildWeatherMessageIncludesCurrentAndDetails(t *testing.T) {
+	loc := shanghai()
+	now := time.Date(2026, 11, 14, 8, 0, 0, 0, loc)
+	day := weatherTestDay("2026-11-14", "多云", 12, 20)
+	day.Daytime.Humidity = 0.68
+	day.Daytime.Precipitation = qweatherPrecipitation{Probability: 0.8, Amount: qweatherValue{Value: 2.3, Unit: "mm"}, Type: "rain"}
+	day.Daytime.Wind = qweatherWind{Scale: 3, Speed: qweatherValue{Value: 12, Unit: "km/h"}}
+	day.Daytime.Wind.Direction.Compass = "SE"
+	day.Astro = struct {
+		Sunrise string `json:"sunrise"`
+		Sunset  string `json:"sunset"`
+	}{Sunrise: "2026-11-14T06:24+08:00", Sunset: "2026-11-14T17:06+08:00"}
+	current := qweatherCurrent{
+		Condition:   qweatherCondition{Text: "小雨"},
+		Temperature: qweatherValue{Value: 15},
+		FeelsLike:   qweatherValue{Value: 14},
+		Pressure:    qweatherValue{Value: 1010, Unit: "hPa"},
+		Visibility:  qweatherValue{Value: 16, Unit: "km"},
+	}
+	msg := buildWeatherMessageWithCurrent(WeatherConfig{LocationName: "杭州"}, weatherSlotMorning, current, []qweatherDay{day}, nil, now)
+	for _, want := range []string{
+		"今天 · 11月14日 周六 · 多云",
+		"🌡 12~20℃ · 实况 小雨 15℃ 体感 14℃",
+		"💧 湿度 68% · 降水概率 80% · 降水量 2.3mm",
+		"🌬 东南风 3级 · 12km/h · 气压 1010hPa",
+		"🌅 日出 06:24 · 日落 17:06",
+		"👁 能见度 16km",
+		"☂️ 记得带伞",
+	} {
+		if !strings.Contains(msg.Body, want) {
+			t.Fatalf("body missing %q: %s", want, msg.Body)
+		}
+	}
+}
+
+func TestBuildWeatherMessageCurrentFailureKeepsForecast(t *testing.T) {
+	now := time.Date(2026, 11, 14, 8, 0, 0, 0, shanghai())
+	day := weatherTestDay("2026-11-14", "晴", 10, 20)
+	msg := buildWeatherMessageWithCurrent(WeatherConfig{LocationName: "杭州"}, weatherSlotMorning, qweatherCurrent{}, []qweatherDay{day}, nil, now)
+	if !strings.Contains(msg.Body, "今天 · 11月14日 周六 · 晴") || !strings.Contains(msg.Body, "🌡 10~20℃") {
+		t.Fatalf("body = %q", msg.Body)
 	}
 }

@@ -50,6 +50,8 @@ type qweatherCurrent struct {
 	Humidity      float64               `json:"humidity"`
 	Wind          qweatherWind          `json:"wind"`
 	Precipitation qweatherPrecipitation `json:"precipitation"`
+	Pressure      qweatherValue         `json:"pressure"`
+	Visibility    qweatherValue         `json:"visibility"`
 }
 
 type qweatherDayPart struct {
@@ -67,6 +69,15 @@ type qweatherDay struct {
 	TemperatureMin    qweatherValue   `json:"temperatureMin"`
 	Daytime           qweatherDayPart `json:"daytime"`
 	Nighttime         qweatherDayPart `json:"nighttime"`
+	Sunrise           string          `json:"sunrise"`
+	Sunset            string          `json:"sunset"`
+	// QWeather v1 returns solar events under "astro" while a few older
+	// deployments expose them at the day's top level. Keep both so the
+	// summary works with either response shape.
+	Astro struct {
+		Sunrise string `json:"sunrise"`
+		Sunset  string `json:"sunset"`
+	} `json:"astro"`
 }
 
 type qweatherAlert struct {

@@ -210,10 +210,19 @@ type weatherMessage struct {
 	Body  string `json:"body"`
 }
 
-// buildWeatherMessage renders one slot's summary. It is deliberately pure so
-// the wording, emoji choice and alert window can be tested without a database
-// or network. The morning slot covers today; the evening slot covers tomorrow.
+// buildWeatherMessage keeps the old call shape for tests and callers that only
+// have a forecast. Production pushes add the optional current observation.
 func buildWeatherMessage(cfg WeatherConfig, slot weatherSlot, daily []qweatherDay, alerts []qweatherAlert, now time.Time) weatherMessage {
+	return buildWeatherMessageWithCurrent(cfg, slot, qweatherCurrent{}, daily, alerts, now)
+}
+
+// buildWeatherMessageWithCurrent renders one slot's summary. It is deliberately
+// pure so the wording, emoji choice and alert window can be tested without a
+// database or network. The morning slot covers today; the evening slot covers
+// tomorrow. Each message keeps the forecast headline first, then adds the
+// details people actually use (current conditions, humidity, wind, sunrise,
+// sunset, visibility) and a compact multi-day outlook.
+func buildWeatherMessageWithCurrent(cfg WeatherConfig, slot weatherSlot, current qweatherCurrent, daily []qweatherDay, alerts []qweatherAlert, now time.Time) weatherMessage {
 	loc := shanghai()
 	local := now.In(loc)
 	if !slot.valid() {
@@ -231,19 +240,15 @@ func buildWeatherMessage(cfg WeatherConfig, slot weatherSlot, daily []qweatherDa
 		title += " · " + name
 	}
 
-	lines := make([]string, 0, 4)
-	lines = append(lines, formatSlotForecast(slot, day))
-	if day != nil {
-		probability := dayProbability(*day)
-		advice := precipitationAdvice(*day)
-		switch {
-		case probability > 0 && advice != "":
-			lines = append(lines, fmt.Sprintf("降水概率 %.0f%%，%s。", percentValue(probability), advice))
-		case probability > 0:
-			lines = append(lines, fmt.Sprintf("降水概率 %.0f%%。", percentValue(probability)))
-		case advice != "":
-			lines = append(lines, advice+"。")
-		}
+	lines := make([]string, 0, 10)
+	if day == nil {
+		lines = append(lines, weatherDayLabel(slot)+"暂无预报数据。")
+	} else {
+		lines = append(lines, weatherHeading(slot, *day, targetDate, loc))
+		lines = append(lines, weatherDetailLines(*day, current)...)
+	}
+	if len(slotAlerts) > 0 && len(lines) > 0 {
+		lines = append(lines, "")
 	}
 	for i, alert := range slotAlerts {
 		if i >= 2 {
@@ -251,10 +256,269 @@ func buildWeatherMessage(cfg WeatherConfig, slot weatherSlot, daily []qweatherDa
 		}
 		lines = append(lines, formatWeatherAlert(alert))
 	}
+	if outlook := formatWeatherOutlook(daily, targetDate, loc); outlook != "" {
+		lines = append(lines, outlook)
+	}
 
 	// Keep the ellipsis inside the documented limits: Notification.Body is 500
 	// characters and the title should stay under 80.
 	return weatherMessage{Title: truncateRunes(title, 79), Body: truncateRunes(strings.Join(lines, "\n"), 499)}
+}
+
+func weatherDayLabel(slot weatherSlot) string {
+	if slot == weatherSlotEvening {
+		return "明天"
+	}
+	return "今天"
+}
+
+func weatherHeading(slot weatherSlot, day qweatherDay, targetDate string, loc *time.Location) string {
+	heading := weatherDayLabel(slot)
+	if date := formatWeatherDate(targetDate, loc); date != "" {
+		heading += " · " + date
+	}
+	return heading + " · " + dayConditionText(day)
+}
+
+var weatherWeekdays = [...]string{"日", "一", "二", "三", "四", "五", "六"}
+
+func formatWeatherDate(date string, loc *time.Location) string {
+	parsed, err := time.ParseInLocation("2006-01-02", date, loc)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d月%d日 周%s", parsed.Month(), parsed.Day(), weatherWeekdays[parsed.Weekday()])
+}
+
+// weatherDetailLines renders the compact block of facts between the headline
+// and the alerts. Missing provider fields are omitted instead of printing
+// meaningless zeroes.
+func weatherDetailLines(day qweatherDay, current qweatherCurrent) []string {
+	lines := make([]string, 0, 5)
+
+	temp := fmt.Sprintf("🌡 %.0f~%.0f℃", day.TemperatureMin.Value, day.TemperatureMax.Value)
+	if current.hasData() {
+		live := make([]string, 0, 3)
+		if text := strings.TrimSpace(current.Condition.Text); text != "" {
+			live = append(live, text)
+		}
+		if current.Temperature.Unit != "" || current.Temperature.Value != 0 {
+			live = append(live, fmt.Sprintf("%.0f℃", current.Temperature.Value))
+		}
+		if current.FeelsLike.Value != 0 {
+			live = append(live, fmt.Sprintf("体感 %.0f℃", current.FeelsLike.Value))
+		}
+		if len(live) > 0 {
+			temp += " · 实况 " + strings.Join(live, " ")
+		}
+	}
+	lines = append(lines, temp)
+
+	humidity := day.Daytime.Humidity
+	if humidity == 0 {
+		humidity = day.Nighttime.Humidity
+	}
+	if humidity == 0 {
+		humidity = current.Humidity
+	}
+	probability := dayProbability(day)
+	amount, amountUnit := dayPrecipitationAmount(day)
+	parts := make([]string, 0, 3)
+	if humidity > 0 {
+		parts = append(parts, fmt.Sprintf("湿度 %.0f%%", percentValue(humidity)))
+	}
+	if probability > 0 {
+		parts = append(parts, fmt.Sprintf("降水概率 %.0f%%", percentValue(probability)))
+	}
+	if amount > 0 {
+		parts = append(parts, fmt.Sprintf("降水量 %.1f%s", amount, amountUnit))
+	}
+	if len(parts) > 0 {
+		lines = append(lines, "💧 "+strings.Join(parts, " · "))
+	}
+
+	wind := day.Daytime.Wind
+	if wind.Scale == 0 && wind.Speed.Value == 0 {
+		wind = day.Nighttime.Wind
+	}
+	if wind.Scale == 0 && wind.Speed.Value == 0 {
+		wind = current.Wind
+	}
+	parts = parts[:0]
+	if direction := windDirectionText(wind.Direction.Compass); direction != "" {
+		if wind.Scale > 0 {
+			parts = append(parts, fmt.Sprintf("%s %.0f级", direction, wind.Scale))
+		} else {
+			parts = append(parts, direction)
+		}
+	}
+	if wind.Speed.Value > 0 {
+		unit := strings.TrimSpace(wind.Speed.Unit)
+		if unit == "" {
+			unit = "km/h"
+		}
+		parts = append(parts, fmt.Sprintf("%.0f%s", wind.Speed.Value, unit))
+	}
+	if current.Pressure.Value > 0 {
+		parts = append(parts, "气压 "+formatWeatherMeasure(current.Pressure, "hPa"))
+	}
+	if len(parts) > 0 {
+		lines = append(lines, "🌬 "+strings.Join(parts, " · "))
+	}
+
+	parts = parts[:0]
+	if sunrise := daySunrise(day); sunrise != "" {
+		parts = append(parts, "日出 "+sunrise)
+	}
+	if sunset := daySunset(day); sunset != "" {
+		parts = append(parts, "日落 "+sunset)
+	}
+	if len(parts) > 0 {
+		lines = append(lines, "🌅 "+strings.Join(parts, " · "))
+	}
+	if current.Visibility.Value > 0 {
+		lines = append(lines, "👁 能见度 "+formatWeatherVisibility(current.Visibility))
+	}
+	if advice := precipitationAdvice(day); advice != "" {
+		lines = append(lines, "☂️ "+advice)
+	}
+	return lines
+}
+
+func (c qweatherCurrent) hasData() bool {
+	return strings.TrimSpace(c.Condition.Text) != "" || strings.TrimSpace(c.Temperature.Unit) != "" ||
+		c.Humidity > 0 || c.Wind.Scale > 0 || c.Wind.Speed.Value > 0
+}
+
+func dayPrecipitationAmount(day qweatherDay) (float64, string) {
+	amount := day.Daytime.Precipitation.Amount.Value
+	unit := strings.TrimSpace(day.Daytime.Precipitation.Amount.Unit)
+	if night := day.Nighttime.Precipitation.Amount; night.Value > amount {
+		amount = night.Value
+		if strings.TrimSpace(night.Unit) != "" {
+			unit = strings.TrimSpace(night.Unit)
+		}
+	}
+	if unit == "" {
+		unit = "mm"
+	}
+	return amount, unit
+}
+
+func daySunrise(day qweatherDay) string {
+	return formatWeatherClock(day.Astro.Sunrise, day.Sunrise)
+}
+
+func daySunset(day qweatherDay) string {
+	return formatWeatherClock(day.Astro.Sunset, day.Sunset)
+}
+
+func formatWeatherClock(values ...string) string {
+	for _, raw := range values {
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		if parsed, ok := parseWeatherTime(raw); ok {
+			return parsed.In(shanghai()).Format("15:04")
+		}
+		if parsed, err := time.Parse("15:04", raw); err == nil {
+			return parsed.Format("15:04")
+		}
+	}
+	return ""
+}
+
+func formatWeatherMeasure(value qweatherValue, fallbackUnit string) string {
+	unit := strings.TrimSpace(value.Unit)
+	if unit == "" {
+		unit = fallbackUnit
+	}
+	return fmt.Sprintf("%.0f%s", value.Value, unit)
+}
+
+func formatWeatherVisibility(value qweatherValue) string {
+	unit := strings.ToLower(strings.TrimSpace(value.Unit))
+	if unit == "" {
+		if value.Value >= 1000 {
+			unit = "m"
+		} else {
+			unit = "km"
+		}
+	}
+	if unit == "m" && value.Value >= 1000 {
+		return fmt.Sprintf("%.0fkm", value.Value/1000)
+	}
+	if unit == "km" {
+		return fmt.Sprintf("%.0fkm", value.Value)
+	}
+	return fmt.Sprintf("%.0f%s", value.Value, unit)
+}
+
+func windDirectionText(compass string) string {
+	raw := strings.TrimSpace(compass)
+	switch strings.ToUpper(raw) {
+	case "N":
+		return "北风"
+	case "NNE":
+		return "东北偏北风"
+	case "NE":
+		return "东北风"
+	case "ENE":
+		return "东北偏东风"
+	case "E":
+		return "东风"
+	case "ESE":
+		return "东南偏东风"
+	case "SE":
+		return "东南风"
+	case "SSE":
+		return "东南偏南风"
+	case "S":
+		return "南风"
+	case "SSW":
+		return "西南偏南风"
+	case "SW":
+		return "西南风"
+	case "WSW":
+		return "西南偏西风"
+	case "W":
+		return "西风"
+	case "WNW":
+		return "西北偏西风"
+	case "NW":
+		return "西北风"
+	case "NNW":
+		return "西北偏北风"
+	}
+	if strings.HasSuffix(raw, "风") {
+		return raw
+	}
+	return ""
+}
+
+// formatWeatherOutlook lists the next days after the slot's target date. It is
+// intentionally compact so the whole summary still fits in a notification.
+func formatWeatherOutlook(daily []qweatherDay, targetDate string, loc *time.Location) string {
+	parts := make([]string, 0, 3)
+	for _, day := range daily {
+		date := forecastDate(day.ForecastStartTime, loc)
+		if date == "" || date <= targetDate {
+			continue
+		}
+		label := date
+		if parsed, err := time.ParseInLocation("2006-01-02", date, loc); err == nil {
+			label = parsed.Format("01/02")
+		}
+		parts = append(parts, fmt.Sprintf("%s %s %.0f~%.0f℃", label, dayConditionText(day), day.TemperatureMin.Value, day.TemperatureMax.Value))
+		if len(parts) >= 3 {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return "📅 未来：" + strings.Join(parts, "｜")
 }
 
 // weatherTargetDate is the date whose forecast a slot reports. Evening looks
@@ -273,19 +537,6 @@ func findForecastDay(daily []qweatherDay, date string, loc *time.Location) *qwea
 		}
 	}
 	return nil
-}
-
-// formatSlotForecast is the single most important line: condition plus the
-// temperature range for the slot's target day.
-func formatSlotForecast(slot weatherSlot, day *qweatherDay) string {
-	label := "今天"
-	if slot == weatherSlotEvening {
-		label = "明天"
-	}
-	if day == nil {
-		return label + "暂无预报数据。"
-	}
-	return fmt.Sprintf("%s%s，%.0f~%.0f℃。", label, dayConditionText(*day), day.TemperatureMin.Value, day.TemperatureMax.Value)
 }
 
 // dayConditionText joins the daytime and nighttime conditions only when they
@@ -503,45 +754,6 @@ func dayProbability(day qweatherDay) float64 {
 	return daytime
 }
 
-// precipitationNeedsUmbrella checks both halves of the day: a dry daytime
-// forecast should not hide rain that is only expected at night.
-func precipitationNeedsUmbrella(day qweatherDay) bool {
-	return precipitationRisk(day.Daytime, "rain") || precipitationRisk(day.Daytime, "snow") ||
-		precipitationRisk(day.Nighttime, "rain") || precipitationRisk(day.Nighttime, "snow")
-}
-
-func weatherHasRain(current qweatherCurrent, daily []qweatherDay, today string) bool {
-	if strings.EqualFold(current.Precipitation.Type, "rain") || strings.Contains(current.Condition.Text, "雨") {
-		return true
-	}
-	for _, day := range daily {
-		date := forecastDate(day.ForecastStartTime, shanghai())
-		if date == "" || date < today {
-			continue
-		}
-		if precipitationRisk(day.Daytime, "rain") || precipitationRisk(day.Nighttime, "rain") {
-			return true
-		}
-	}
-	return false
-}
-
-func weatherHasSnow(current qweatherCurrent, daily []qweatherDay, today string) bool {
-	if strings.EqualFold(current.Precipitation.Type, "snow") || strings.Contains(current.Condition.Text, "雪") {
-		return true
-	}
-	for _, day := range daily {
-		date := forecastDate(day.ForecastStartTime, shanghai())
-		if date == "" || date < today {
-			continue
-		}
-		if precipitationRisk(day.Daytime, "snow") || precipitationRisk(day.Nighttime, "snow") {
-			return true
-		}
-	}
-	return false
-}
-
 // precipitationRisk treats an explicit type or a high probability as a real
 // chance of rain/snow, so a "多云 80%" day still earns an umbrella hint.
 func precipitationRisk(part qweatherDayPart, kind string) bool {
@@ -566,24 +778,30 @@ func precipitationRisk(part qweatherDayPart, kind string) bool {
 }
 
 const (
-	weatherForecastDays  = 4
+	weatherForecastDays  = 7
 	weatherCatchUpWindow = 4 * time.Hour
 	weatherRetryInterval = 30 * time.Minute
 )
 
-// weatherForecast loads the four-day forecast (today plus three days) and the
-// active alerts. Four days are requested because the evening slot needs
-// tomorrow even when the provider's "today" has already rolled over.
-func weatherForecast(ctx context.Context, client *qweatherClient, cfg WeatherConfig) ([]qweatherDay, []qweatherAlert, error) {
+// weatherForecast loads the current observation, a multi-day forecast and the
+// active alerts. Seven days are requested so the evening slot still has three
+// future days after its "tomorrow" target, even when the provider's "today"
+// has already rolled over. The current observation is optional: a provider
+// hiccup must not block the forecast that the user actually asked for.
+func weatherForecast(ctx context.Context, client *qweatherClient, cfg WeatherConfig) (qweatherCurrent, []qweatherDay, []qweatherAlert, error) {
 	daily, err := client.Daily(ctx, cfg.Latitude, cfg.Longitude, weatherForecastDays)
 	if err != nil {
-		return nil, nil, err
+		return qweatherCurrent{}, nil, nil, err
 	}
 	alerts, err := client.Alerts(ctx, cfg.Latitude, cfg.Longitude)
 	if err != nil {
-		return nil, nil, err
+		return qweatherCurrent{}, nil, nil, err
 	}
-	return daily, alerts, nil
+	current, err := client.Current(ctx, cfg.Latitude, cfg.Longitude)
+	if err != nil {
+		current = qweatherCurrent{}
+	}
+	return current, daily, alerts, nil
 }
 
 // pushWeather fetches the forecast and delivers one slot's summary. Manual
@@ -634,11 +852,11 @@ func pushWeather(db *gorm.DB, cfg WeatherConfig, manual bool, slot weatherSlot) 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
-	daily, alerts, err := weatherForecast(ctx, client, cfg)
+	current, daily, alerts, err := weatherForecast(ctx, client, cfg)
 	if err != nil {
 		return weatherMessage{}, err
 	}
-	msg := buildWeatherMessage(cfg, slot, daily, alerts, time.Now())
+	msg := buildWeatherMessageWithCurrent(cfg, slot, current, daily, alerts, time.Now())
 
 	now := time.Now().UTC()
 	localToday := time.Now().In(shanghai()).Format("2006-01-02")

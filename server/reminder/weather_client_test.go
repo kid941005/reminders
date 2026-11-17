@@ -54,12 +54,12 @@ func TestQWeatherClientRequests(t *testing.T) {
 			if req.URL.Query().Get("localTime") != "true" || req.URL.Query().Get("lang") != "zh" {
 				t.Errorf("current query = %s", req.URL.RawQuery)
 			}
-			return caldavStubResponse(http.StatusOK, `{"validTime":"2026-11-14T08:00:00+08:00","condition":{"text":"小雨","code":"305"},"temperature":{"value":15.4,"unit":"°C"},"humidity":0.68,"wind":{"direction":{"degree":135,"compass":"se"},"speed":{"value":12},"scale":3},"precipitation":{"amount":{"value":0.4},"type":"rain"}}`, nil), nil
+			return caldavStubResponse(http.StatusOK, `{"validTime":"2026-11-14T08:00:00+08:00","condition":{"text":"小雨","code":"305"},"temperature":{"value":15.4,"unit":"°C"},"feelsLike":{"value":14,"unit":"°C"},"humidity":0.68,"wind":{"direction":{"degree":135,"compass":"se"},"speed":{"value":12},"scale":3},"precipitation":{"amount":{"value":0.4},"type":"rain"},"pressure":{"value":1010,"unit":"hPa"},"visibility":{"value":16,"unit":"km"}}`, nil), nil
 		case strings.HasPrefix(req.URL.Path, "/weather/v1/daily/"):
 			if req.URL.Query().Get("days") != "4" {
 				t.Errorf("daily days = %q", req.URL.Query().Get("days"))
 			}
-			return caldavStubResponse(http.StatusOK, `{"days":[{"forecastStartTime":"2026-11-14T00:00:00+08:00","temperatureMax":{"value":20},"temperatureMin":{"value":12},"daytime":{"condition":{"text":"小雨"},"precipitation":{"probability":0.7,"type":"rain"}}}]}`, nil), nil
+			return caldavStubResponse(http.StatusOK, `{"days":[{"forecastStartTime":"2026-11-14T00:00:00+08:00","temperatureMax":{"value":20},"temperatureMin":{"value":12},"daytime":{"condition":{"text":"小雨"},"precipitation":{"probability":0.7,"type":"rain"}},"astro":{"sunrise":"2026-11-14T06:24:00+08:00","sunset":"2026-11-14T17:06:00+08:00"}}]}`, nil), nil
 		case strings.HasPrefix(req.URL.Path, "/weatheralert/v1/current/"):
 			return caldavStubResponse(http.StatusOK, `{"metadata":{"zeroResult":false},"alerts":[{"id":"a1","messageType":{"code":"alert"},"eventType":{"name":"大风"},"color":{"code":"blue"},"expireTime":"2099-01-01T00:00:00+08:00","headline":"预计有大风"}]}`, nil), nil
 		case req.URL.Path == "/geo/v2/city/lookup":
@@ -77,7 +77,7 @@ func TestQWeatherClientRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.Condition.Text != "小雨" || current.Temperature.Value != 15.4 || current.Wind.Scale != 3 {
+	if current.Condition.Text != "小雨" || current.Temperature.Value != 15.4 || current.Wind.Scale != 3 || current.Pressure.Value != 1010 || current.Visibility.Value != 16 || current.FeelsLike.Value != 14 {
 		t.Fatalf("unexpected current: %+v", current)
 	}
 
@@ -85,7 +85,7 @@ func TestQWeatherClientRequests(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(daily) != 1 || daily[0].Daytime.Precipitation.Probability != 0.7 {
+	if len(daily) != 1 || daily[0].Daytime.Precipitation.Probability != 0.7 || daily[0].Astro.Sunrise == "" {
 		t.Fatalf("unexpected daily: %+v", daily)
 	}
 
