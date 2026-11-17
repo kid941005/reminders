@@ -15,8 +15,8 @@ ESP32 小智 --语音--> 小智服务端 / LLM --MCP(WebSocket)--> mcp_pipe.py
 ```
 
 - **ESP32 固件不用改**，设备只负责拾音和播报。
-- **Reminder 后端不用改**，本目录只做 MCP 协议适配。
-- `server.py` 暴露 5 个工具：`get_current_time`、`list_todos`、`create_todo`、`complete_todo`、`snooze_todo`。
+- **Reminder 后端需 v0.18.0 或更高**（提供 `/weather/query` 天气接口），本目录只做 MCP 协议适配。
+- `server.py` 暴露 6 个工具：`get_current_time`、`list_todos`、`create_todo`、`complete_todo`、`snooze_todo`、`get_weather`。
 - `mcp_pipe.py` 负责 stdio ↔ WebSocket，把 MCP Server 接到小智的 MCP 接入点。
 
 ## 目录
@@ -131,14 +131,29 @@ python -m unittest -v test_server.py
 | `create_todo` | 新增待办 | 标题 ≤ 200 字；过去时间拒绝；同标题 + 同时间（±2 分钟）去重 |
 | `complete_todo` | 完成待办 | 按标题搜索，唯一匹配才完成；多条返回候选让用户确认 |
 | `snooze_todo` | 推迟提醒 | `until` 必须是带时区的 ISO 8601 |
+| `get_weather` | 查询实况、预报和预警 | `city` 为空时用 Reminder 里配置的城市；`days` 1–7，默认 3 |
 
 `due_at` 示例：`2026-11-17T15:00:00+08:00`。只给日期 `2026-11-17` 时按当天 00:00（全天）处理。
+
+### 天气查询
+
+`get_weather` 调用 Reminder 的 `GET /api/reminder/weather/query`，返回结构化数据：
+
+- `location`：城市名与经纬度；
+- `current`：实况（天气、温度、体感、湿度、风、降水、气压、能见度）；
+- `days`：逐日预报（天气、温度区间、降水概率、风、日出日落）；
+- `alerts`：当前有效的气象预警；
+- `speech`：可直接播报的中文摘要。
+
+`city` 为空时使用用户在「偏好设置 → 天气提醒」里保存的城市；传入城市名时由后端调用和风天气
+城市搜索解析坐标，适合“杭州天气怎么样”“明天北京会下雨吗”这类问法。使用前需要管理员在
+Reminder 设置页配置和风天气 API Host 与 Key。
 
 ## 安全与限制
 
 - API Key 只放在 `.env`，不要写进固件、Prompt 或 Git。
 - 一个 API Key 对应一个 Reminder 用户，不要多人共用。
-- 只暴露新增、查询、完成、推迟；不暴露删除和批量完成，避免语音误操作。
+- 只暴露待办的新增、查询、完成、推迟和天气查询；不暴露删除和批量完成，避免语音误操作。
 - 语音识别可能把标题听错，完成多条匹配时工具会返回候选，不会直接猜。
 - 钉钉日程等只读来源的条目也能被完成，但不会回写来源日历。
 

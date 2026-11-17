@@ -405,6 +405,44 @@ def snooze_todo(query: str = "", todo_id: int = 0, until: str = "") -> dict:
     }
 
 
+@mcp.tool()
+def get_weather(city: str = "", days: int = 3) -> dict:
+    """查询和风天气（实况、未来几天预报和气象预警）。用户问天气时调用。
+
+    city 为空时使用 Reminder「天气提醒」里配置的城市；也可以直接传城市名，
+    例如“杭州”“北京朝阳”。days 为 1 到 7，默认 3。
+    """
+    city = (city or "").strip()
+    if len(city) > 60:
+        return {"ok": False, "error": "城市名称过长"}
+    try:
+        days = int(days or 3)
+    except (TypeError, ValueError):
+        days = 3
+    days = max(1, min(days, 7))
+
+    params: dict[str, Any] = {"days": days}
+    if city:
+        params["city"] = city
+    try:
+        data = _request("GET", "/weather/query", params=params)
+    except ReminderAPIError as exc:
+        return {"ok": False, "error": str(exc)}
+    if not isinstance(data, dict):
+        return {"ok": False, "error": "提醒服务返回格式不正确"}
+
+    summary = str(data.get("summary") or "").strip()
+    return {
+        "ok": True,
+        "location": data.get("location") or {},
+        "current": data.get("current") or {},
+        "days": data.get("days") or [],
+        "alerts": data.get("alerts") or [],
+        "title": data.get("title") or "",
+        "speech": summary or "暂时没有天气数据",
+    }
+
+
 if __name__ == "__main__":
     if not API_KEY:
         logger.error("REMINDER_API_KEY 未设置，工具调用会失败")

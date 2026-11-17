@@ -3,6 +3,7 @@ package reminder
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -106,6 +107,79 @@ func handlePreviewWeather(db *gorm.DB) gin.HandlerFunc {
 		}
 		response.Success(c, gin.H{"slot": slot, "message": buildWeatherMessageWithCurrent(cfg, slot, current, daily, alerts, time.Now())})
 	}
+}
+
+// handleQueryWeather returns structured weather for voice assistants and other
+// API clients. A city can be supplied directly; when it is omitted the caller's
+// saved weather-reminder location is used.
+func handleQueryWeather(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		city := strings.TrimSpace(c.Query("city"))
+		if len([]rune(city)) > 60 {
+			response.ErrorBadRequest(c, "城市名称过长")
+			return
+		}
+		days, ok := weatherQueryDays(c.Query("days"))
+		if !ok {
+			response.ErrorBadRequest(c, "天数参数无效，应为 1 到 7")
+			return
+		}
+		host, apiKey, err := qweatherCredentials(db)
+		if err != nil {
+			response.ErrorBadRequest(c, err.Error())
+			return
+		}
+		client := weatherClientFactory(host, apiKey)
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		defer cancel()
+
+		cfg := WeatherConfig{}
+		if city == "" {
+			stored, ok := getWeatherConfig(db, currentUserID(c))
+			if !ok {
+				response.ErrorBadRequest(c, "尚未配置天气提醒，请先选择城市或直接指定城市")
+				return
+			}
+			cfg = stored
+		} else {
+			locations, lookupErr := client.LookupCity(ctx, city)
+			if lookupErr != nil {
+				response.ErrorBadRequest(c, lookupErr.Error())
+				return
+			}
+			if len(locations) == 0 {
+				response.ErrorBadRequest(c, "没有找到城市，请换一个名称试试")
+				return
+			}
+			loc := locations[0]
+			latitude, latErr := strconv.ParseFloat(strings.TrimSpace(loc.Lat), 64)
+			longitude, lonErr := strconv.ParseFloat(strings.TrimSpace(loc.Lon), 64)
+			if latErr != nil || lonErr != nil {
+				response.ErrorBadRequest(c, "城市坐标无效，请换一个城市")
+				return
+			}
+			cfg = WeatherConfig{LocationName: loc.Name, Latitude: latitude, Longitude: longitude}
+		}
+
+		current, daily, alerts, err := queryWeather(ctx, client, cfg, days)
+		if err != nil {
+			response.ErrorBadRequest(c, err.Error())
+			return
+		}
+		response.Success(c, buildWeatherQueryResult(cfg, current, daily, alerts, time.Now()))
+	}
+}
+
+func weatherQueryDays(raw string) (int, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 3, true
+	}
+	days, err := strconv.Atoi(raw)
+	if err != nil || days < 1 || days > 7 {
+		return 0, false
+	}
+	return days, true
 }
 
 func handleWeatherLocations(db *gorm.DB) gin.HandlerFunc {

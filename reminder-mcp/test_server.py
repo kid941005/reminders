@@ -116,5 +116,58 @@ class NoMatchTest(unittest.TestCase):
         self.assertIn("没有找到", result["error"])
 
 
+class WeatherTest(unittest.TestCase):
+    def test_city_and_days_are_forwarded(self) -> None:
+        captured: dict = {}
+
+        def fake_request(method: str, path: str, **kwargs):
+            captured["method"] = method
+            captured["path"] = path
+            captured.update(kwargs)
+            return {
+                "location": {"name": "杭州"},
+                "current": {"condition": "晴", "temperature": 20},
+                "days": [{"date": "2026-11-17"}],
+                "alerts": [],
+                "title": "☀️ 今日天气 · 杭州",
+                "summary": "今天晴，10~20℃",
+            }
+
+        with mock.patch.object(server, "_request", side_effect=fake_request):
+            result = server.get_weather("杭州", 2)
+
+        self.assertTrue(result["ok"])
+        self.assertEqual(captured["method"], "GET")
+        self.assertEqual(captured["path"], "/weather/query")
+        self.assertEqual(captured["params"], {"days": 2, "city": "杭州"})
+        self.assertEqual(result["speech"], "今天晴，10~20℃")
+        self.assertEqual(result["location"]["name"], "杭州")
+
+    def test_days_are_clamped_and_empty_city_is_omitted(self) -> None:
+        captured: dict = {}
+
+        def fake_request(method: str, path: str, **kwargs):
+            captured.update(kwargs)
+            return {"summary": "晴"}
+
+        with mock.patch.object(server, "_request", side_effect=fake_request):
+            server.get_weather("", 99)
+
+        self.assertEqual(captured["params"], {"days": 7})
+
+    def test_api_error_is_reported(self) -> None:
+        with mock.patch.object(
+            server, "_request", side_effect=server.ReminderAPIError("管理员尚未配置和风天气")
+        ):
+            result = server.get_weather("杭州")
+        self.assertFalse(result["ok"])
+        self.assertIn("尚未配置", result["error"])
+
+    def test_city_name_is_bounded(self) -> None:
+        result = server.get_weather("杭" * 61)
+        self.assertFalse(result["ok"])
+        self.assertIn("过长", result["error"])
+
+
 if __name__ == "__main__":
     unittest.main()

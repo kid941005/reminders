@@ -314,13 +314,7 @@ func weatherDetailLines(day qweatherDay, current qweatherCurrent) []string {
 	}
 	lines = append(lines, temp)
 
-	humidity := day.Daytime.Humidity
-	if humidity == 0 {
-		humidity = day.Nighttime.Humidity
-	}
-	if humidity == 0 {
-		humidity = current.Humidity
-	}
+	humidity := weatherHumidityForDay(day, current)
 	probability := dayProbability(day)
 	amount, amountUnit := dayPrecipitationAmount(day)
 	parts := make([]string, 0, 3)
@@ -337,13 +331,7 @@ func weatherDetailLines(day qweatherDay, current qweatherCurrent) []string {
 		lines = append(lines, "💧 "+strings.Join(parts, " · "))
 	}
 
-	wind := day.Daytime.Wind
-	if wind.Scale == 0 && wind.Speed.Value == 0 {
-		wind = day.Nighttime.Wind
-	}
-	if wind.Scale == 0 && wind.Speed.Value == 0 {
-		wind = current.Wind
-	}
+	wind := weatherWindForDay(day, current)
 	parts = parts[:0]
 	if direction := windDirectionText(wind.Direction.Compass); direction != "" {
 		if wind.Scale > 0 {
@@ -388,6 +376,32 @@ func weatherDetailLines(day qweatherDay, current qweatherCurrent) []string {
 func (c qweatherCurrent) hasData() bool {
 	return strings.TrimSpace(c.Condition.Text) != "" || strings.TrimSpace(c.Temperature.Unit) != "" ||
 		c.Humidity > 0 || c.Wind.Scale > 0 || c.Wind.Speed.Value > 0
+}
+
+// weatherHumidityForDay prefers daytime humidity, then nighttime, then the
+// current observation. Providers omit different fields per plan, so falling
+// back keeps the summary useful without inventing a value.
+func weatherHumidityForDay(day qweatherDay, current qweatherCurrent) float64 {
+	humidity := day.Daytime.Humidity
+	if humidity == 0 {
+		humidity = day.Nighttime.Humidity
+	}
+	if humidity == 0 {
+		humidity = current.Humidity
+	}
+	return humidity
+}
+
+// weatherWindForDay applies the same fallback order as humidity.
+func weatherWindForDay(day qweatherDay, current qweatherCurrent) qweatherWind {
+	wind := day.Daytime.Wind
+	if wind.Scale == 0 && wind.Speed.Value == 0 {
+		wind = day.Nighttime.Wind
+	}
+	if wind.Scale == 0 && wind.Speed.Value == 0 {
+		wind = current.Wind
+	}
+	return wind
 }
 
 func dayPrecipitationAmount(day qweatherDay) (float64, string) {

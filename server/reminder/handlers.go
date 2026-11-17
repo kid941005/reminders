@@ -60,6 +60,7 @@ func setupAuthRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group.DELETE("/weather", handleDeleteWeather(db))
 	group.POST("/weather/run", handleRunWeather(db))
 	group.GET("/weather/preview", handlePreviewWeather(db))
+	group.GET("/weather/query", handleQueryWeather(db))
 	group.GET("/weather/locations", handleWeatherLocations(db))
 
 	group.GET("/notifications", handleNotifications(db))

@@ -26,6 +26,8 @@ func weatherStubBody(path string) (string, bool) {
 	case strings.HasPrefix(path, "/weatheralert/v1/current/"):
 		expire := today.AddDate(0, 0, 1).Format("2006-01-02") + "T20:00:00+08:00"
 		return fmt.Sprintf(`{"metadata":{"zeroResult":false},"alerts":[{"id":"a1","messageType":{"code":"alert"},"eventType":{"name":"大风"},"color":{"code":"blue"},"expireTime":%q,"headline":"预计有大风"}]}`, expire), true
+	case strings.HasPrefix(path, "/geo/v2/city/lookup"):
+		return `{"location":[{"name":"杭州","id":"101210101","lat":"30.25","lon":"120.17","adm1":"浙江","adm2":"杭州"}]}`, true
 	default:
 		return "", false
 	}

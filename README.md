@@ -113,7 +113,9 @@ docker compose up -d
 - 管理员在设置页统一填写和风天气 API Host 与 API Key（AES-GCM 加密，接口不回显），也可用
   环境变量 `QWEATHER_API_HOST` / `QWEATHER_API_KEY` 提供；
 - 以本地日期 + 时段做幂等，早间成功不会吞掉晚间推送，重启后也不会重复推送（多实例部署为尽力而为）；
-  每个时段在计划时间后 4 小时内仍会补推，失败最多每 30 分钟重试一次。
+  每个时段在计划时间后 4 小时内仍会补推，失败最多每 30 分钟重试一次；
+- **小智语音查询天气**：MCP 适配器提供 `get_weather`，支持按已配置城市或临时指定城市查询实况、
+  未来 1–7 天预报和气象预警，返回可直接播报的中文摘要。
 
 ### 账号与系统
 
@@ -223,7 +225,7 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 | 通知中心 | `GET /api/reminder/notifications`、`GET /api/reminder/notifications/unread-count`、`POST /api/reminder/notifications/:id/read`、`POST /api/reminder/notifications/read-all` |
 | 纪念日 | `GET/POST /api/reminder/countdowns`、`PUT/DELETE /api/reminder/countdowns/:id` |
 | 通知方式 | `GET /api/reminder/channels`、`PUT/PATCH/DELETE /api/reminder/channels/:channel`、`POST /api/reminder/channels/:channel/test`、`POST /api/reminder/channels/qq/bind-code` |
-| 天气 | `GET/PUT/DELETE /api/reminder/weather`、`POST /api/reminder/weather/run?slot=morning\|evening`、`GET /api/reminder/weather/preview?slot=morning\|evening`、`GET /api/reminder/weather/locations?q=` |
+| 天气 | `GET/PUT/DELETE /api/reminder/weather`、`POST /api/reminder/weather/run?slot=morning\|evening`、`GET /api/reminder/weather/preview?slot=morning\|evening`、`GET /api/reminder/weather/query?city=&days=`、`GET /api/reminder/weather/locations?q=` |
 | 日历 | `GET /api/reminder/feed`、`POST /api/reminder/feed/reset`、`GET /api/reminder/feed.ics?token=...`、`GET/PUT/DELETE /api/reminder/calendar-sync`、`POST /api/reminder/calendar-sync/run` |
 | Apple 提醒事项 | `GET/PUT/DELETE /api/reminder/apple-reminders`、`POST /api/reminder/apple-reminders/discover`、`POST /api/reminder/apple-reminders/run` |
 | 节假日与农历 | `GET /api/reminder/holidays`、`GET /api/reminder/lunar`、`GET /api/reminder/lunar/convert` |
@@ -235,7 +237,7 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 ### 小智语音助手（MCP，可选）
 
 仓库自带 `reminder-mcp/` 适配器，把上面的 REST API 包装成小智设备可用的 MCP 工具，
-支持语音新增、查询、完成和推迟待办；ESP32 固件与 Reminder 后端都不需要改。
+支持语音新增、查询、完成和推迟待办，以及按城市查询和风天气；ESP32 固件不需要改，Reminder 后端升级到 v0.18.0 即可。
 镜像由 GitHub Actions 构建并推送到 `ghcr.io/kid941005/reminders-mcp:latest`。
 
 ```bash
