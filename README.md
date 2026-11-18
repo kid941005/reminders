@@ -95,10 +95,13 @@ docker compose up -d
   订阅地址可随时重置（旧地址立即失效）；
 - **钉钉日程单向导入（CalDAV）**：填写钉钉「日历设置 → CalDAV 同步」生成的账号密码，日程会导入到
   「钉钉日程」清单；只读，本地改动不会写回钉钉；每 30 分钟同步一次，窗口默认前 7 天、后 180 天；
-- **Apple 提醒事项单向推送（CalDAV）**：填写 Apple ID 和应用专用密码后，本地新建、修改、完成、
-  删除的提醒会同步到所选的 iCloud 提醒事项列表；只单向推送，Apple 端改动不回写本地；使用确定性
-  UID 与 ETag 条件请求避免重复和覆盖冲突，失败自动退避重试；国际区账号使用 `caldav.icloud.com`，
-  中国大陆账号使用 `caldav.icloud.com.cn`（服务器设置也可直接填 `www.icloud.com.cn` 自动转换）；
+- **Apple 提醒事项单向推送（CloudKit，推荐）**：用 Apple ID 主密码登录并完成两步验证后，选择要同步的
+  提醒事项列表，本地新建、修改、完成、删除的提醒会直接写入新版 iCloud 提醒事项，iPhone / iPad /
+  Mac 原生「提醒事项」App 可见；登录凭据加密保存在本地，只单向推送，Apple 端改动不回写本地；
+- **Apple 提醒事项单向推送（CalDAV，兼容旧列表）**：如果账号仍保留 iOS 13 之前的旧 CalDAV 任务
+  列表，可改用 CalDAV 模式，填写 Apple ID 和应用专用密码；使用确定性 UID 与 ETag 条件请求避免
+  重复和覆盖冲突，失败自动退避重试；国际区账号使用 `caldav.icloud.com`，中国大陆账号使用
+  `caldav.icloud.com.cn`（服务器设置也可直接填 `www.icloud.com.cn` 自动转换）；
 - **法定节假日与调休**：日历直接标出「休 / 班」，数据随二进制内置、离线可用；次年安排公布前会提示
   尚未公布，不会把未覆盖日期当作普通工作日。
 
@@ -228,7 +231,7 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 | 通知方式 | `GET /api/reminder/channels`、`PUT/PATCH/DELETE /api/reminder/channels/:channel`、`POST /api/reminder/channels/:channel/test`、`POST /api/reminder/channels/qq/bind-code` |
 | 天气 | `GET/PUT/DELETE /api/reminder/weather`、`POST /api/reminder/weather/run?slot=morning\|evening`、`GET /api/reminder/weather/preview?slot=morning\|evening`、`GET /api/reminder/weather/query?city=&days=`、`GET /api/reminder/weather/locations?q=` |
 | 日历 | `GET /api/reminder/feed`、`POST /api/reminder/feed/reset`、`GET /api/reminder/feed.ics?token=...`、`GET/PUT/DELETE /api/reminder/calendar-sync`、`POST /api/reminder/calendar-sync/run` |
-| Apple 提醒事项 | `GET/PUT/DELETE /api/reminder/apple-reminders`、`POST /api/reminder/apple-reminders/discover`、`POST /api/reminder/apple-reminders/run` |
+| Apple 提醒事项 | `GET/PUT/DELETE /api/reminder/apple-reminders`、`POST /api/reminder/apple-reminders/discover`、`POST /api/reminder/apple-reminders/run`、`POST /api/reminder/apple-reminders/cloudkit/login`、`POST /api/reminder/apple-reminders/cloudkit/verify` |
 | 节假日与农历 | `GET /api/reminder/holidays`、`GET /api/reminder/lunar`、`GET /api/reminder/lunar/convert` |
 | 管理 | `GET /api/users`、`PUT/DELETE /api/users/:id`、`PUT /api/users/:id/status`、`PUT /api/users/:id/password`、`GET /api/audit-logs`、`GET /api/audit-logs/export`、`GET /api/reminder/admin/deliveries`、`GET /api/reminder/admin/providers`、`PUT /api/reminder/admin/providers/:provider`、`GET/PUT /api/reminder/admin/weather` |
 

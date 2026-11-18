@@ -1,0 +1,3 @@
+SRP implementation in this directory is derived from
+https://github.com/tarekbecker/icloud-reminders-cli (MIT License).
+The original copyright notice is retained in LICENSE in this directory.

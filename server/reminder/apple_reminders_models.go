@@ -16,6 +16,9 @@ const (
 	appleReminderDefaultServerCN = "caldav.icloud.com.cn"
 	appleReminderCalendarProdID  = "-//SmallGo Reminder//Apple Reminders//EN"
 	appleReminderUIDDomain       = "reminder.local"
+
+	appleReminderBackendCalDAV   = "caldav"
+	appleReminderBackendCloudKit = "cloudkit"
 )
 
 // AppleReminderSync stores one user's iCloud CalDAV reminder-list binding.
@@ -24,9 +27,11 @@ const (
 type AppleReminderSync struct {
 	ID             uint       `gorm:"primaryKey" json:"id"`
 	UserID         uint       `gorm:"uniqueIndex;not null" json:"user_id"`
+	Backend        string     `gorm:"size:16;not null;default:caldav" json:"backend"`
 	Server         string     `gorm:"size:255;not null;default:caldav.icloud.com" json:"server"`
 	AppleID        string     `gorm:"size:255;not null" json:"apple_id"`
 	Password       string     `gorm:"type:text;not null" json:"-"`
+	SessionData    string     `gorm:"type:text" json:"-"`
 	CollectionURL  string     `gorm:"size:512;not null" json:"collection_url"`
 	CollectionName string     `gorm:"size:200" json:"collection_name"`
 	Enabled        bool       `gorm:"not null;default:true" json:"enabled"`
@@ -76,6 +81,8 @@ type AppleReminderSyncDTO struct {
 
 // AppleReminderSyncInput is the user-editable part of the configuration.
 type AppleReminderSyncInput struct {
+	Backend        string `json:"backend"`
+	LoginID        string `json:"login_id"`
 	Server         string `json:"server"`
 	AppleID        string `json:"apple_id"`
 	Password       string `json:"password"`
@@ -87,6 +94,7 @@ type AppleReminderSyncInput struct {
 // AppleReminderDiscoverInput identifies an iCloud account while listing lists.
 // An empty Password means "reuse the stored password" for an existing config.
 type AppleReminderDiscoverInput struct {
+	Backend  string `json:"backend"`
 	Server   string `json:"server"`
 	AppleID  string `json:"apple_id"`
 	Password string `json:"password"`

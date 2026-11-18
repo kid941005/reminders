@@ -128,18 +128,43 @@
         </div>
       </div>
 
-      <div class="mt-4 grid gap-2 sm:grid-cols-2">
+      <div class="mt-4">
+        <select v-model="appleForm.backend" class="compact-input">
+          <option value="cloudkit">CloudKit（新版 iCloud 提醒事项，iPhone 原生可见）</option>
+          <option value="caldav">CalDAV（旧版，仅兼容旧列表）</option>
+        </select>
+        <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
+          CloudKit 对接 iOS 13 之后的 iCloud 提醒事项，需填写 Apple ID 主密码（不是 App 专用密码）并完成两步验证；登录凭据仅加密保存在本地。
+        </p>
+      </div>
+
+      <div class="mt-2 grid gap-2 sm:grid-cols-2">
         <input v-model="appleForm.apple_id" class="compact-input" placeholder="Apple ID（邮箱）" autocomplete="username" />
         <input
           v-model="appleForm.password"
           class="compact-input"
           type="password"
           autocomplete="new-password"
-          :placeholder="appleCfg ? 'App 专用密码（留空表示不修改）' : 'App 专用密码'"
+          :placeholder="appleCfg ? (appleForm.backend === 'cloudkit' ? 'Apple ID 主密码（留空表示沿用已保存登录）' : 'App 专用密码（留空表示不修改）') : (appleForm.backend === 'cloudkit' ? 'Apple ID 主密码' : 'App 专用密码')"
         />
       </div>
 
-      <div class="mt-2 flex flex-wrap items-center gap-2">
+      <div v-if="appleForm.backend === 'cloudkit'" class="mt-2 space-y-2">
+        <button type="button" class="btn-ghost" :disabled="appleBusy || cloudkitBusy" @click="loginCloudKit">
+          {{ cloudkitBusy ? '正在登录…' : cloudkitNeed2FA ? '重新登录' : '登录 iCloud 并加载列表' }}
+        </button>
+        <div v-if="cloudkitNeed2FA" class="flex flex-wrap gap-2">
+          <input v-model="cloudkitCode" class="compact-input max-w-[10rem]" placeholder="6 位两步验证码" inputmode="numeric" maxlength="6" />
+          <button type="button" class="btn-brand" :disabled="appleBusy || cloudkitBusy || cloudkitCode.trim().length < 6" @click="verifyCloudKit">
+            {{ cloudkitBusy ? '验证中…' : '验证并加载列表' }}
+          </button>
+        </div>
+        <p class="text-[11px] leading-5 text-muted-foreground">
+          首次登录需要输入设备上收到的 6 位验证码；登录成功后凭据会加密保存，之后无需重复验证。若账号已登录过，可直接加载列表并保存。
+        </p>
+      </div>
+
+      <div v-else class="mt-2 flex flex-wrap items-center gap-2">
         <button type="button" class="btn-ghost" :disabled="appleBusy" @click="discoverAppleLists">
           {{ appleDiscovering ? '正在读取列表…' : '加载提醒列表' }}
         </button>
@@ -148,7 +173,7 @@
         </button>
       </div>
 
-      <template v-if="appleShowServer">
+      <template v-if="appleForm.backend === 'caldav' && appleShowServer">
         <input
           v-model="appleForm.server"
           class="compact-input mt-2"
@@ -394,10 +419,12 @@ import {
   getAppleReminders,
   getCalendarSync,
   getChannelStatuses,
+  loginAppleCloudKit,
   runAppleReminders,
   runCalendarSync,
   saveAppleReminders,
   saveCalendarSync,
+  verifyAppleCloudKit,
 } from '../api/reminder'
 import type {
   AppleReminderCollection,
@@ -445,11 +472,14 @@ const syncMsgType = ref<'success' | 'error'>('success')
 
 // Apple 提醒事项：只做本地到 iCloud 的单向推送，密码只写不读。
 const appleCfg = ref<AppleReminderSyncConfig | null>(null)
-const appleForm = reactive({ server: 'caldav.icloud.com', apple_id: '', password: '', collection_url: '' })
+const appleForm = reactive({ backend: 'cloudkit', server: 'caldav.icloud.com', apple_id: '', password: '', collection_url: '', login_id: '' })
 const appleCollections = ref<AppleReminderCollection[]>([])
 const appleShowServer = ref(false)
 const appleBusy = ref(false)
 const appleDiscovering = ref(false)
+const cloudkitNeed2FA = ref(false)
+const cloudkitBusy = ref(false)
+const cloudkitCode = ref('')
 const appleMsg = ref('')
 const appleMsgType = ref<'success' | 'error'>('success')
 
@@ -589,13 +619,15 @@ async function loadAppleReminders() {
     const data = (res.data?.data || null) as AppleReminderSyncConfig | null
     appleCfg.value = data
     if (data) {
-      appleForm.server = data.server || 'caldav.icloud.com'
+      appleForm.backend = data.backend || 'caldav'
+      appleForm.server = data.backend === 'cloudkit' ? 'caldav.icloud.com' : (data.server || 'caldav.icloud.com')
       appleForm.apple_id = data.apple_id || ''
       appleForm.collection_url = data.collection_url || ''
       appleCollections.value = data.collection_url
         ? [{ url: data.collection_url, name: data.collection_name || '已选择的列表' }]
         : []
     } else {
+      appleForm.backend = 'cloudkit'
       appleForm.server = 'caldav.icloud.com'
       appleCollections.value = []
       appleForm.collection_url = ''
@@ -613,29 +645,99 @@ function notifyApple(message: string, type: 'success' | 'error' = 'success') {
   window.setTimeout(() => { appleMsg.value = '' }, 5000)
 }
 
+function applyAppleCollections(lists: AppleReminderCollection[]) {
+  appleCollections.value = lists
+  if (!lists.some((item) => item.url === appleForm.collection_url)) {
+    appleForm.collection_url = lists[0]?.url || ''
+  }
+}
+
+async function loginCloudKit() {
+  if (appleBusy.value || cloudkitBusy.value) return
+  if (!appleForm.apple_id.trim()) {
+    notifyApple('请填写 Apple ID', 'error')
+    return
+  }
+  if (!appleForm.password) {
+    if (appleCfg.value?.backend === 'cloudkit') {
+      await discoverAppleLists()
+      return
+    }
+    notifyApple('请输入 Apple ID 密码', 'error')
+    return
+  }
+  cloudkitBusy.value = true
+  try {
+    const res = await loginAppleCloudKit({
+      apple_id: appleForm.apple_id.trim(),
+      password: appleForm.password,
+    })
+    const data = res.data?.data || {}
+    appleForm.login_id = data.login_id || ''
+    cloudkitNeed2FA.value = !!data.need_2fa
+    if (data.need_2fa) {
+      notifyApple('已发送验证码，请在设备上查看并输入 6 位数字')
+      return
+    }
+    applyAppleCollections((data.lists || []) as AppleReminderCollection[])
+    notifyApple('登录成功，已加载 ' + appleCollections.value.length + ' 个提醒事项列表')
+  } catch (err: any) {
+    notifyApple(err.response?.data?.message || '登录 iCloud 失败', 'error')
+  } finally {
+    cloudkitBusy.value = false
+  }
+}
+
+async function verifyCloudKit() {
+  if (appleBusy.value || cloudkitBusy.value) return
+  if (!appleForm.login_id) {
+    notifyApple('登录已过期，请重新登录', 'error')
+    return
+  }
+  const code = cloudkitCode.value.trim()
+  if (code.length < 6) {
+    notifyApple('请输入 6 位两步验证码', 'error')
+    return
+  }
+  cloudkitBusy.value = true
+  try {
+    const res = await verifyAppleCloudKit({ login_id: appleForm.login_id, code })
+    const data = res.data?.data || {}
+    cloudkitNeed2FA.value = false
+    cloudkitCode.value = ''
+    applyAppleCollections((data.lists || []) as AppleReminderCollection[])
+    notifyApple('验证成功，已加载 ' + appleCollections.value.length + ' 个提醒事项列表')
+  } catch (err: any) {
+    notifyApple(err.response?.data?.message || '验证码校验失败', 'error')
+  } finally {
+    cloudkitBusy.value = false
+  }
+}
+
 async function discoverAppleLists() {
   if (appleBusy.value || appleDiscovering.value) return
   if (!appleForm.apple_id.trim()) {
     notifyApple('请填写 Apple ID', 'error')
     return
   }
-  if (!appleCfg.value && !appleForm.password) {
-    notifyApple('首次配置请填写 App 专用密码', 'error')
+  if (appleForm.backend === 'caldav' && appleCfg.value?.backend !== 'caldav' && !appleForm.password) {
+    notifyApple('切换到 CalDAV 需要填写 App 专用密码', 'error')
+    return
+  }
+  if (appleForm.backend === 'cloudkit' && !appleCfg.value) {
+    notifyApple('请先登录 iCloud', 'error')
     return
   }
   appleDiscovering.value = true
   try {
     const res = await discoverAppleReminders({
+      backend: appleForm.backend,
       server: appleForm.server.trim() || 'caldav.icloud.com',
       apple_id: appleForm.apple_id.trim(),
       password: appleForm.password || undefined,
     })
-    const lists = (res.data?.data?.lists || []) as AppleReminderCollection[]
-    appleCollections.value = lists
-    if (!lists.some((item) => item.url === appleForm.collection_url)) {
-      appleForm.collection_url = lists[0]?.url || ''
-    }
-    notifyApple('已加载 ' + lists.length + ' 个提醒事项列表')
+    applyAppleCollections((res.data?.data?.lists || []) as AppleReminderCollection[])
+    notifyApple('已加载 ' + appleCollections.value.length + ' 个提醒事项列表')
   } catch (err: any) {
     notifyApple(err.response?.data?.message || '加载列表失败', 'error')
   } finally {
@@ -649,8 +751,12 @@ async function saveAppleSync() {
     notifyApple('请填写 Apple ID', 'error')
     return
   }
-  if (!appleCfg.value && !appleForm.password) {
-    notifyApple('首次配置请填写 App 专用密码', 'error')
+  if (appleForm.backend === 'caldav' && appleCfg.value?.backend !== 'caldav' && !appleForm.password) {
+    notifyApple('切换到 CalDAV 需要填写 App 专用密码', 'error')
+    return
+  }
+  if (appleForm.backend === 'cloudkit' && !appleForm.login_id && appleCfg.value?.backend !== 'cloudkit') {
+    notifyApple('请先登录 iCloud 并加载提醒事项列表', 'error')
     return
   }
   if (!appleForm.collection_url) {
@@ -660,6 +766,8 @@ async function saveAppleSync() {
   appleBusy.value = true
   try {
     const res = await saveAppleReminders({
+      backend: appleForm.backend,
+      login_id: appleForm.login_id || undefined,
       server: appleForm.server.trim() || 'caldav.icloud.com',
       apple_id: appleForm.apple_id.trim(),
       password: appleForm.password || undefined,
@@ -670,6 +778,8 @@ async function saveAppleSync() {
     const data = (res.data?.data || null) as AppleReminderSyncConfig | null
     appleCfg.value = data
     appleForm.password = ''
+    appleForm.login_id = ''
+    cloudkitNeed2FA.value = false
     notifyApple('已保存，正在同步…')
     await runAppleSync(true)
   } catch (err: any) {

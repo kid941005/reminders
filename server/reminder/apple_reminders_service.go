@@ -36,6 +36,17 @@ func SaveAppleReminderSync(db *gorm.DB, userID uint, in AppleReminderSyncInput) 
 		}
 	}
 
+	backend := strings.ToLower(strings.TrimSpace(in.Backend))
+	if backend == "" && hasExisting {
+		backend = appleReminderBackendOf(&existing)
+	}
+	if backend == "" {
+		backend = appleReminderBackendCalDAV
+	}
+	if backend == appleReminderBackendCloudKit {
+		return saveAppleCloudKitSync(db, userID, in, existing, hasExisting)
+	}
+
 	serverInput := strings.TrimSpace(in.Server)
 	if serverInput == "" && hasExisting {
 		serverInput = existing.Server
@@ -56,7 +67,9 @@ func SaveAppleReminderSync(db *gorm.DB, userID uint, in AppleReminderSyncInput) 
 
 	plainPassword := strings.TrimSpace(in.Password)
 	if plainPassword == "" {
-		if !hasExisting {
+		// Never fall back to an empty password when the saved configuration is
+		// CloudKit-based; switching back to CalDAV needs a fresh App password.
+		if !hasExisting || appleReminderBackendOf(&existing) != appleReminderBackendCalDAV {
 			return AppleReminderSyncDTO{}, errors.New("请填写 App 专用密码")
 		}
 		plainPassword, err = decryptTarget(db, existing.Password)
@@ -102,6 +115,7 @@ func SaveAppleReminderSync(db *gorm.DB, userID uint, in AppleReminderSyncInput) 
 		return AppleReminderSyncDTO{}, err
 	}
 	accountChanged := !hasExisting || !strings.EqualFold(existing.AppleID, appleID) ||
+		appleReminderBackendOf(&existing) != appleReminderBackendCalDAV ||
 		!strings.EqualFold(strings.TrimRight(existing.Server, "/"), server)
 	collectionChanged := !hasExisting || !strings.EqualFold(strings.TrimRight(existing.CollectionURL, "/"), strings.TrimRight(matched.URL, "/"))
 
@@ -111,9 +125,11 @@ func SaveAppleReminderSync(db *gorm.DB, userID uint, in AppleReminderSyncInput) 
 			cfg = existing
 		}
 		cfg.UserID = userID
+		cfg.Backend = appleReminderBackendCalDAV
 		cfg.Server = server
 		cfg.AppleID = appleID
 		cfg.Password = encrypted
+		cfg.SessionData = ""
 		cfg.CollectionURL = matched.URL
 		cfg.CollectionName = matched.Name
 		cfg.Enabled = enabled
@@ -159,6 +175,16 @@ func DiscoverAppleReminderLists(db *gorm.DB, userID uint, in AppleReminderDiscov
 			return nil, err
 		}
 	}
+	backend := strings.ToLower(strings.TrimSpace(in.Backend))
+	if backend == "" && hasExisting {
+		backend = appleReminderBackendOf(&existing)
+	}
+	if backend == appleReminderBackendCloudKit {
+		if !hasExisting {
+			return nil, errors.New("请先登录 iCloud 并选择提醒事项列表")
+		}
+		return discoverAppleCloudKitLists(db, &existing)
+	}
 	server := strings.TrimSpace(in.Server)
 	if server == "" && hasExisting {
 		server = existing.Server
@@ -172,7 +198,9 @@ func DiscoverAppleReminderLists(db *gorm.DB, userID uint, in AppleReminderDiscov
 	}
 	plainPassword := strings.TrimSpace(in.Password)
 	if plainPassword == "" {
-		if !hasExisting {
+		// A CloudKit configuration stores no CalDAV password, so switching back
+		// to CalDAV always requires the user to enter a fresh App-specific password.
+		if !hasExisting || appleReminderBackendOf(&existing) != appleReminderBackendCalDAV {
 			return nil, errors.New("请填写 App 专用密码")
 		}
 		var err error
@@ -271,6 +299,9 @@ func processDueAppleReminderQueue(db *gorm.DB, cfg *AppleReminderSync, now time.
 
 // processAppleReminderOutbox drains the due queue for one configuration.
 func processAppleReminderOutbox(db *gorm.DB, cfg *AppleReminderSync) (int, int, error) {
+	if appleReminderBackendOf(cfg) == appleReminderBackendCloudKit {
+		return processAppleCloudKitOutbox(db, *cfg)
+	}
 	plainPassword, err := decryptTarget(db, cfg.Password)
 	if err != nil {
 		markAppleReminderConfig(db, cfg, 0, 0, errors.New("Apple 应用专用密码无法读取，请重新保存配置"))

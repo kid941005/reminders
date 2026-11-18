@@ -210,6 +210,7 @@ export const runCalendarSync = () => request.post('/api/reminder/calendar-sync/r
 // Apple 提醒事项单向推送：本地新建/修改/完成/删除同步到 iCloud。密码同样只写不读。
 export interface AppleReminderSyncConfig {
   id: number
+  backend: string
   server: string
   apple_id: string
   collection_url: string
@@ -227,6 +228,8 @@ export interface AppleReminderCollection {
   name: string
 }
 export interface AppleReminderSyncInput {
+  backend?: string
+  login_id?: string
   server: string
   apple_id: string
   password?: string
@@ -235,9 +238,15 @@ export interface AppleReminderSyncInput {
   enabled?: boolean
 }
 export interface AppleReminderDiscoverInput {
+  backend?: string
   server: string
   apple_id: string
   password?: string
+}
+export interface AppleCloudKitLoginResult {
+  need_2fa: boolean
+  login_id: string
+  lists?: AppleReminderCollection[]
 }
 export interface AppleReminderSyncResult {
   pushed: number
@@ -252,3 +261,7 @@ export const saveAppleReminders = (data: AppleReminderSyncInput) =>
   request.put('/api/reminder/apple-reminders', data)
 export const deleteAppleReminders = () => request.delete('/api/reminder/apple-reminders')
 export const runAppleReminders = () => request.post('/api/reminder/apple-reminders/run')
+export const loginAppleCloudKit = (data: { apple_id: string; password: string }) =>
+  request.post('/api/reminder/apple-reminders/cloudkit/login', data)
+export const verifyAppleCloudKit = (data: { login_id: string; code: string }) =>
+  request.post('/api/reminder/apple-reminders/cloudkit/verify', data)
