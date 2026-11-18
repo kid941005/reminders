@@ -2,6 +2,15 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.18.1（2026-11-18）
+
+### 修复
+
+- **中国大陆 iCloud 账号无法完成 Apple 提醒事项同步**：CalDAV 客户端此前只信任 `icloud.com`
+  域名，Apple 将中国区账号重定向到 `pXX-caldav.icloud.com.cn` 分片时会直接拒绝；服务器默认值
+  也只认 `caldav.icloud.com`。现在同时接受 `icloud.com.cn` 及其分片，并在服务器设置中支持直接
+  填写 `www.icloud.com.cn` / `www.icloud.com` 自动转换为对应的 CalDAV 地址。
+
 ## v0.18.0（2026-11-17）
 
 ### 新增

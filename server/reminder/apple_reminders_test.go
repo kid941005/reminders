@@ -289,7 +289,26 @@ func TestAppleRedirectWhitelist(t *testing.T) {
 		t.Fatal("cross-host redirect to non-iCloud host should be rejected")
 	}
 	if isAppleCloudHost(nil) || isAppleCloudHost(mustURL(t, "https://noticloud.com/")) || !isAppleCloudHost(mustURL(t, "https://p01-caldav.icloud.com/")) {
-		t.Fatal("isAppleCloudHost must only accept icloud.com and its subdomains")
+		t.Fatal("isAppleCloudHost must accept icloud.com and its subdomains")
+	}
+	if !isAppleCloudHost(mustURL(t, "https://p01-caldav.icloud.com.cn/")) {
+		t.Fatal("isAppleCloudHost must accept China iCloud shards")
+	}
+	if isAppleCloudHost(mustURL(t, "https://evil.icloud.com.cn.example.com/")) {
+		t.Fatal("isAppleCloudHost must reject lookalike hosts")
+	}
+
+	for input, want := range map[string]string{
+		"":                           appleReminderDefaultServer,
+		"www.icloud.com":             appleReminderDefaultServer,
+		"https://icloud.com/":        appleReminderDefaultServer,
+		"www.icloud.com.cn":          appleReminderDefaultServerCN,
+		"https://www.icloud.com.cn/": appleReminderDefaultServerCN,
+		"p01-caldav.icloud.com.cn":   "p01-caldav.icloud.com.cn",
+	} {
+		if got := appleServerOrDefault(input); got != want {
+			t.Fatalf("appleServerOrDefault(%q) = %q, want %q", input, got, want)
+		}
 	}
 }
 

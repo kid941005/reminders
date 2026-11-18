@@ -29,13 +29,33 @@ func isAppleCloudHost(target *url.URL) bool {
 		return false
 	}
 	host := strings.ToLower(target.Hostname())
-	return host == "icloud.com" || strings.HasSuffix(host, ".icloud.com")
+	for _, zone := range []string{"icloud.com", "icloud.com.cn"} {
+		if host == zone || strings.HasSuffix(host, "."+zone) {
+			return true
+		}
+	}
+	return false
 }
 
+// appleServerOrDefault accepts the web address users normally know
+// (www.icloud.com / www.icloud.com.cn) and maps it to the matching CalDAV
+// endpoint. China-mainland iCloud accounts live on *.icloud.com.cn; sending
+// them to caldav.icloud.com can land in the wrong partition or be rejected
+// when Apple redirects to a pXX-caldav.icloud.com.cn shard.
 func appleServerOrDefault(server string) string {
 	server = strings.TrimSpace(server)
 	if server == "" {
 		return appleReminderDefaultServer
+	}
+	host := server
+	if parsed, err := url.Parse(server); err == nil && parsed.Hostname() != "" {
+		host = parsed.Hostname()
+	}
+	switch strings.ToLower(strings.TrimSuffix(host, ".")) {
+	case "www.icloud.com", "icloud.com":
+		return appleReminderDefaultServer
+	case "www.icloud.com.cn", "icloud.com.cn":
+		return appleReminderDefaultServerCN
 	}
 	return server
 }

@@ -148,13 +148,17 @@
         </button>
       </div>
 
-      <input
-        v-if="appleShowServer"
-        v-model="appleForm.server"
-        class="compact-input mt-2"
-        placeholder="CalDAV 服务器，默认 caldav.icloud.com"
-        autocomplete="off"
-      />
+      <template v-if="appleShowServer">
+        <input
+          v-model="appleForm.server"
+          class="compact-input mt-2"
+          placeholder="CalDAV 服务器，默认 caldav.icloud.com"
+          autocomplete="off"
+        />
+        <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
+          国际区账号填 caldav.icloud.com；中国大陆账号（icloud.com.cn）填 caldav.icloud.com.cn，也可以直接填 www.icloud.com.cn 自动转换。
+        </p>
+      </template>
 
       <div class="mt-2">
         <select v-model="appleForm.collection_url" class="compact-input" :disabled="appleCollections.length === 0">

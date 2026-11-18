@@ -10,11 +10,12 @@ const (
 	appleReminderStatusRetry   = "retry"
 	appleReminderStatusError   = "error"
 
-	appleReminderMaxAttempts    = 8
-	appleReminderBatchSize      = 200
-	appleReminderDefaultServer  = "caldav.icloud.com"
-	appleReminderCalendarProdID = "-//SmallGo Reminder//Apple Reminders//EN"
-	appleReminderUIDDomain      = "reminder.local"
+	appleReminderMaxAttempts     = 8
+	appleReminderBatchSize       = 200
+	appleReminderDefaultServer   = "caldav.icloud.com"
+	appleReminderDefaultServerCN = "caldav.icloud.com.cn"
+	appleReminderCalendarProdID  = "-//SmallGo Reminder//Apple Reminders//EN"
+	appleReminderUIDDomain       = "reminder.local"
 )
 
 // AppleReminderSync stores one user's iCloud CalDAV reminder-list binding.
