@@ -72,22 +72,21 @@
                 type="button"
                 class="quick-day-pill"
                 :class="{ active: quickTimeDayKey === day.key }"
+                :aria-pressed="quickTimeDayKey === day.key"
                 @mousedown.prevent
-                @click="quickTimeDayKey = day.key"
+                @click="selectQuickTimeDay(day)"
               >{{ day.label }}</button>
             </div>
-            <div v-if="quickTimeSlots.length" class="quick-time-grid">
-              <button
-                v-for="slot in quickTimeSlots"
-                :key="slot.key"
-                type="button"
-                class="quick-time-slot"
-                :class="{ selected: slot.selected }"
-                @mousedown.prevent
-                @click="pickQuickTime(slot)"
-              >{{ slot.label }}</button>
-            </div>
-            <p v-else class="quick-time-empty">今天已经没有可选的整点时间了，选择「明天」或「其他日期」吧。</p>
+            <TimeWheel
+              v-if="quickTimeDay && quickTimeAvailable"
+              class="quick-time-wheel"
+              :hour="quickWheelHour"
+              :minute="quickWheelMinute"
+              :min-hour="quickTimeMin?.hour"
+              :min-minute="quickTimeMin?.minute"
+              @change="onQuickTimeChange"
+            />
+            <p v-else class="quick-time-empty">今天已经没有可选的时间了，选择「明天」或「其他日期」吧。</p>
           </div>
         </Transition>
 
@@ -276,6 +275,7 @@ import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Toast from '../components/Toast.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import LunarDatePicker from '../components/LunarDatePicker.vue'
+import TimeWheel from '../components/TimeWheel.vue'
 import RepeatNotifySelect from '../components/RepeatNotifySelect.vue'
 import RemindBeforeSelect from '../components/RemindBeforeSelect.vue'
 import RepeatTimesSelect from '../components/RepeatTimesSelect.vue'
@@ -553,7 +553,6 @@ function nextTodayPreset(): Date {
   return target
 }
 interface QuickTimeDay { key: string; label: string; date: Date }
-interface QuickTimeSlot { key: string; label: string; date: Date; hour: number; minute: number; selected: boolean }
 
 function localDateKey(date: Date) {
   const pad = (n: number) => String(n).padStart(2, '0')
@@ -599,38 +598,67 @@ watch(quickTimeDays, days => {
     quickTimeDayKey.value = days[0].key
   }
 }, { immediate: true })
-// 30 分钟一档；今天过滤掉已经过去（含 1 分钟内）的时间，23:30 之后补一个 23:59。
-const quickTimeSlots = computed<QuickTimeSlot[]>(() => {
-  const day = quickTimeDays.value.find(item => item.key === quickTimeDayKey.value) || quickTimeDays.value[0]
-  if (!day) return []
-  const now = new Date(clockNow.value)
-  const isToday = localDateKey(now) === day.key
+const quickTimeDay = computed<QuickTimeDay | null>(() =>
+  quickTimeDays.value.find(item => item.key === quickTimeDayKey.value) || quickTimeDays.value[0] || null
+)
+// 滚轮只负责时/分；日期由上方「今天/明天/本周」的日期 pill 决定。
+const quickWheelParts = computed(() => {
+  const day = quickTimeDay.value
+  if (!day) return { hour: 9, minute: 0 }
   const due = quick.due_at ? new Date(quick.due_at) : null
-  const slots: QuickTimeSlot[] = []
-  const push = (hour: number, minute: number) => {
-    const date = new Date(day.date)
-    date.setHours(hour, minute, 0, 0)
-    if (isToday && date.getTime() < now.getTime() + 60_000) return
-    const selected = !!due
-      && localDateKey(due) === day.key
-      && due.getHours() === hour
-      && due.getMinutes() === minute
-    slots.push({
-      key: `${day.key}-${String(hour).padStart(2, '0')}${String(minute).padStart(2, '0')}`,
-      label: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
-      date, hour, minute, selected,
-    })
+  if (due && localDateKey(due) === day.key) {
+    return { hour: due.getHours(), minute: due.getMinutes() }
   }
-  for (let hour = 0; hour < 24; hour++) {
-    push(hour, 0)
-    push(hour, 30)
+  if (day.key === localDateKey(new Date(clockNow.value))) {
+    const fallback = nextTodayPreset()
+    return { hour: fallback.getHours(), minute: fallback.getMinutes() }
   }
-  if (isToday) push(23, 59)
-  return slots
+  return { hour: 9, minute: 0 }
 })
-function pickQuickTime(slot: QuickTimeSlot) {
-  quick.due_at = toLocalIso(slot.date)
-  quickTimeOpen.value = false
+const quickWheelHour = computed(() => quickWheelParts.value.hour)
+const quickWheelMinute = computed(() => quickWheelParts.value.minute)
+// 今天只能选未来时间：最早为当前时刻 + 1 分钟；23:59 之后返回 hour=24，
+// 由模板显示「今天没有可选时间」而不是让滚轮停在过期值上。
+const quickTimeMin = computed<{ hour: number; minute: number } | null>(() => {
+  const day = quickTimeDay.value
+  if (!day) return null
+  const now = new Date(clockNow.value)
+  if (day.key !== localDateKey(now)) return null
+  const cutoff = new Date(now.getTime() + 60_000)
+  if (localDateKey(cutoff) !== day.key) {
+    // 23:59 这一档只在它还没过去时可用；23:59:xx 已经没有未来的整分钟。
+    return now.getHours() === 23 && now.getMinutes() === 59
+      ? { hour: 24, minute: 0 }
+      : { hour: 23, minute: 59 }
+  }
+  return { hour: cutoff.getHours(), minute: cutoff.getMinutes() }
+})
+const quickTimeAvailable = computed(() => !!quickTimeDay.value && (!quickTimeMin.value || quickTimeMin.value.hour < 24))
+function clampQuickDue(date: Date) {
+  const min = quickTimeMin.value
+  if (!min || min.hour >= 24) return date
+  if (date.getHours() < min.hour || (date.getHours() === min.hour && date.getMinutes() < min.minute)) {
+    const clamped = new Date(date)
+    clamped.setHours(min.hour, min.minute, 0, 0)
+    return clamped
+  }
+  return date
+}
+function onQuickTimeChange(value: { hour: number; minute: number }) {
+  const day = quickTimeDay.value
+  if (!day) return
+  const picked = new Date(day.date)
+  picked.setHours(value.hour, value.minute, 0, 0)
+  quick.due_at = toLocalIso(clampQuickDue(picked))
+}
+function selectQuickTimeDay(day: QuickTimeDay) {
+  // 先取当前时/分，再切换日期，避免 computed 因为 due_at 还停在上一天而
+  // 回退到默认时间。
+  const parts = quickWheelParts.value
+  quickTimeDayKey.value = day.key
+  const picked = new Date(day.date)
+  picked.setHours(parts.hour, parts.minute, 0, 0)
+  quick.due_at = toLocalIso(clampQuickDue(picked))
 }
 function clearQuickTime() {
   quick.due_at = null
@@ -660,20 +688,34 @@ function setPreset(kind: 'today' | 'tomorrow' | 'week') {
     if (quick.due_at) quickTimeDayKey.value = localDateKey(new Date(quick.due_at))
     return
   }
+  // 切换快捷方式时尽量保留用户已经选好的时分：今天/明天/本周只是换日期，
+  // 不该把 03:45 重置成 20:00。只有第一次选择（还没有 due_at）才用默认时间。
+  const previous = quick.due_at ? new Date(quick.due_at) : null
+  const previousTime = previous && !Number.isNaN(previous.getTime())
+    ? { hour: previous.getHours(), minute: previous.getMinutes() }
+    : null
   preset.value = kind
   // 快捷按钮直接展示时间列表，同时收起日期弹层和「更多」面板。
   quickDateOpen.value = false
   quickExpanded.value = false
   quickTimeOpen.value = true
-  quickTimeDayKey.value = localDateKey(new Date(clockNow.value))
-  if (kind === 'today' || kind === 'week') {
-    quick.due_at = nextTodayPreset().toISOString()
-    return
+  quickTimeDayKey.value = kind === 'week' && previous && !Number.isNaN(previous.getTime())
+    ? localDateKey(previous)
+    : localDateKey(new Date(clockNow.value))
+  // 本周可能把上一个日期排除在外，quickTimeDays 的 watch 会把 key 拉回今天，
+  // 这里同样回退到第一天，保证 due_at 与高亮日期一致。
+  const day = quickTimeDays.value.find(item => item.key === quickTimeDayKey.value) || quickTimeDays.value[0]
+  const target = day ? new Date(day.date) : new Date(clockNow.value)
+  if (previousTime) {
+    target.setHours(previousTime.hour, previousTime.minute, 0, 0)
+  } else if (kind === 'tomorrow') {
+    target.setHours(9, 0, 0, 0)
+  } else {
+    const fallback = nextTodayPreset()
+    target.setHours(fallback.getHours(), fallback.getMinutes(), 0, 0)
   }
-  const d = new Date()
-  d.setSeconds(0, 0)
-  if (kind === 'tomorrow') { d.setDate(d.getDate() + 1); d.setHours(9, 0) }
-  quick.due_at = d.toISOString()
+  // 本周选中的也可能是今天，统一夹到未来时间；非今天时 quickTimeMin 为空，不会改动。
+  quick.due_at = toLocalIso(clampQuickDue(target))
 }
 function toggleQuickChannel(channel: ReminderChannel) {
   quickChannelsTouched = true
@@ -884,13 +926,7 @@ function onShortcut(e: KeyboardEvent) {
   background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.22)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.16)));
 }
 .quick-day-pill.active { @apply border-brand-500/30 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
-.quick-time-grid { @apply grid max-h-44 grid-cols-4 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-6; }
-.quick-time-slot {
-  @apply rounded-lg border px-1.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:border-brand-500/35 hover:text-brand-600;
-  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.12));
-  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.22)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.16)));
-}
-.quick-time-slot.selected { @apply border-brand-500/40 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
+.quick-time-wheel { @apply mt-1; }
 .quick-time-empty { @apply py-3 text-center text-xs text-muted-foreground; }
 .channel-pill {
   @apply rounded-xl border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition disabled:cursor-not-allowed disabled:opacity-35;
