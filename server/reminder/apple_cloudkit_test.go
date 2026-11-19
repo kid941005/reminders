@@ -114,6 +114,51 @@ func TestAppleCloudKitTwoFactorOptionsDTO(t *testing.T) {
 	}
 }
 
+func TestAppleCloudKitTwoFactorOptionsUnmarshalPhoneShapes(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want []int
+	}{
+		{
+			name: "trustedPhoneNumbers",
+			body: `{"trustedPhoneNumbers":[{"id":7,"numberWithDialCode":"+86 111"}]}`,
+			want: []int{7},
+		},
+		{
+			name: "single trustedPhoneNumber",
+			body: `{"trustedPhoneNumber":{"id":8,"numberWithDialCode":"+86 222"}}`,
+			want: []int{8},
+		},
+		{
+			name: "phoneNumberVerification object",
+			body: `{"phoneNumberVerification":{"trustedPhoneNumber":{"id":9,"numberWithDialCode":"+86 333"},"trustedPhoneNumbers":[{"id":10,"numberWithDialCode":"+86 444"}]}}`,
+			want: []int{10, 9},
+		},
+		{
+			name: "duplicate shapes are deduplicated",
+			body: `{"trustedPhoneNumbers":[{"id":7,"numberWithDialCode":"+86 111"}],"trustedPhoneNumber":{"id":7,"numberWithDialCode":"+86 111"}}`,
+			want: []int{7},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var options appleCloudKitTwoFactorOptions
+			if err := json.Unmarshal([]byte(tc.body), &options); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if len(options.TrustedPhoneNumbers) != len(tc.want) {
+				t.Fatalf("phones = %#v, want ids %v", options.TrustedPhoneNumbers, tc.want)
+			}
+			for i, want := range tc.want {
+				if options.TrustedPhoneNumbers[i].ID != want {
+					t.Fatalf("phone[%d].id = %d, want %d", i, options.TrustedPhoneNumbers[i].ID, want)
+				}
+			}
+		})
+	}
+}
+
 func TestAppleCloudKitPickPhone(t *testing.T) {
 	options := &appleCloudKitTwoFactorOptions{TrustedPhoneNumbers: []appleCloudKitPhoneNumber{
 		{ID: 1, NumberWithDialCode: "+86 111"},

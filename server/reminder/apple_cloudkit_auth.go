@@ -106,11 +106,71 @@ type appleCloudKitSecurityCodeInfo struct {
 
 // appleCloudKitTwoFactorOptions is the subset of Apple's /appleauth/auth
 // response needed to offer a verification method.
+//
+// Apple is not consistent about where it puts the trusted phone numbers:
+// modern HSA2 JSON usually returns "trustedPhoneNumbers", but some responses
+// (and the HTML auth shell) wrap them in "phoneNumberVerification" or return a
+// single "trustedPhoneNumber" object. All shapes are normalized by
+// UnmarshalJSON so a field rename does not silently hide SMS verification.
 type appleCloudKitTwoFactorOptions struct {
 	TrustedDevices      []appleCloudKitTrustedDevice  `json:"trustedDevices"`
 	TrustedPhoneNumbers []appleCloudKitPhoneNumber    `json:"trustedPhoneNumbers"`
 	NoTrustedDevices    bool                          `json:"noTrustedDevices"`
 	SecurityCode        appleCloudKitSecurityCodeInfo `json:"securityCode"`
+}
+
+type appleCloudKitPhoneVerification struct {
+	TrustedPhoneNumber  *appleCloudKitPhoneNumber  `json:"trustedPhoneNumber"`
+	TrustedPhoneNumbers []appleCloudKitPhoneNumber `json:"trustedPhoneNumbers"`
+}
+
+// UnmarshalJSON accepts every trusted-phone shape Apple has been observed to
+// return. Without this, an account with a trusted phone number can look like it
+// has no verification method at all, and the settings page tells the user to
+// re-login on an iPhone even though SMS would work.
+func (o *appleCloudKitTwoFactorOptions) UnmarshalJSON(data []byte) error {
+	type rawOptions struct {
+		TrustedDevices          []appleCloudKitTrustedDevice    `json:"trustedDevices"`
+		TrustedPhoneNumbers     []appleCloudKitPhoneNumber      `json:"trustedPhoneNumbers"`
+		TrustedPhoneNumber      *appleCloudKitPhoneNumber       `json:"trustedPhoneNumber"`
+		PhoneNumberVerification *appleCloudKitPhoneVerification `json:"phoneNumberVerification"`
+		NoTrustedDevices        bool                            `json:"noTrustedDevices"`
+		SecurityCode            appleCloudKitSecurityCodeInfo   `json:"securityCode"`
+	}
+	var raw rawOptions
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	o.TrustedDevices = raw.TrustedDevices
+	o.NoTrustedDevices = raw.NoTrustedDevices
+	o.SecurityCode = raw.SecurityCode
+	o.TrustedPhoneNumbers = nil
+	seen := make(map[string]bool, 4)
+	add := func(phone *appleCloudKitPhoneNumber) {
+		if phone == nil || (phone.ID == 0 && strings.TrimSpace(phone.NumberWithDialCode) == "") {
+			return
+		}
+		key := fmt.Sprintf("id:%d", phone.ID)
+		if phone.ID == 0 {
+			key = "number:" + strings.TrimSpace(phone.NumberWithDialCode)
+		}
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		o.TrustedPhoneNumbers = append(o.TrustedPhoneNumbers, *phone)
+	}
+	for i := range raw.TrustedPhoneNumbers {
+		add(&raw.TrustedPhoneNumbers[i])
+	}
+	add(raw.TrustedPhoneNumber)
+	if raw.PhoneNumberVerification != nil {
+		for i := range raw.PhoneNumberVerification.TrustedPhoneNumbers {
+			add(&raw.PhoneNumberVerification.TrustedPhoneNumbers[i])
+		}
+		add(raw.PhoneNumberVerification.TrustedPhoneNumber)
+	}
+	return nil
 }
 
 type appleCloudKitPhoneOption struct {

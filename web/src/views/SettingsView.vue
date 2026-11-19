@@ -169,9 +169,6 @@
               {{ cloudkitResending ? '发送中…' : '发送短信验证码' }}
             </button>
           </div>
-          <p v-if="cloudkitOptions && !cloudkitPhones.length && !(cloudkitOptions.trusted_device_count || 0)" class="text-[11px] leading-5 text-rose-500">
-            该 Apple ID 没有受信任设备或电话号码，无法完成两步验证。请先在 iPhone 上登录该账号，或改用 CalDAV。
-          </p>
         </div>
         <p class="text-[11px] leading-5 text-muted-foreground">
           首次登录需要完成两步验证；登录成功后凭据会加密保存，之后无需重复验证。若账号已登录过，可直接加载列表并保存。
@@ -681,12 +678,18 @@ const cloudkitHint = computed(() => {
   const phones = options.phones || []
   if (options.no_trusted_devices) {
     if (!phones.length) {
-      return '该 Apple ID 没有受信任设备或电话号码，无法接收验证码。'
+      return 'Apple 没有返回可用的受信任设备或电话号码，请稍后重试，或先在 iPhone 上确认该账号的受信任号码。'
     }
     if (options.sms_auto_sent) {
       return `该账号没有受信任设备，验证码已发送到 ${phones[0].number}。若没有收到，可重新发送。`
     }
     return '该账号没有受信任设备，请选择受信任电话号码并点击“发送短信验证码”。'
+  }
+  // 新版双重认证的 JSON 响应通常不返回 trustedDevices（那是旧版两步验证
+  // 的字段），因此不能再用 trusted_device_count 判断“没有受信任设备”。
+  // 只要 no_trusted_devices 为 false，就说明 Apple 已向受信任设备推送验证码。
+  if (!phones.length) {
+    return '验证码已发送到你的受信任设备，请输入设备上显示的 6 位数字。'
   }
   return '验证码已发送到你的受信任设备。若没有收到，可选择电话号码改用短信接收。'
 })
@@ -735,9 +738,11 @@ async function loginCloudKit() {
       const options = cloudkitOptions.value
       const phones = cloudkitPhones.value
       if (options?.no_trusted_devices && !phones.length) {
-        notifyApple('该 Apple ID 没有受信任设备或电话号码，无法接收验证码', 'error')
+        notifyApple('未获取到可用的验证方式，请稍后重试，或在 iPhone 上确认受信任号码', 'error')
       } else if (options?.sms_auto_sent) {
         notifyApple('验证码已发送到 ' + (phones[0]?.number || '受信任电话号码'))
+      } else if (!phones.length) {
+        notifyApple('验证码已发送到受信任设备，请输入设备上显示的 6 位数字')
       } else {
         notifyApple('验证码已发送到受信任设备；没收到可改用短信接收')
       }
