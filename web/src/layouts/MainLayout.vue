@@ -65,18 +65,46 @@
             </div>
           </form>
 
-          <RouterLink
-            v-for="list in lists"
-            :key="list.id"
-            :to="`/admin/list/${list.id}`"
-            class="nav-row"
-            :class="{ 'nav-row-active': route.path === `/admin/list/${list.id}` }"
-            @click="mobileOpen = false"
-          >
-            <span class="h-2.5 w-2.5 rounded-full ring-4 ring-current/10" :style="{ color: listColor(list.color), background: listColor(list.color) }"></span>
-            <span class="flex-1 truncate">{{ list.name }}</span>
-            <span v-if="list.open_count" class="nav-count">{{ list.open_count }}</span>
-          </RouterLink>
+          <template v-for="list in lists" :key="list.id">
+            <form
+              v-if="editingListId === list.id"
+              class="mx-2 mt-1 rounded-xl border border-brand-500/20 bg-brand-500/5 p-2"
+              @submit.prevent="submitRename(list)"
+            >
+              <input
+                data-list-rename-input
+                v-model="editingListName"
+                class="w-full bg-transparent px-2 py-1 text-sm outline-none"
+                maxlength="40"
+                placeholder="清单名称"
+                @keydown.esc="editingListId = null"
+              />
+              <div class="mt-2 flex justify-end gap-1">
+                <button type="button" class="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-muted" @click="editingListId = null">取消</button>
+                <button class="rounded-lg bg-brand-500 px-2 py-1 text-xs font-semibold text-white disabled:opacity-50" :disabled="!editingListName.trim()">保存</button>
+              </div>
+            </form>
+            <div v-else class="group relative">
+              <RouterLink
+                :to="`/admin/list/${list.id}`"
+                class="nav-row pr-14"
+                :class="{ 'nav-row-active': route.path === `/admin/list/${list.id}` }"
+                @click="mobileOpen = false"
+              >
+                <span class="h-2.5 w-2.5 rounded-full ring-4 ring-current/10" :style="{ color: listColor(list.color), background: listColor(list.color) }"></span>
+                <span class="flex-1 truncate">{{ list.name }}</span>
+                <span v-if="list.open_count" class="nav-count">{{ list.open_count }}</span>
+              </RouterLink>
+              <div class="absolute right-1.5 top-1/2 flex -translate-y-1/2 items-center gap-0.5 rounded-lg bg-surface/90 p-0.5 shadow-sm backdrop-blur transition-opacity lg:pointer-events-none lg:opacity-0 lg:group-hover:pointer-events-auto lg:group-hover:opacity-100">
+                <button type="button" class="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground" title="重命名清单" aria-label="重命名清单" @click.prevent.stop="startRenameList(list)">
+                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor"><path d="m14.5 5.5 4 4M4 20l4.2-1 10.3-10.3a2.1 2.1 0 0 0 0-3l-.2-.2a2.1 2.1 0 0 0-3 0L5 15.8 4 20Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+                <button v-if="!list.is_default" type="button" class="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10" title="删除清单" aria-label="删除清单" @click.prevent.stop="askDeleteList(list)">
+                  <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor"><path d="M19 7l-.9 12.1A2 2 0 0 1 16.1 21H7.9a2 2 0 0 1-2-1.9L5 7m5 4v6m4-6v6m1-10V4a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v3M4 7h16" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </button>
+              </div>
+            </div>
+          </template>
         </nav>
 
         <div class="border-t border-border/70 p-3">
@@ -173,6 +201,18 @@
       @dismiss="dismissCurrentAlert"
     />
 
+    <!-- 清单删除确认 -->
+    <ConfirmDialog
+      v-model="deleteListVisible"
+      danger
+      title="删除清单？"
+      :message="`确定删除清单「${deleteListTarget?.name || ''}」？清单里的提醒会移到默认清单，不会被删除。`"
+      confirm-text="删除"
+      loading-text="删除中…"
+      :loading="deleteListLoading"
+      @confirm="confirmDeleteList"
+    />
+
     <!-- 赞赏支持弹窗 -->
     <SupportModal />
   </div>
@@ -182,6 +222,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import Toast from '../components/Toast.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import SupportModal from '../components/SupportModal.vue'
 import UiThemeToggle from '../components/ui/ThemeToggle.vue'
 import ReminderAlert from '../components/ReminderAlert.vue'
@@ -190,12 +231,14 @@ import { useSupportStore } from '../stores/support'
 import {
   completeReminder,
   createList,
+  deleteList,
   getLists,
   getNotifications,
   getRevision,
   getSummary,
   markNotificationRead,
   snoozeReminder,
+  updateList,
   type ReminderList,
 } from '../api/reminder'
 import { getVersion } from '../api/config'
@@ -211,6 +254,11 @@ const summary = ref<Record<string, number>>({})
 const creatingList = ref(false)
 const newListName = ref('')
 const listInput = ref<HTMLInputElement | null>(null)
+const editingListId = ref<number | null>(null)
+const editingListName = ref('')
+const deleteListVisible = ref(false)
+const deleteListTarget = ref<ReminderList | null>(null)
+const deleteListLoading = ref(false)
 const realtimeToast = ref('')
 // 渠道投递失败是错误，不该用绿色成功样式提示。
 const realtimeToastType = ref<'success' | 'error'>('success')
@@ -296,6 +344,60 @@ async function submitList() {
     realtimeToast.value = ''
     const message = err?.response?.data?.message || '创建清单失败，请重试'
     setTimeout(() => { realtimeToast.value = message }, 0)
+  }
+}
+function toastError(message: string) {
+  realtimeToastType.value = 'error'
+  realtimeToast.value = ''
+  // 等 Vue 先把旧提示清空，再显示新提示；否则连续两次错误只看到第一条。
+  setTimeout(() => { realtimeToast.value = message }, 0)
+}
+function startRenameList(list: ReminderList) {
+  editingListId.value = list.id
+  editingListName.value = list.name
+  nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('[data-list-rename-input]')
+    input?.focus()
+    input?.select()
+  })
+}
+async function submitRename(list: ReminderList) {
+  const name = editingListName.value.trim()
+  if (!name) return
+  try {
+    const res = await updateList(list.id, { name })
+    if (res.data?.code !== 0) {
+      toastError(res.data?.message || '重命名清单失败')
+      return
+    }
+    editingListId.value = null
+    await refreshNavigation()
+  } catch (err: any) {
+    toastError(err?.response?.data?.message || '重命名清单失败，请重试')
+  }
+}
+function askDeleteList(list: ReminderList) {
+  deleteListTarget.value = list
+  deleteListVisible.value = true
+}
+async function confirmDeleteList() {
+  const target = deleteListTarget.value
+  if (!target) return
+  deleteListLoading.value = true
+  try {
+    const res = await deleteList(target.id)
+    if (res.data?.code !== 0) {
+      toastError(res.data?.message || '删除清单失败')
+      return
+    }
+    deleteListVisible.value = false
+    deleteListTarget.value = null
+    if (route.path === '/admin/list/' + target.id) router.push('/admin')
+    await refreshNavigation()
+  } catch (err: any) {
+    toastError(err?.response?.data?.message || '删除清单失败，请重试')
+  } finally {
+    deleteListLoading.value = false
   }
 }
 async function refreshNavigation() {

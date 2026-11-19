@@ -40,15 +40,15 @@
         <button v-if="quick.title" class="btn-primary !h-9 !px-4" :disabled="saving" @click="submitQuick">{{ saving ? '保存中' : '添加' }}</button>
       </div>
 
-      <div v-if="quickFocused || quick.title" class="mt-3 border-t border-border/60 pt-3 sm:mt-4 sm:pt-4">
+      <div v-if="quickFocused || quick.title || quickExpanded" class="mt-3 border-t border-border/60 pt-3 sm:mt-4 sm:pt-4">
         <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
-          <button class="quick-chip" :class="{ active: preset === 'today' }" @click="setPreset('today')">今天</button>
-          <button class="quick-chip" :class="{ active: preset === 'tomorrow' }" @click="setPreset('tomorrow')">明天</button>
-          <button class="quick-chip" :class="{ active: preset === 'weekend' }" @click="setPreset('weekend')">本周末</button>
-          <button class="quick-chip" :class="{ active: quick.priority === 3 }" @click="quick.priority = quick.priority === 3 ? 0 : 3">
+          <button class="quick-chip" :class="{ active: preset === 'today' }" @mousedown.prevent @click="setPreset('today')">今天</button>
+          <button class="quick-chip" :class="{ active: preset === 'tomorrow' }" @mousedown.prevent @click="setPreset('tomorrow')">明天</button>
+          <button class="quick-chip" :class="{ active: preset === 'weekend' }" @mousedown.prevent @click="setPreset('weekend')">本周末</button>
+          <button class="quick-chip" :class="{ active: quick.priority === 3 }" @mousedown.prevent @click="quick.priority = quick.priority === 3 ? 0 : 3">
             <span class="text-rose-500">!!!</span> 重要
           </button>
-          <button class="quick-chip" :class="{ active: quickExpanded }" @click="quickExpanded = !quickExpanded">
+          <button class="quick-chip" :class="{ active: quickExpanded }" @mousedown.prevent @click="quickExpanded = !quickExpanded">
             <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor"><path d="M12 6v.01M12 12v.01M12 18v.01" stroke-width="3" stroke-linecap="round"/></svg>
             更多
           </button>
@@ -151,7 +151,7 @@
       </div>
       <h3 class="mt-5 text-lg font-extrabold">{{ emptyTitle }}</h3>
       <p class="mt-1 max-w-sm text-sm leading-6 text-muted-foreground">{{ emptyText }}</p>
-      <button v-if="view !== 'completed'" class="btn-primary mt-5" @click="focusQuickAdd">添加第一条提醒</button>
+      <button v-if="view !== 'completed' && !searching" class="btn-primary mt-5" @click="focusQuickAdd">添加第一条提醒</button>
     </section>
 
     <Transition name="drawer">
@@ -362,8 +362,15 @@ const subtitle = computed(() => {
   return '所有未完成的提醒都在这里'
 })
 const overdueCount = computed(() => items.value.filter(isOverdue).length)
-const emptyTitle = computed(() => view.value === 'completed' ? '还没有完成记录' : view.value === 'today' ? '今天轻松了' : '这里还没有提醒')
-const emptyText = computed(() => view.value === 'completed' ? '完成的提醒会安静地收在这里。' : '把脑海里惦记的事情记下来，剩下的交给 Reminder。')
+const searching = computed(() => search.value.trim().length > 0)
+const emptyTitle = computed(() => {
+  if (searching.value) return '没有找到相关提醒'
+  return view.value === 'completed' ? '还没有完成记录' : view.value === 'today' ? '今天轻松了' : '这里还没有提醒'
+})
+const emptyText = computed(() => {
+  if (searching.value) return '换个关键词试试，或清空搜索查看全部提醒。'
+  return view.value === 'completed' ? '完成的提醒会安静地收在这里。' : '把脑海里惦记的事情记下来，剩下的交给 Reminder。'
+})
 
 const quickDateOpen = ref(false)
 const editingDateOpen = ref(false)
