@@ -40,20 +40,56 @@
         <button v-if="quick.title" class="btn-primary !h-9 !px-4" :disabled="saving" @click="submitQuick">{{ saving ? '保存中' : '添加' }}</button>
       </div>
 
-      <div v-if="quickFocused || quick.title || quickExpanded" class="mt-3 border-t border-border/60 pt-3 sm:mt-4 sm:pt-4">
+      <div v-if="quickFocused || quick.title || quickExpanded || quickTimeOpen || preset" class="mt-3 border-t border-border/60 pt-3 sm:mt-4 sm:pt-4">
         <div class="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <button class="quick-chip" :class="{ active: preset === 'today' }" @mousedown.prevent @click="setPreset('today')">今天</button>
           <button class="quick-chip" :class="{ active: preset === 'tomorrow' }" @mousedown.prevent @click="setPreset('tomorrow')">明天</button>
-          <button class="quick-chip" :class="{ active: preset === 'weekend' }" @mousedown.prevent @click="setPreset('weekend')">本周末</button>
+          <button class="quick-chip" :class="{ active: preset === 'week' }" @mousedown.prevent @click="setPreset('week')">本周</button>
           <button class="quick-chip" :class="{ active: quick.priority === 3 }" @mousedown.prevent @click="quick.priority = quick.priority === 3 ? 0 : 3">
             <span class="text-rose-500">!!!</span> 重要
           </button>
-          <button class="quick-chip" :class="{ active: quickExpanded }" @mousedown.prevent @click="quickExpanded = !quickExpanded">
+          <button class="quick-chip" :class="{ active: quickExpanded }" @mousedown.prevent @click="toggleQuickExpanded">
             <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor"><path d="M12 6v.01M12 12v.01M12 18v.01" stroke-width="3" stroke-linecap="round"/></svg>
             更多
           </button>
           <span v-if="quick.due_at" class="ml-auto text-xs font-semibold text-brand-600 dark:text-brand-300">{{ formatDue(quick.due_at) }}</span>
         </div>
+
+        <Transition name="expand">
+          <div v-if="quickTimeOpen" class="quick-time-panel">
+            <div class="quick-time-head">
+              <span class="quick-time-title">{{ quickTimeTitle }}</span>
+              <div class="flex items-center gap-3">
+                <button v-if="quick.due_at" type="button" class="quick-time-action" @mousedown.prevent @click="clearQuickTime">清除</button>
+                <button type="button" class="quick-time-action" @mousedown.prevent @click="openDatePickerFromQuick">其他日期</button>
+                <button type="button" class="quick-time-action" @mousedown.prevent @click="quickTimeOpen = false">收起</button>
+              </div>
+            </div>
+            <div v-if="quickTimeDays.length > 1" class="mb-2 flex flex-wrap gap-1.5">
+              <button
+                v-for="day in quickTimeDays"
+                :key="day.key"
+                type="button"
+                class="quick-day-pill"
+                :class="{ active: quickTimeDayKey === day.key }"
+                @mousedown.prevent
+                @click="quickTimeDayKey = day.key"
+              >{{ day.label }}</button>
+            </div>
+            <div v-if="quickTimeSlots.length" class="quick-time-grid">
+              <button
+                v-for="slot in quickTimeSlots"
+                :key="slot.key"
+                type="button"
+                class="quick-time-slot"
+                :class="{ selected: slot.selected }"
+                @mousedown.prevent
+                @click="pickQuickTime(slot)"
+              >{{ slot.label }}</button>
+            </div>
+            <p v-else class="quick-time-empty">今天已经没有可选的整点时间了，选择「明天」或「其他日期」吧。</p>
+          </div>
+        </Transition>
 
         <Transition name="expand">
           <div v-if="quickExpanded" class="mt-3 grid gap-2.5 rounded-2xl bg-muted/65 p-3 sm:mt-4 sm:grid-cols-2 sm:gap-3 sm:p-4 lg:grid-cols-4">
@@ -235,7 +271,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import Toast from '../components/Toast.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -373,6 +409,8 @@ const emptyText = computed(() => {
 })
 
 const quickDateOpen = ref(false)
+const quickTimeOpen = ref(false)
+const quickTimeDayKey = ref('')
 const editingDateOpen = ref(false)
 const quickDateAnchor = ref<HTMLElement | null>(null)
 const editingDateAnchor = ref<HTMLElement | null>(null)
@@ -382,6 +420,7 @@ const quickDatePicked = computed({
   set: value => {
     quick.due_at = value ? toLocalIso(value) : null
     preset.value = ''
+    quickTimeOpen.value = false
   },
 })
 const editingDatePicked = computed({
@@ -476,6 +515,7 @@ async function submitQuick() {
     applyDefaultChannels()
     if (dayKey.value) quick.due_at = dayDefaultDue()
     preset.value = ''
+    quickTimeOpen.value = false
     quickExpanded.value = false
     // 不再手动把 quickFocused 置 false：输入框随后会重新获得焦点，不会触发
     // blur，强行置 false 会让「今天/明天…」这一行收起来且无法恢复。
@@ -512,22 +552,127 @@ function nextTodayPreset(): Date {
   }
   return target
 }
-function setPreset(kind: string) {
-  preset.value = preset.value === kind ? '' : kind
-  // 快捷按钮直接写回时间，同时收起可能开着的日期弹层。
-  quickDateOpen.value = false
-  if (!preset.value) {
-    quick.due_at = null
+interface QuickTimeDay { key: string; label: string; date: Date }
+interface QuickTimeSlot { key: string; label: string; date: Date; hour: number; minute: number; selected: boolean }
+
+function localDateKey(date: Date) {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+}
+function startOfLocalDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate())
+}
+const quickTimeTitle = computed(() => {
+  if (preset.value === 'week') return '本周 · 选择时间'
+  if (preset.value === 'tomorrow') return '明天 · 选择时间'
+  return '今天 · 选择时间'
+})
+// 今天/明天只给一天；本周列出从今天到本周日的剩余日期，周末自然也在其中。
+const quickTimeDays = computed<QuickTimeDay[]>(() => {
+  if (!quickTimeOpen.value) return []
+  const today = startOfLocalDay(new Date(clockNow.value))
+  if (preset.value === 'today') {
+    return [{ key: localDateKey(today), label: '今天', date: today }]
+  }
+  if (preset.value === 'tomorrow') {
+    const tomorrow = new Date(today)
+    tomorrow.setDate(today.getDate() + 1)
+    return [{ key: localDateKey(tomorrow), label: '明天', date: tomorrow }]
+  }
+  if (preset.value === 'week') {
+    const days: QuickTimeDay[] = []
+    const mondayOffset = (today.getDay() + 6) % 7
+    const weekEnd = new Date(today)
+    weekEnd.setDate(today.getDate() + (6 - mondayOffset))
+    for (let cursor = new Date(today); cursor <= weekEnd; cursor.setDate(cursor.getDate() + 1)) {
+      const key = localDateKey(cursor)
+      const label = days.length === 0 ? '今天' : days.length === 1 ? '明天' : new Intl.DateTimeFormat('zh-CN', { weekday: 'short' }).format(cursor)
+      days.push({ key, label, date: new Date(cursor) })
+    }
+    return days
+  }
+  return []
+})
+// 选择日期后同步校正当前高亮的日期，避免跨天或切换快捷方式时停在不存在的日期上。
+watch(quickTimeDays, days => {
+  if (days.length && !days.some(day => day.key === quickTimeDayKey.value)) {
+    quickTimeDayKey.value = days[0].key
+  }
+}, { immediate: true })
+// 30 分钟一档；今天过滤掉已经过去（含 1 分钟内）的时间，23:30 之后补一个 23:59。
+const quickTimeSlots = computed<QuickTimeSlot[]>(() => {
+  const day = quickTimeDays.value.find(item => item.key === quickTimeDayKey.value) || quickTimeDays.value[0]
+  if (!day) return []
+  const now = new Date(clockNow.value)
+  const isToday = localDateKey(now) === day.key
+  const due = quick.due_at ? new Date(quick.due_at) : null
+  const slots: QuickTimeSlot[] = []
+  const push = (hour: number, minute: number) => {
+    const date = new Date(day.date)
+    date.setHours(hour, minute, 0, 0)
+    if (isToday && date.getTime() < now.getTime() + 60_000) return
+    const selected = !!due
+      && localDateKey(due) === day.key
+      && due.getHours() === hour
+      && due.getMinutes() === minute
+    slots.push({
+      key: `${day.key}-${String(hour).padStart(2, '0')}${String(minute).padStart(2, '0')}`,
+      label: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      date, hour, minute, selected,
+    })
+  }
+  for (let hour = 0; hour < 24; hour++) {
+    push(hour, 0)
+    push(hour, 30)
+  }
+  if (isToday) push(23, 59)
+  return slots
+})
+function pickQuickTime(slot: QuickTimeSlot) {
+  quick.due_at = toLocalIso(slot.date)
+  quickTimeOpen.value = false
+}
+function clearQuickTime() {
+  quick.due_at = null
+  preset.value = ''
+  quickTimeOpen.value = false
+}
+async function openDatePickerFromQuick() {
+  quickTimeOpen.value = false
+  quickExpanded.value = true
+  await nextTick()
+  quickDateOpen.value = true
+}
+function toggleQuickExpanded() {
+  quickExpanded.value = !quickExpanded.value
+  if (quickExpanded.value) quickTimeOpen.value = false
+}
+function setPreset(kind: 'today' | 'tomorrow' | 'week') {
+  // 已经选过该快捷方式时只负责展开/收起列表，保留用户选好的具体时间。
+  if (preset.value === kind) {
+    if (quickTimeOpen.value) {
+      quickTimeOpen.value = false
+      return
+    }
+    quickDateOpen.value = false
+    quickExpanded.value = false
+    quickTimeOpen.value = true
+    if (quick.due_at) quickTimeDayKey.value = localDateKey(new Date(quick.due_at))
     return
   }
-  if (kind === 'today') {
+  preset.value = kind
+  // 快捷按钮直接展示时间列表，同时收起日期弹层和「更多」面板。
+  quickDateOpen.value = false
+  quickExpanded.value = false
+  quickTimeOpen.value = true
+  quickTimeDayKey.value = localDateKey(new Date(clockNow.value))
+  if (kind === 'today' || kind === 'week') {
     quick.due_at = nextTodayPreset().toISOString()
     return
   }
   const d = new Date()
   d.setSeconds(0, 0)
   if (kind === 'tomorrow') { d.setDate(d.getDate() + 1); d.setHours(9, 0) }
-  if (kind === 'weekend') { const add = (6 - d.getDay() + 7) % 7 || 7; d.setDate(d.getDate() + add); d.setHours(9, 0) }
   quick.due_at = d.toISOString()
 }
 function toggleQuickChannel(channel: ReminderChannel) {
@@ -723,6 +868,30 @@ function onShortcut(e: KeyboardEvent) {
   box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
 }
 .quick-chip.active { @apply border-brand-500/25 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
+/* 快捷添加的时间列表：点今天/明天/本周直接展开，避免再点一次「更多」。 */
+.quick-time-panel {
+  @apply mt-3 rounded-2xl border p-3;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.08));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.2)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.14)));
+  box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+}
+.quick-time-head { @apply mb-2 flex items-center justify-between gap-2; }
+.quick-time-title { @apply text-xs font-bold text-muted-foreground; }
+.quick-time-action { @apply text-[11px] font-semibold text-brand-600 transition hover:text-brand-500 dark:text-brand-300; }
+.quick-day-pill {
+  @apply rounded-full border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.12));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.22)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.16)));
+}
+.quick-day-pill.active { @apply border-brand-500/30 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
+.quick-time-grid { @apply grid max-h-44 grid-cols-4 gap-1.5 overflow-y-auto pr-1 sm:grid-cols-6; }
+.quick-time-slot {
+  @apply rounded-lg border px-1.5 py-1.5 text-[11px] font-semibold text-muted-foreground transition hover:border-brand-500/35 hover:text-brand-600;
+  border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.12));
+  background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.22)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.16)));
+}
+.quick-time-slot.selected { @apply border-brand-500/40 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
+.quick-time-empty { @apply py-3 text-center text-xs text-muted-foreground; }
 .channel-pill {
   @apply rounded-xl border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition disabled:cursor-not-allowed disabled:opacity-35;
   border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.1));
