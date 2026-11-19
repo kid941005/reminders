@@ -1,6 +1,7 @@
 package reminder
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
@@ -96,6 +97,20 @@ func TestAppleCloudKitTwoFactorOptionsDTO(t *testing.T) {
 	}).dto()
 	if !auto.SMSAutoSent {
 		t.Fatalf("single phone without trusted devices should be auto-sent: %#v", auto)
+	}
+
+	// A nil slice must serialize as [] so the settings page can read
+	// options.phones.length without throwing and blanking the view.
+	empty := (&appleCloudKitTwoFactorOptions{}).dto()
+	if empty.Phones == nil {
+		t.Fatal("phones must be an empty slice, not nil")
+	}
+	raw, err := json.Marshal(empty)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"phones":[]`) {
+		t.Fatalf("empty phones should serialize as []: %s", raw)
 	}
 }
 

@@ -161,15 +161,15 @@
               {{ cloudkitBusy ? '验证中…' : '验证并加载列表' }}
             </button>
           </div>
-          <div v-if="cloudkitOptions && cloudkitOptions.phones.length" class="flex flex-wrap items-center gap-2">
+          <div v-if="cloudkitPhones.length" class="flex flex-wrap items-center gap-2">
             <select v-model.number="cloudkitSelectedPhoneID" class="compact-input max-w-[16rem]" @change="cloudkitPhoneID = 0">
-              <option v-for="phone in cloudkitOptions.phones" :key="phone.id" :value="phone.id">{{ phone.number }}</option>
+              <option v-for="phone in cloudkitPhones" :key="phone.id" :value="phone.id">{{ phone.number }}</option>
             </select>
             <button type="button" class="btn-ghost" :disabled="appleBusy || cloudkitResending" @click="resendCloudKit">
               {{ cloudkitResending ? '发送中…' : '发送短信验证码' }}
             </button>
           </div>
-          <p v-if="cloudkitOptions && !cloudkitOptions.phones.length && !cloudkitOptions.trusted_device_count" class="text-[11px] leading-5 text-rose-500">
+          <p v-if="cloudkitOptions && !cloudkitPhones.length && !(cloudkitOptions.trusted_device_count || 0)" class="text-[11px] leading-5 text-rose-500">
             该 Apple ID 没有受信任设备或电话号码，无法完成两步验证。请先在 iPhone 上登录该账号，或改用 CalDAV。
           </p>
         </div>
@@ -666,6 +666,10 @@ function notifyApple(message: string, type: 'success' | 'error' = 'success') {
   window.setTimeout(() => { appleMsg.value = '' }, 5000)
 }
 
+// 后端旧版本可能把空的 phones 序列化成 null；这里统一归一化，避免模板
+// 读取 .length 时抛错导致整个设置页白屏。
+const cloudkitPhones = computed<AppleCloudKitPhoneOption[]>(() => cloudkitOptions.value?.phones || [])
+
 const cloudkitHint = computed(() => {
   const options = cloudkitOptions.value
   if (!options) {
@@ -674,12 +678,13 @@ const cloudkitHint = computed(() => {
   if (options.security_code_locked) {
     return '验证码尝试次数过多，Apple 已暂时锁定验证。请稍后再试，或先在 iPhone 上确认该账号状态。'
   }
+  const phones = options.phones || []
   if (options.no_trusted_devices) {
-    if (!options.phones.length) {
+    if (!phones.length) {
       return '该 Apple ID 没有受信任设备或电话号码，无法接收验证码。'
     }
     if (options.sms_auto_sent) {
-      return `该账号没有受信任设备，验证码已发送到 ${options.phones[0].number}。若没有收到，可重新发送。`
+      return `该账号没有受信任设备，验证码已发送到 ${phones[0].number}。若没有收到，可重新发送。`
     }
     return '该账号没有受信任设备，请选择受信任电话号码并点击“发送短信验证码”。'
   }
@@ -728,10 +733,11 @@ async function loginCloudKit() {
     if (data.need_2fa) {
       applyCloudKitOptions(data.options as AppleCloudKitTwoFactorOptions | undefined)
       const options = cloudkitOptions.value
-      if (options?.no_trusted_devices && !options.phones.length) {
+      const phones = cloudkitPhones.value
+      if (options?.no_trusted_devices && !phones.length) {
         notifyApple('该 Apple ID 没有受信任设备或电话号码，无法接收验证码', 'error')
       } else if (options?.sms_auto_sent) {
-        notifyApple('验证码已发送到 ' + (options.phones[0]?.number || '受信任电话号码'))
+        notifyApple('验证码已发送到 ' + (phones[0]?.number || '受信任电话号码'))
       } else {
         notifyApple('验证码已发送到受信任设备；没收到可改用短信接收')
       }

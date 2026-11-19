@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/pbkdf2"
 
+	"smallgo/server/logger"
 	"smallgo/server/reminder/applesrp"
 )
 
@@ -134,6 +135,7 @@ func (o *appleCloudKitTwoFactorOptions) dto() *appleCloudKitTwoFactorOptionsDTO 
 	}
 	dto := &appleCloudKitTwoFactorOptionsDTO{
 		TrustedDeviceCount: len(o.TrustedDevices),
+		Phones:             make([]appleCloudKitPhoneOption, 0, len(o.TrustedPhoneNumbers)),
 		NoTrustedDevices:   o.NoTrustedDevices,
 		CodeLength:         o.SecurityCode.Length,
 		TooManyCodesSent:   o.SecurityCode.TooManyCodesSent,
@@ -153,16 +155,96 @@ func (o *appleCloudKitTwoFactorOptions) dto() *appleCloudKitTwoFactorOptionsDTO 
 	return dto
 }
 
+// appleCloudKitMaskID keeps enough of an Apple ID to identify the account in
+// logs without writing the full address.
+func appleCloudKitMaskID(id string) string {
+	id = strings.TrimSpace(id)
+	if at := strings.IndexByte(id, '@'); at > 0 {
+		local := id[:at]
+		if len(local) > 2 {
+			local = local[:2] + "***"
+		} else {
+			local = "***"
+		}
+		return local + id[at:]
+	}
+	if len(id) > 4 {
+		return id[:2] + "***"
+	}
+	return "***"
+}
+
+// beginStep/endStep make the Apple login pipeline observable in logs: when a
+// login hangs, the last "步骤开始" line names the request that never returned.
+func (a *appleCloudKitAuth) beginStep(step string) time.Time {
+	logger.Info("cloudkit: 步骤开始 step=%s account=%s", step, appleCloudKitMaskID(a.username))
+	return time.Now()
+}
+
+func (a *appleCloudKitAuth) endStep(step string, started time.Time, err error) {
+	elapsed := time.Since(started).Round(time.Millisecond)
+	if err != nil {
+		logger.Warn("cloudkit: 步骤失败 step=%s account=%s elapsed=%s err=%v", step, appleCloudKitMaskID(a.username), elapsed, err)
+		return
+	}
+	logger.Info("cloudkit: 步骤完成 step=%s account=%s elapsed=%s", step, appleCloudKitMaskID(a.username), elapsed)
+}
+
+func optionsTrustedDevices(o *appleCloudKitTwoFactorOptions) int {
+	if o == nil {
+		return 0
+	}
+	return len(o.TrustedDevices)
+}
+
+func optionsTrustedPhones(o *appleCloudKitTwoFactorOptions) int {
+	if o == nil {
+		return 0
+	}
+	return len(o.TrustedPhoneNumbers)
+}
+
+func optionsNoTrustedDevices(o *appleCloudKitTwoFactorOptions) bool {
+	return o != nil && o.NoTrustedDevices
+}
+
+// cloudKitLoggingTransport records every request Apple's login endpoints see.
+// Only method, host+path, status and Apple's request id are logged: query
+// strings, bodies and cookies can carry account material and must stay out.
+type cloudKitLoggingTransport struct {
+	base http.RoundTripper
+}
+
+func (t cloudKitLoggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	started := time.Now()
+	logger.Info("cloudkit: 请求 %s %s", req.Method, req.URL.Host+req.URL.Path)
+	resp, err := t.base.RoundTrip(req)
+	if err != nil {
+		logger.Warn("cloudkit: 请求失败 %s %s elapsed=%s err=%v", req.Method, req.URL.Host+req.URL.Path, time.Since(started).Round(time.Millisecond), err)
+		return nil, err
+	}
+	logger.Info("cloudkit: 响应 %s %s status=%d request_id=%s elapsed=%s", req.Method, req.URL.Host+req.URL.Path, resp.StatusCode, resp.Header.Get("X-Apple-I-Request-Id"), time.Since(started).Round(time.Millisecond))
+	return resp, nil
+}
+
 func newAppleCloudKitAuth(username, password string) *appleCloudKitAuth {
 	jar, _ := cookiejar.New(nil)
 	frameID := strings.ToLower(uuid.New().String())
+	transport := http.DefaultTransport
+	if transport == nil {
+		transport = &http.Transport{}
+	}
 	return &appleCloudKitAuth{
 		username: username,
 		password: password,
 		clientID: "auth-" + frameID,
 		frameID:  frameID,
 		jar:      jar,
-		client:   &http.Client{Jar: jar, Timeout: 45 * time.Second},
+		client: &http.Client{
+			Jar:       jar,
+			Timeout:   45 * time.Second,
+			Transport: cloudKitLoggingTransport{base: transport},
+		},
 	}
 }
 
@@ -243,13 +325,25 @@ func startAppleCloudKitLogin(appleID, password string) (*appleCloudKitLoginStart
 		return nil, errors.New("请填写 Apple ID 主密码")
 	}
 	auth := newAppleCloudKitAuth(appleID, password)
-	if err := auth.authStart(); err != nil {
+	logger.Info("cloudkit: 登录开始 account=%s", appleCloudKitMaskID(appleID))
+
+	started := auth.beginStep("authorize/signin")
+	err := auth.authStart()
+	auth.endStep("authorize/signin", started, err)
+	if err != nil {
 		return nil, fmt.Errorf("连接 Apple 登录服务失败: %w", err)
 	}
-	if err := auth.authFederate(); err != nil {
+
+	started = auth.beginStep("federate")
+	err = auth.authFederate()
+	auth.endStep("federate", started, err)
+	if err != nil {
 		return nil, err
 	}
+
+	started = auth.beginStep("srp")
 	needs2FA, err := auth.srpAuth()
+	auth.endStep("srp", started, err)
 	if err != nil {
 		return nil, err
 	}
@@ -257,15 +351,20 @@ func startAppleCloudKitLogin(appleID, password string) (*appleCloudKitLoginStart
 		// Apple has already pushed a code to trusted devices. Fetching the
 		// options lets us tell the user which devices/phones are available and
 		// offer an SMS fallback when the push does not arrive.
+		started = auth.beginStep("2fa/options")
 		options, optionsErr := auth.twoFactorOptions()
+		auth.endStep("2fa/options", started, optionsErr)
 		start := &appleCloudKitLoginStart{Need2FA: true, Options: options}
 		if optionsErr != nil {
 			start.OptionsError = optionsErr.Error()
 		}
+		logger.Info("cloudkit: 等待两步验证 account=%s devices=%d phones=%d no_devices=%t options_ok=%t", appleCloudKitMaskID(appleID), optionsTrustedDevices(options), optionsTrustedPhones(options), optionsNoTrustedDevices(options), optionsErr == nil)
 		start.LoginID = storeAppleCloudKitLogin(&appleCloudKitLoginState{auth: auth, options: options})
 		return start, nil
 	}
+	started = auth.beginStep("session")
 	session, err := auth.finishSession()
+	auth.endStep("session", started, err)
 	if err != nil {
 		return nil, err
 	}
@@ -308,7 +407,9 @@ func verifyAppleCloudKitLogin(loginID, code string, phoneID int) (*appleCloudKit
 	if phoneID > 0 {
 		options := state.options
 		if options == nil {
+			started := state.auth.beginStep("2fa/options")
 			options, err = state.auth.twoFactorOptions()
+			state.auth.endStep("2fa/options", started, err)
 			if err != nil {
 				return nil, err
 			}
@@ -318,13 +419,25 @@ func verifyAppleCloudKitLogin(loginID, code string, phoneID int) (*appleCloudKit
 		if err != nil {
 			return nil, err
 		}
-		if err := state.auth.submitPhoneTwoFactor(phone.ID, phone.PushMode, code); err != nil {
+		logger.Info("cloudkit: 校验短信验证码 account=%s phone_id=%d mode=%s", appleCloudKitMaskID(state.auth.username), phone.ID, phone.PushMode)
+		started := state.auth.beginStep("2fa/phone")
+		err = state.auth.submitPhoneTwoFactor(phone.ID, phone.PushMode, code)
+		state.auth.endStep("2fa/phone", started, err)
+		if err != nil {
 			return nil, err
 		}
-	} else if err := state.auth.submitTwoFactor(code); err != nil {
-		return nil, err
+	} else {
+		logger.Info("cloudkit: 校验设备验证码 account=%s", appleCloudKitMaskID(state.auth.username))
+		started := state.auth.beginStep("2fa/device")
+		err = state.auth.submitTwoFactor(code)
+		state.auth.endStep("2fa/device", started, err)
+		if err != nil {
+			return nil, err
+		}
 	}
+	started := state.auth.beginStep("session")
 	session, err := state.auth.finishSession()
+	state.auth.endStep("session", started, err)
 	if err != nil {
 		return nil, err
 	}
@@ -356,7 +469,11 @@ func resendAppleCloudKitLogin(loginID string, phoneID int) (*appleCloudKitPhoneO
 	if err != nil {
 		return nil, err
 	}
-	if err := state.auth.requestPhoneCode(phone.ID, phone.PushMode); err != nil {
+	logger.Info("cloudkit: 请求短信验证码 account=%s phone_id=%d mode=%s", appleCloudKitMaskID(state.auth.username), phone.ID, phone.PushMode)
+	started := state.auth.beginStep("2fa/send")
+	err = state.auth.requestPhoneCode(phone.ID, phone.PushMode)
+	state.auth.endStep("2fa/send", started, err)
+	if err != nil {
 		return nil, err
 	}
 	mode := strings.TrimSpace(phone.PushMode)

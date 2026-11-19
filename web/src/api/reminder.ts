@@ -277,9 +277,12 @@ export const saveAppleReminders = (data: AppleReminderSyncInput) =>
   request.put('/api/reminder/apple-reminders', data)
 export const deleteAppleReminders = () => request.delete('/api/reminder/apple-reminders')
 export const runAppleReminders = () => request.post('/api/reminder/apple-reminders/run')
+// Apple 登录要串行完成 authorize → federate → SRP → 2FA → accountLogin，
+// 单次最长可达 45 秒，默认 30 秒会在后端仍处理时提前断开并丢失前端状态。
+const cloudKitLoginConfig = { timeout: 120000 }
 export const loginAppleCloudKit = (data: { apple_id: string; password: string }) =>
-  request.post('/api/reminder/apple-reminders/cloudkit/login', data)
+  request.post('/api/reminder/apple-reminders/cloudkit/login', data, cloudKitLoginConfig)
 export const verifyAppleCloudKit = (data: { login_id: string; code: string; phone_id?: number }) =>
-  request.post('/api/reminder/apple-reminders/cloudkit/verify', data)
+  request.post('/api/reminder/apple-reminders/cloudkit/verify', data, cloudKitLoginConfig)
 export const resendAppleCloudKit = (data: { login_id: string; phone_id?: number }) =>
-  request.post('/api/reminder/apple-reminders/cloudkit/resend', data)
+  request.post('/api/reminder/apple-reminders/cloudkit/resend', data, cloudKitLoginConfig)
