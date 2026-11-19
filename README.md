@@ -98,6 +98,7 @@ docker compose up -d
 - **Apple 提醒事项单向推送（CloudKit，推荐）**：用 Apple ID 主密码登录并完成两步验证后，选择要同步的
   提醒事项列表，本地新建、修改、完成、删除的提醒会直接写入新版 iCloud 提醒事项，iPhone / iPad /
   Mac 原生「提醒事项」App 可见；登录凭据加密保存在本地，只单向推送，Apple 端改动不回写本地；
+  若收不到设备推送的验证码，可在设置页选择受信任电话号码发送短信验证码；
 - **Apple 提醒事项单向推送（CalDAV，兼容旧列表）**：如果账号仍保留 iOS 13 之前的旧 CalDAV 任务
   列表，可改用 CalDAV 模式，填写 Apple ID 和应用专用密码；使用确定性 UID 与 ETag 条件请求避免
   重复和覆盖冲突，失败自动退避重试；国际区账号使用 `caldav.icloud.com`，中国大陆账号使用
