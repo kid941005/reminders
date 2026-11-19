@@ -97,22 +97,16 @@
       </template>
 
       <div v-if="withTime" class="mt-3 border-t border-border/70 pt-3">
-        <!-- 手机端：时/分两个滚轮下拉，比系统表盘弹窗更好按 -->
-        <div v-if="isMobile">
-          <p class="mb-1.5 text-xs font-bold text-muted-foreground">时间</p>
-          <div class="flex items-center gap-2">
-            <select v-model="hourValue" class="time-select" aria-label="小时">
-              <option v-for="h in hourOptions" :key="h" :value="h">{{ h }} 时</option>
-            </select>
-            <span class="text-sm font-bold text-muted-foreground" aria-hidden="true">:</span>
-            <select v-model="minuteValue" class="time-select" aria-label="分钟">
-              <option v-for="m in minuteOptions" :key="m" :value="m">{{ m }} 分</option>
-            </select>
-          </div>
-        </div>
-        <div v-else class="flex items-center gap-2">
-          <label class="text-xs font-bold text-muted-foreground">时间</label>
-          <input v-model="timeValue" type="time" class="time-input" @input="onTimeChange" @change="onTimeChange" />
+        <!-- 桌面端与手机端统一用「时 / 分」下拉，避免系统时间表盘要先点开再滚动的两步操作。 -->
+        <p class="mb-1.5 text-xs font-bold text-muted-foreground">时间</p>
+        <div class="flex items-center gap-2">
+          <select v-model="hourValue" class="time-select flex-1" aria-label="小时">
+            <option v-for="h in hourOptions" :key="h" :value="h">{{ h }} 时</option>
+          </select>
+          <span class="text-sm font-bold text-muted-foreground" aria-hidden="true">:</span>
+          <select v-model="minuteValue" class="time-select flex-1" aria-label="分钟">
+            <option v-for="m in minuteOptions" :key="m" :value="m">{{ m }} 分</option>
+          </select>
         </div>
       </div>
 
@@ -590,6 +584,5 @@ void Promise.resolve().then(place)
 .day-sub { @apply mt-1 max-w-full truncate text-[9px] leading-none text-muted-foreground; }
 .festival-sub { @apply font-bold text-rose-500; }
 .term-sub { @apply font-bold text-emerald-600 dark:text-emerald-400; }
-.time-input { @apply h-10 flex-1 rounded-xl border border-border bg-surface px-3 text-[16px] sm:text-xs font-medium text-foreground outline-none focus:border-brand-500/50; }
-.time-select { @apply h-10 w-[104px] rounded-xl border border-border bg-surface px-2 text-[16px] font-medium text-foreground outline-none focus:border-brand-500/50; }
+.time-select { @apply h-10 min-w-[96px] rounded-xl border border-border bg-surface px-2 text-[16px] font-medium text-foreground outline-none focus:border-brand-500/50; }
 </style>
