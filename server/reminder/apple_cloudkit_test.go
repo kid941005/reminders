@@ -70,6 +70,70 @@ func TestAppleCloudKitReminderFields(t *testing.T) {
 	}
 }
 
+func TestAppleCloudKitTwoFactorOptionsDTO(t *testing.T) {
+	options := &appleCloudKitTwoFactorOptions{
+		TrustedDevices: []appleCloudKitTrustedDevice{{ID: "d1"}},
+		TrustedPhoneNumbers: []appleCloudKitPhoneNumber{
+			{ID: 7, NumberWithDialCode: "+86 •••• 88", PushMode: "sms"},
+			{ID: 8, NumberWithDialCode: "+86 •••• 99"},
+		},
+		SecurityCode: appleCloudKitSecurityCodeInfo{Length: 6},
+	}
+	dto := options.dto()
+	if dto == nil || dto.TrustedDeviceCount != 1 || len(dto.Phones) != 2 {
+		t.Fatalf("unexpected dto: %#v", dto)
+	}
+	if dto.SMSAutoSent || dto.CodeLength != 6 {
+		t.Fatalf("unexpected flags: %#v", dto)
+	}
+	if dto.Phones[1].Mode != "sms" {
+		t.Fatalf("empty push mode should default to sms: %#v", dto.Phones[1])
+	}
+
+	auto := (&appleCloudKitTwoFactorOptions{
+		NoTrustedDevices:    true,
+		TrustedPhoneNumbers: []appleCloudKitPhoneNumber{{ID: 9, NumberWithDialCode: "+86 •••• 00"}},
+	}).dto()
+	if !auto.SMSAutoSent {
+		t.Fatalf("single phone without trusted devices should be auto-sent: %#v", auto)
+	}
+}
+
+func TestAppleCloudKitPickPhone(t *testing.T) {
+	options := &appleCloudKitTwoFactorOptions{TrustedPhoneNumbers: []appleCloudKitPhoneNumber{
+		{ID: 1, NumberWithDialCode: "+86 111"},
+		{ID: 2, NumberWithDialCode: "+86 222"},
+	}}
+	if phone, err := appleCloudKitPickPhone(options, 2); err != nil || phone.ID != 2 {
+		t.Fatalf("pick by id: phone=%#v err=%v", phone, err)
+	}
+	if _, err := appleCloudKitPickPhone(options, 99); err == nil {
+		t.Fatal("unknown phone id should fail")
+	}
+	if _, err := appleCloudKitPickPhone(options, 0); err == nil {
+		t.Fatal("multiple phones without a selection should fail")
+	}
+	single := &appleCloudKitTwoFactorOptions{TrustedPhoneNumbers: []appleCloudKitPhoneNumber{{ID: 3}}}
+	if phone, err := appleCloudKitPickPhone(single, 0); err != nil || phone.ID != 3 {
+		t.Fatalf("single phone fallback: phone=%#v err=%v", phone, err)
+	}
+	if _, err := appleCloudKitPickPhone(nil, 0); err == nil {
+		t.Fatal("nil options should fail")
+	}
+}
+
+func TestAppleCloudKitServiceError(t *testing.T) {
+	if got := appleCloudKitServiceError([]byte(`{"serviceErrors":[{"message":"Too many codes sent","code":"-28248"}]}`)); got != "：Too many codes sent" {
+		t.Fatalf("unexpected service error %q", got)
+	}
+	if got := appleCloudKitServiceError([]byte(`{"service_errors":[{"message":"验证码错误"}]}`)); got != "：验证码错误" {
+		t.Fatalf("unexpected snake_case service error %q", got)
+	}
+	if got := appleCloudKitServiceError([]byte("not-json")); got != "" {
+		t.Fatalf("non-json body should not echo, got %q", got)
+	}
+}
+
 func TestAppleCloudKitSessionJSONRoundTrip(t *testing.T) {
 	sess := &appleCloudKitSession{CKBaseURL: "https://ckdatabasews.icloud.com", SessionToken: "token", Cookies: []appleCloudKitCookie{{Name: "X-APPLE-WEBAUTH-USER", Value: "abc", Domain: ".icloud.com", Path: "/", Secure: true}}}
 	client, err := newAppleCloudKitClientFromSession(sess)

@@ -55,6 +55,7 @@ func setupAuthRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	group.POST("/apple-reminders/run", handleRunAppleReminders(db))
 	group.POST("/apple-reminders/cloudkit/login", handleAppleCloudKitLogin(db))
 	group.POST("/apple-reminders/cloudkit/verify", handleAppleCloudKitVerify(db))
+	group.POST("/apple-reminders/cloudkit/resend", handleAppleCloudKitResend(db))
 
 	// 和风天气：每用户配置、立即推送、文案预览与城市搜索。
 	group.GET("/weather", handleGetWeather(db))

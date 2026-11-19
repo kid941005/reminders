@@ -122,8 +122,8 @@
         <div class="min-w-0 flex-1">
           <h3 class="text-sm font-bold text-foreground">Apple 提醒事项（单向推送）</h3>
           <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
-            用 Apple ID 和应用专用密码连接 iCloud，本地新建、修改、完成、删除的提醒会同步到所选列表。
-            只单向推送：在 Apple 端做的改动不会回写本地。
+            CloudKit 用 Apple ID 主密码和两步验证登录，CalDAV 用 App 专用密码连接 iCloud。
+            本地新建、修改、完成、删除的提醒会同步到所选列表；只单向推送，在 Apple 端做的改动不会回写本地。
           </p>
         </div>
       </div>
@@ -153,14 +153,28 @@
         <button type="button" class="btn-ghost" :disabled="appleBusy || cloudkitBusy" @click="loginCloudKit">
           {{ cloudkitBusy ? '正在登录…' : cloudkitNeed2FA ? '重新登录' : '登录 iCloud 并加载列表' }}
         </button>
-        <div v-if="cloudkitNeed2FA" class="flex flex-wrap gap-2">
-          <input v-model="cloudkitCode" class="compact-input max-w-[10rem]" placeholder="6 位两步验证码" inputmode="numeric" maxlength="6" />
-          <button type="button" class="btn-brand" :disabled="appleBusy || cloudkitBusy || cloudkitCode.trim().length < 6" @click="verifyCloudKit">
-            {{ cloudkitBusy ? '验证中…' : '验证并加载列表' }}
-          </button>
+        <div v-if="cloudkitNeed2FA" class="space-y-2 rounded-xl bg-slate-500/8 p-3">
+          <p class="text-[11px] leading-5 text-muted-foreground">{{ cloudkitHint }}</p>
+          <div class="flex flex-wrap gap-2">
+            <input v-model="cloudkitCode" class="compact-input max-w-[10rem]" placeholder="6 位两步验证码" inputmode="numeric" maxlength="6" />
+            <button type="button" class="btn-brand" :disabled="appleBusy || cloudkitBusy || cloudkitCode.trim().length < 6" @click="verifyCloudKit">
+              {{ cloudkitBusy ? '验证中…' : '验证并加载列表' }}
+            </button>
+          </div>
+          <div v-if="cloudkitOptions && cloudkitOptions.phones.length" class="flex flex-wrap items-center gap-2">
+            <select v-model.number="cloudkitSelectedPhoneID" class="compact-input max-w-[16rem]" @change="cloudkitPhoneID = 0">
+              <option v-for="phone in cloudkitOptions.phones" :key="phone.id" :value="phone.id">{{ phone.number }}</option>
+            </select>
+            <button type="button" class="btn-ghost" :disabled="appleBusy || cloudkitResending" @click="resendCloudKit">
+              {{ cloudkitResending ? '发送中…' : '发送短信验证码' }}
+            </button>
+          </div>
+          <p v-if="cloudkitOptions && !cloudkitOptions.phones.length && !cloudkitOptions.trusted_device_count" class="text-[11px] leading-5 text-rose-500">
+            该 Apple ID 没有受信任设备或电话号码，无法完成两步验证。请先在 iPhone 上登录该账号，或改用 CalDAV。
+          </p>
         </div>
         <p class="text-[11px] leading-5 text-muted-foreground">
-          首次登录需要输入设备上收到的 6 位验证码；登录成功后凭据会加密保存，之后无需重复验证。若账号已登录过，可直接加载列表并保存。
+          首次登录需要完成两步验证；登录成功后凭据会加密保存，之后无需重复验证。若账号已登录过，可直接加载列表并保存。
         </p>
       </div>
 
@@ -209,7 +223,7 @@
         状态 {{ appleCfg.last_status === 'ok' ? '正常' : appleCfg.last_status === 'error' ? '失败' : '未知' }}<span v-if="appleCfg.last_error">：{{ appleCfg.last_error }}</span>
       </p>
       <p class="mt-2 text-[11px] leading-5 text-muted-foreground">
-        应用专用密码在「Apple ID 账户管理 → 登录与安全」生成，仅加密保存在本地，不会回传前端。同步每分钟检查一次队列，失败会自动退避重试。
+        CloudKit 使用 Apple ID 主密码和两步验证，CalDAV 使用 App 专用密码；凭据仅加密保存在本地，不会回传前端。同步每分钟检查一次队列，失败会自动退避重试。
       </p>
     </div>
 
@@ -420,6 +434,7 @@ import {
   getCalendarSync,
   getChannelStatuses,
   loginAppleCloudKit,
+  resendAppleCloudKit,
   runAppleReminders,
   runCalendarSync,
   saveAppleReminders,
@@ -427,6 +442,8 @@ import {
   verifyAppleCloudKit,
 } from '../api/reminder'
 import type {
+  AppleCloudKitPhoneOption,
+  AppleCloudKitTwoFactorOptions,
   AppleReminderCollection,
   AppleReminderSyncConfig,
   CalendarSyncConfig,
@@ -480,6 +497,10 @@ const appleDiscovering = ref(false)
 const cloudkitNeed2FA = ref(false)
 const cloudkitBusy = ref(false)
 const cloudkitCode = ref('')
+const cloudkitOptions = ref<AppleCloudKitTwoFactorOptions | null>(null)
+const cloudkitSelectedPhoneID = ref(0)
+const cloudkitPhoneID = ref(0)
+const cloudkitResending = ref(false)
 const appleMsg = ref('')
 const appleMsgType = ref<'success' | 'error'>('success')
 
@@ -645,6 +666,35 @@ function notifyApple(message: string, type: 'success' | 'error' = 'success') {
   window.setTimeout(() => { appleMsg.value = '' }, 5000)
 }
 
+const cloudkitHint = computed(() => {
+  const options = cloudkitOptions.value
+  if (!options) {
+    return '验证码已发送到你的受信任设备，请输入设备上显示的 6 位数字。'
+  }
+  if (options.security_code_locked) {
+    return '验证码尝试次数过多，Apple 已暂时锁定验证。请稍后再试，或先在 iPhone 上确认该账号状态。'
+  }
+  if (options.no_trusted_devices) {
+    if (!options.phones.length) {
+      return '该 Apple ID 没有受信任设备或电话号码，无法接收验证码。'
+    }
+    if (options.sms_auto_sent) {
+      return `该账号没有受信任设备，验证码已发送到 ${options.phones[0].number}。若没有收到，可重新发送。`
+    }
+    return '该账号没有受信任设备，请选择受信任电话号码并点击“发送短信验证码”。'
+  }
+  return '验证码已发送到你的受信任设备。若没有收到，可选择电话号码改用短信接收。'
+})
+
+function applyCloudKitOptions(options?: AppleCloudKitTwoFactorOptions) {
+  cloudkitOptions.value = options || null
+  const phones = options?.phones || []
+  cloudkitSelectedPhoneID.value = phones[0]?.id || 0
+  // When Apple has no trusted device and exactly one phone number it sends the
+  // SMS automatically; in every other case a device code is the default.
+  cloudkitPhoneID.value = options?.sms_auto_sent ? (phones[0]?.id || 0) : 0
+}
+
 function applyAppleCollections(lists: AppleReminderCollection[]) {
   appleCollections.value = lists
   if (!lists.some((item) => item.url === appleForm.collection_url)) {
@@ -676,9 +726,18 @@ async function loginCloudKit() {
     appleForm.login_id = data.login_id || ''
     cloudkitNeed2FA.value = !!data.need_2fa
     if (data.need_2fa) {
-      notifyApple('已发送验证码，请在设备上查看并输入 6 位数字')
+      applyCloudKitOptions(data.options as AppleCloudKitTwoFactorOptions | undefined)
+      const options = cloudkitOptions.value
+      if (options?.no_trusted_devices && !options.phones.length) {
+        notifyApple('该 Apple ID 没有受信任设备或电话号码，无法接收验证码', 'error')
+      } else if (options?.sms_auto_sent) {
+        notifyApple('验证码已发送到 ' + (options.phones[0]?.number || '受信任电话号码'))
+      } else {
+        notifyApple('验证码已发送到受信任设备；没收到可改用短信接收')
+      }
       return
     }
+    cloudkitOptions.value = null
     applyAppleCollections((data.lists || []) as AppleReminderCollection[])
     notifyApple('登录成功，已加载 ' + appleCollections.value.length + ' 个提醒事项列表')
   } catch (err: any) {
@@ -689,7 +748,7 @@ async function loginCloudKit() {
 }
 
 async function verifyCloudKit() {
-  if (appleBusy.value || cloudkitBusy.value) return
+  if (appleBusy.value || cloudkitBusy.value || cloudkitResending.value) return
   if (!appleForm.login_id) {
     notifyApple('登录已过期，请重新登录', 'error')
     return
@@ -701,16 +760,49 @@ async function verifyCloudKit() {
   }
   cloudkitBusy.value = true
   try {
-    const res = await verifyAppleCloudKit({ login_id: appleForm.login_id, code })
+    const res = await verifyAppleCloudKit({
+      login_id: appleForm.login_id,
+      code,
+      phone_id: cloudkitPhoneID.value || undefined,
+    })
     const data = res.data?.data || {}
     cloudkitNeed2FA.value = false
     cloudkitCode.value = ''
+    cloudkitOptions.value = null
+    cloudkitPhoneID.value = 0
+    cloudkitSelectedPhoneID.value = 0
     applyAppleCollections((data.lists || []) as AppleReminderCollection[])
     notifyApple('验证成功，已加载 ' + appleCollections.value.length + ' 个提醒事项列表')
   } catch (err: any) {
     notifyApple(err.response?.data?.message || '验证码校验失败', 'error')
   } finally {
     cloudkitBusy.value = false
+  }
+}
+
+async function resendCloudKit() {
+  if (appleBusy.value || cloudkitBusy.value || cloudkitResending.value) return
+  if (!appleForm.login_id) {
+    notifyApple('登录已过期，请重新登录', 'error')
+    return
+  }
+  if (!cloudkitSelectedPhoneID.value) {
+    notifyApple('请选择接收验证码的电话号码', 'error')
+    return
+  }
+  cloudkitResending.value = true
+  try {
+    const res = await resendAppleCloudKit({
+      login_id: appleForm.login_id,
+      phone_id: cloudkitSelectedPhoneID.value,
+    })
+    const phone = res.data?.data?.phone as AppleCloudKitPhoneOption | undefined
+    cloudkitPhoneID.value = phone?.id || cloudkitSelectedPhoneID.value
+    notifyApple('验证码已发送到 ' + (phone?.number || '所选电话号码'))
+  } catch (err: any) {
+    notifyApple(err.response?.data?.message || '发送短信验证码失败', 'error')
+  } finally {
+    cloudkitResending.value = false
   }
 }
 

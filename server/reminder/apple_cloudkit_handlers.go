@@ -18,6 +18,12 @@ type appleCloudKitLoginInput struct {
 type appleCloudKitVerifyInput struct {
 	LoginID string `json:"login_id"`
 	Code    string `json:"code"`
+	PhoneID int    `json:"phone_id"`
+}
+
+type appleCloudKitResendInput struct {
+	LoginID string `json:"login_id"`
+	PhoneID int    `json:"phone_id"`
 }
 
 func handleAppleCloudKitLogin(db *gorm.DB) gin.HandlerFunc {
@@ -27,21 +33,28 @@ func handleAppleCloudKitLogin(db *gorm.DB) gin.HandlerFunc {
 			response.ErrorBadRequest(c, "请求参数无效")
 			return
 		}
-		need2FA, loginID, session, err := startAppleCloudKitLogin(in.AppleID, in.Password)
+		start, err := startAppleCloudKitLogin(in.AppleID, in.Password)
 		if err != nil {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
-		if need2FA {
-			response.Success(c, gin.H{"need_2fa": true, "login_id": loginID})
+		if start.Need2FA {
+			payload := gin.H{"need_2fa": true, "login_id": start.LoginID}
+			if start.Options != nil {
+				payload["options"] = start.Options.dto()
+			}
+			if start.OptionsError != "" {
+				payload["options_error"] = start.OptionsError
+			}
+			response.Success(c, payload)
 			return
 		}
-		lists, err := appleCloudKitListsForSession(session)
+		lists, err := appleCloudKitListsForSession(start.Session)
 		if err != nil {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
-		response.Success(c, gin.H{"need_2fa": false, "login_id": loginID, "lists": lists})
+		response.Success(c, gin.H{"need_2fa": false, "login_id": start.LoginID, "lists": lists})
 	}
 }
 
@@ -52,7 +65,7 @@ func handleAppleCloudKitVerify(db *gorm.DB) gin.HandlerFunc {
 			response.ErrorBadRequest(c, "请求参数无效")
 			return
 		}
-		session, err := verifyAppleCloudKitLogin(in.LoginID, in.Code)
+		session, err := verifyAppleCloudKitLogin(in.LoginID, in.Code, in.PhoneID)
 		if err != nil {
 			response.ErrorBadRequest(c, err.Error())
 			return
@@ -63,6 +76,22 @@ func handleAppleCloudKitVerify(db *gorm.DB) gin.HandlerFunc {
 			return
 		}
 		response.Success(c, gin.H{"lists": lists, "login_id": in.LoginID})
+	}
+}
+
+func handleAppleCloudKitResend(db *gorm.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var in appleCloudKitResendInput
+		if err := c.ShouldBindJSON(&in); err != nil {
+			response.ErrorBadRequest(c, "请求参数无效")
+			return
+		}
+		phone, err := resendAppleCloudKitLogin(in.LoginID, in.PhoneID)
+		if err != nil {
+			response.ErrorBadRequest(c, err.Error())
+			return
+		}
+		response.Success(c, gin.H{"sent": true, "phone": phone})
 	}
 }
 

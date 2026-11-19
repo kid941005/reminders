@@ -84,6 +84,75 @@ type appleCloudKitAuthInitResp struct {
 	C         string `json:"c"`
 }
 
+type appleCloudKitTrustedDevice struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	ModelName string `json:"modelName"`
+}
+
+type appleCloudKitPhoneNumber struct {
+	ID                 int    `json:"id"`
+	NumberWithDialCode string `json:"numberWithDialCode"`
+	PushMode           string `json:"pushMode"`
+}
+
+type appleCloudKitSecurityCodeInfo struct {
+	Length                int  `json:"length"`
+	TooManyCodesSent      bool `json:"tooManyCodesSent"`
+	TooManyCodesValidated bool `json:"tooManyCodesValidated"`
+	SecurityCodeLocked    bool `json:"securityCodeLocked"`
+}
+
+// appleCloudKitTwoFactorOptions is the subset of Apple's /appleauth/auth
+// response needed to offer a verification method.
+type appleCloudKitTwoFactorOptions struct {
+	TrustedDevices      []appleCloudKitTrustedDevice  `json:"trustedDevices"`
+	TrustedPhoneNumbers []appleCloudKitPhoneNumber    `json:"trustedPhoneNumbers"`
+	NoTrustedDevices    bool                          `json:"noTrustedDevices"`
+	SecurityCode        appleCloudKitSecurityCodeInfo `json:"securityCode"`
+}
+
+type appleCloudKitPhoneOption struct {
+	ID     int    `json:"id"`
+	Number string `json:"number"`
+	Mode   string `json:"mode"`
+}
+
+type appleCloudKitTwoFactorOptionsDTO struct {
+	TrustedDeviceCount int                        `json:"trusted_device_count"`
+	Phones             []appleCloudKitPhoneOption `json:"phones"`
+	NoTrustedDevices   bool                       `json:"no_trusted_devices"`
+	CodeLength         int                        `json:"code_length"`
+	TooManyCodesSent   bool                       `json:"too_many_codes_sent"`
+	SecurityCodeLocked bool                       `json:"security_code_locked"`
+	SMSAutoSent        bool                       `json:"sms_auto_sent"`
+}
+
+func (o *appleCloudKitTwoFactorOptions) dto() *appleCloudKitTwoFactorOptionsDTO {
+	if o == nil {
+		return nil
+	}
+	dto := &appleCloudKitTwoFactorOptionsDTO{
+		TrustedDeviceCount: len(o.TrustedDevices),
+		NoTrustedDevices:   o.NoTrustedDevices,
+		CodeLength:         o.SecurityCode.Length,
+		TooManyCodesSent:   o.SecurityCode.TooManyCodesSent,
+		SecurityCodeLocked: o.SecurityCode.SecurityCodeLocked,
+	}
+	if dto.CodeLength <= 0 {
+		dto.CodeLength = 6
+	}
+	for _, phone := range o.TrustedPhoneNumbers {
+		mode := strings.TrimSpace(phone.PushMode)
+		if mode == "" {
+			mode = "sms"
+		}
+		dto.Phones = append(dto.Phones, appleCloudKitPhoneOption{ID: phone.ID, Number: phone.NumberWithDialCode, Mode: mode})
+	}
+	dto.SMSAutoSent = o.NoTrustedDevices && len(o.TrustedPhoneNumbers) == 1
+	return dto
+}
+
 func newAppleCloudKitAuth(username, password string) *appleCloudKitAuth {
 	jar, _ := cookiejar.New(nil)
 	frameID := strings.ToLower(uuid.New().String())
@@ -102,7 +171,22 @@ func newAppleCloudKitAuth(username, password string) *appleCloudKitAuth {
 type appleCloudKitLoginState struct {
 	auth      *appleCloudKitAuth
 	session   *appleCloudKitSession
+	options   *appleCloudKitTwoFactorOptions
 	createdAt time.Time
+	// mu serializes verify/resend on the same challenge: both mutate the
+	// auth object's scnt/session headers and must not run concurrently.
+	mu sync.Mutex
+}
+
+// appleCloudKitLoginStart is the outcome of the password phase. Need2FA is
+// true while Apple waits for a verification code; Options describes how the
+// code can be delivered.
+type appleCloudKitLoginStart struct {
+	Need2FA      bool
+	LoginID      string
+	Session      *appleCloudKitSession
+	Options      *appleCloudKitTwoFactorOptions
+	OptionsError string
 }
 
 var appleCloudKitLogins sync.Map
@@ -149,40 +233,50 @@ func takeAppleCloudKitSession(loginID string) (*appleCloudKitSession, error) {
 // startAppleCloudKitLogin runs the password/SRP phase. When Apple requires a
 // verification code it returns need2FA=true and a login_id the browser uses
 // for the verify call.
-func startAppleCloudKitLogin(appleID, password string) (need2FA bool, loginID string, session *appleCloudKitSession, err error) {
+func startAppleCloudKitLogin(appleID, password string) (*appleCloudKitLoginStart, error) {
 	appleID = strings.TrimSpace(appleID)
 	password = strings.TrimSpace(password)
 	if appleID == "" {
-		return false, "", nil, errors.New("请填写 Apple ID")
+		return nil, errors.New("请填写 Apple ID")
 	}
 	if password == "" {
-		return false, "", nil, errors.New("请填写 Apple 密码或 App 专用密码")
+		return nil, errors.New("请填写 Apple ID 主密码")
 	}
 	auth := newAppleCloudKitAuth(appleID, password)
 	if err := auth.authStart(); err != nil {
-		return false, "", nil, fmt.Errorf("连接 Apple 登录服务失败: %w", err)
+		return nil, fmt.Errorf("连接 Apple 登录服务失败: %w", err)
 	}
 	if err := auth.authFederate(); err != nil {
-		return false, "", nil, err
+		return nil, err
 	}
 	needs2FA, err := auth.srpAuth()
 	if err != nil {
-		return false, "", nil, err
+		return nil, err
 	}
 	if needs2FA {
-		loginID = storeAppleCloudKitLogin(&appleCloudKitLoginState{auth: auth})
-		return true, loginID, nil, nil
+		// Apple has already pushed a code to trusted devices. Fetching the
+		// options lets us tell the user which devices/phones are available and
+		// offer an SMS fallback when the push does not arrive.
+		options, optionsErr := auth.twoFactorOptions()
+		start := &appleCloudKitLoginStart{Need2FA: true, Options: options}
+		if optionsErr != nil {
+			start.OptionsError = optionsErr.Error()
+		}
+		start.LoginID = storeAppleCloudKitLogin(&appleCloudKitLoginState{auth: auth, options: options})
+		return start, nil
 	}
-	session, err = auth.finishSession()
+	session, err := auth.finishSession()
 	if err != nil {
-		return false, "", nil, err
+		return nil, err
 	}
-	loginID = storeAppleCloudKitLogin(&appleCloudKitLoginState{session: session})
-	return false, loginID, session, nil
+	loginID := storeAppleCloudKitLogin(&appleCloudKitLoginState{session: session})
+	return &appleCloudKitLoginStart{LoginID: loginID, Session: session}, nil
 }
 
 // verifyAppleCloudKitLogin submits the 6-digit code and completes the login.
-func verifyAppleCloudKitLogin(loginID, code string) (*appleCloudKitSession, error) {
+// phoneID selects a trusted phone number; zero means the code pushed to a
+// trusted device.
+func verifyAppleCloudKitLogin(loginID, code string, phoneID int) (*appleCloudKitSession, error) {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return nil, errors.New("请输入 6 位验证码")
@@ -191,13 +285,43 @@ func verifyAppleCloudKitLogin(loginID, code string) (*appleCloudKitSession, erro
 	if err != nil {
 		return nil, err
 	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
 	if state.auth == nil {
 		if state.session == nil {
 			return nil, errors.New("登录状态无效，请重新登录")
 		}
 		return state.session, nil
 	}
-	if err := state.auth.submitTwoFactor(code); err != nil {
+	if phoneID == 0 && state.options != nil && state.options.NoTrustedDevices {
+		switch len(state.options.TrustedPhoneNumbers) {
+		case 0:
+			return nil, errors.New("该 Apple ID 没有受信任设备或电话号码，无法完成两步验证")
+		case 1:
+			// Apple sends this code automatically when there is exactly one
+			// trusted phone number and no trusted device.
+			phoneID = state.options.TrustedPhoneNumbers[0].ID
+		default:
+			return nil, errors.New("该账号没有受信任设备，请先选择电话号码并发送短信验证码")
+		}
+	}
+	if phoneID > 0 {
+		options := state.options
+		if options == nil {
+			options, err = state.auth.twoFactorOptions()
+			if err != nil {
+				return nil, err
+			}
+			state.options = options
+		}
+		phone, err := appleCloudKitPickPhone(options, phoneID)
+		if err != nil {
+			return nil, err
+		}
+		if err := state.auth.submitPhoneTwoFactor(phone.ID, phone.PushMode, code); err != nil {
+			return nil, err
+		}
+	} else if err := state.auth.submitTwoFactor(code); err != nil {
 		return nil, err
 	}
 	session, err := state.auth.finishSession()
@@ -206,6 +330,58 @@ func verifyAppleCloudKitLogin(loginID, code string) (*appleCloudKitSession, erro
 	}
 	appleCloudKitLogins.Store(strings.TrimSpace(loginID), &appleCloudKitLoginState{session: session, createdAt: time.Now()})
 	return session, nil
+}
+
+// resendAppleCloudKitLogin requests a new SMS/voice code for a trusted phone
+// number. phoneID may be zero when Apple exposes exactly one phone number.
+func resendAppleCloudKitLogin(loginID string, phoneID int) (*appleCloudKitPhoneOption, error) {
+	state, err := loadAppleCloudKitLogin(loginID)
+	if err != nil {
+		return nil, err
+	}
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if state.auth == nil {
+		return nil, errors.New("当前登录不需要验证码")
+	}
+	options := state.options
+	if options == nil {
+		options, err = state.auth.twoFactorOptions()
+		if err != nil {
+			return nil, err
+		}
+		state.options = options
+	}
+	phone, err := appleCloudKitPickPhone(options, phoneID)
+	if err != nil {
+		return nil, err
+	}
+	if err := state.auth.requestPhoneCode(phone.ID, phone.PushMode); err != nil {
+		return nil, err
+	}
+	mode := strings.TrimSpace(phone.PushMode)
+	if mode == "" {
+		mode = "sms"
+	}
+	return &appleCloudKitPhoneOption{ID: phone.ID, Number: phone.NumberWithDialCode, Mode: mode}, nil
+}
+
+func appleCloudKitPickPhone(options *appleCloudKitTwoFactorOptions, phoneID int) (*appleCloudKitPhoneNumber, error) {
+	if options == nil || len(options.TrustedPhoneNumbers) == 0 {
+		return nil, errors.New("该 Apple ID 没有可用于接收短信的受信任电话号码，请先在 iPhone 上登录该账号后重试")
+	}
+	if phoneID > 0 {
+		for i := range options.TrustedPhoneNumbers {
+			if options.TrustedPhoneNumbers[i].ID == phoneID {
+				return &options.TrustedPhoneNumbers[i], nil
+			}
+		}
+		return nil, errors.New("选择的电话号码已失效，请重新登录")
+	}
+	if len(options.TrustedPhoneNumbers) == 1 {
+		return &options.TrustedPhoneNumbers[0], nil
+	}
+	return nil, errors.New("请选择接收验证码的电话号码")
 }
 
 func (a *appleCloudKitAuth) finishSession() (*appleCloudKitSession, error) {
@@ -363,6 +539,120 @@ func (a *appleCloudKitAuth) authComplete(c, m1, m2 string) (bool, error) {
 	default:
 		return false, fmt.Errorf("Apple 登录失败（HTTP %d）", resp.StatusCode)
 	}
+}
+
+// twoFactorOptions reads the verification methods Apple offers for the
+// current challenge. A code has already been pushed to trusted devices.
+func (a *appleCloudKitAuth) twoFactorOptions() (*appleCloudKitTwoFactorOptions, error) {
+	req, err := http.NewRequest("GET", appleCloudKitAuthEndpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header = a.updateAuthHeaders(req.Header)
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("获取两步验证方式失败（HTTP %d）", resp.StatusCode)
+	}
+	var options appleCloudKitTwoFactorOptions
+	if err := json.Unmarshal(body, &options); err != nil {
+		return nil, fmt.Errorf("解析两步验证方式失败: %w", err)
+	}
+	return &options, nil
+}
+
+// requestPhoneCode asks Apple to send a new code to a trusted phone number.
+func (a *appleCloudKitAuth) requestPhoneCode(phoneID int, mode string) error {
+	if phoneID <= 0 {
+		return errors.New("请选择接收验证码的电话号码")
+	}
+	if strings.TrimSpace(mode) == "" {
+		mode = "sms"
+	}
+	bodyJSON, _ := json.Marshal(map[string]interface{}{
+		"phoneNumber": map[string]interface{}{"id": phoneID},
+		"mode":        mode,
+	})
+	req, err := http.NewRequest("PUT", appleCloudKitAuthEndpoint+"/verify/phone", bytes.NewReader(bodyJSON))
+	if err != nil {
+		return err
+	}
+	req.Header = a.updateAuthHeaders(req.Header)
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return fmt.Errorf("发送短信验证码失败（HTTP %d）%s", resp.StatusCode, appleCloudKitServiceError(body))
+	}
+	if next := resp.Header.Get("scnt"); next != "" {
+		a.scnt = next
+	}
+	return nil
+}
+
+// submitPhoneTwoFactor submits a code that was delivered by SMS or voice call.
+func (a *appleCloudKitAuth) submitPhoneTwoFactor(phoneID int, mode, code string) error {
+	if strings.TrimSpace(mode) == "" {
+		mode = "sms"
+	}
+	bodyJSON, _ := json.Marshal(map[string]interface{}{
+		"phoneNumber":  map[string]interface{}{"id": phoneID},
+		"securityCode": map[string]string{"code": strings.TrimSpace(code)},
+		"mode":         mode,
+	})
+	req, err := http.NewRequest("POST", appleCloudKitAuthEndpoint+"/verify/phone/securitycode", bytes.NewReader(bodyJSON))
+	if err != nil {
+		return err
+	}
+	req.Header = a.updateAuthHeaders(req.Header)
+	resp, err := a.client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode != 200 && resp.StatusCode != 204 {
+		return fmt.Errorf("短信验证码校验失败（HTTP %d）%s", resp.StatusCode, appleCloudKitServiceError(body))
+	}
+	if next := resp.Header.Get("scnt"); next != "" {
+		a.scnt = next
+	}
+	return nil
+}
+
+// appleCloudKitServiceError extracts Apple's user-facing service error text
+// without echoing the whole response body.
+func appleCloudKitServiceError(body []byte) string {
+	var payload struct {
+		ServiceErrors []struct {
+			Message string `json:"message"`
+			Code    string `json:"code"`
+		} `json:"serviceErrors"`
+		ServiceErrorsSnake []struct {
+			Message string `json:"message"`
+			Code    string `json:"code"`
+		} `json:"service_errors"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return ""
+	}
+	items := payload.ServiceErrors
+	if len(items) == 0 {
+		items = payload.ServiceErrorsSnake
+	}
+	for _, item := range items {
+		if strings.TrimSpace(item.Message) != "" {
+			return "：" + strings.TrimSpace(item.Message)
+		}
+	}
+	return ""
 }
 
 func (a *appleCloudKitAuth) submitTwoFactor(code string) error {

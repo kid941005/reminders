@@ -243,10 +243,26 @@ export interface AppleReminderDiscoverInput {
   apple_id: string
   password?: string
 }
+export interface AppleCloudKitPhoneOption {
+  id: number
+  number: string
+  mode: string
+}
+export interface AppleCloudKitTwoFactorOptions {
+  trusted_device_count: number
+  phones: AppleCloudKitPhoneOption[]
+  no_trusted_devices: boolean
+  code_length: number
+  too_many_codes_sent: boolean
+  security_code_locked: boolean
+  sms_auto_sent: boolean
+}
 export interface AppleCloudKitLoginResult {
   need_2fa: boolean
   login_id: string
   lists?: AppleReminderCollection[]
+  options?: AppleCloudKitTwoFactorOptions
+  options_error?: string
 }
 export interface AppleReminderSyncResult {
   pushed: number
@@ -263,5 +279,7 @@ export const deleteAppleReminders = () => request.delete('/api/reminder/apple-re
 export const runAppleReminders = () => request.post('/api/reminder/apple-reminders/run')
 export const loginAppleCloudKit = (data: { apple_id: string; password: string }) =>
   request.post('/api/reminder/apple-reminders/cloudkit/login', data)
-export const verifyAppleCloudKit = (data: { login_id: string; code: string }) =>
+export const verifyAppleCloudKit = (data: { login_id: string; code: string; phone_id?: number }) =>
   request.post('/api/reminder/apple-reminders/cloudkit/verify', data)
+export const resendAppleCloudKit = (data: { login_id: string; phone_id?: number }) =>
+  request.post('/api/reminder/apple-reminders/cloudkit/resend', data)
