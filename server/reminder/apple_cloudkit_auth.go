@@ -796,7 +796,7 @@ func (a *appleCloudKitAuth) submitPhoneTwoFactor(phoneID int, mode, code string)
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return fmt.Errorf("短信验证码校验失败（HTTP %d）%s", resp.StatusCode, appleCloudKitServiceError(body))
+		return appleCloudKitVerificationError("短信验证码校验失败", resp.StatusCode, body)
 	}
 	if next := resp.Header.Get("scnt"); next != "" {
 		a.scnt = next
@@ -832,6 +832,27 @@ func appleCloudKitServiceError(body []byte) string {
 	return ""
 }
 
+// appleCloudKitVerificationError translates Apple's generic verification
+// failures into actionable Chinese messages while preserving other service
+// details for diagnosis. Apple returns HTTP 400 with serviceErrors text such as
+// "Incorrect verification code." for both expired and mistyped codes.
+func appleCloudKitVerificationError(prefix string, status int, body []byte) error {
+	detail := strings.TrimSpace(appleCloudKitServiceError(body))
+	lower := strings.ToLower(detail)
+	switch {
+	case strings.Contains(lower, "too many") || strings.Contains(lower, "rate limit"):
+		return errors.New("验证码发送过于频繁，请稍后再试")
+	case strings.Contains(lower, "incorrect verification code"),
+		strings.Contains(lower, "invalid verification code"),
+		strings.Contains(lower, "incorrect code"):
+		return errors.New("验证码不正确或已过期，请重新获取后再试")
+	}
+	if detail != "" {
+		return fmt.Errorf("%s（HTTP %d）%s", prefix, status, detail)
+	}
+	return fmt.Errorf("%s（HTTP %d）", prefix, status)
+}
+
 func (a *appleCloudKitAuth) submitTwoFactor(code string) error {
 	bodyJSON, _ := json.Marshal(map[string]interface{}{
 		"securityCode": map[string]string{"code": strings.TrimSpace(code)},
@@ -848,9 +869,9 @@ func (a *appleCloudKitAuth) submitTwoFactor(code string) error {
 		return err
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, resp.Body)
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode != 200 && resp.StatusCode != 204 {
-		return fmt.Errorf("两步验证码校验失败（HTTP %d），请确认验证码是否正确", resp.StatusCode)
+		return appleCloudKitVerificationError("两步验证码校验失败", resp.StatusCode, body)
 	}
 	if next := resp.Header.Get("scnt"); next != "" {
 		a.scnt = next

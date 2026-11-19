@@ -194,6 +194,30 @@ func TestAppleCloudKitServiceError(t *testing.T) {
 	}
 }
 
+func TestAppleCloudKitVerificationError(t *testing.T) {
+	cases := []struct {
+		name   string
+		prefix string
+		status int
+		body   string
+		want   string
+	}{
+		{"incorrect code", "短信验证码校验失败", 400, `{"serviceErrors":[{"message":"Incorrect verification code."}]}`, "验证码不正确或已过期，请重新获取后再试"},
+		{"incorrect code snake", "两步验证码校验失败", 400, `{"service_errors":[{"message":"invalid verification code"}]}`, "验证码不正确或已过期，请重新获取后再试"},
+		{"too many", "短信验证码校验失败", 400, `{"serviceErrors":[{"message":"Too many codes sent"}]}`, "验证码发送过于频繁，请稍后再试"},
+		{"other detail", "短信验证码校验失败", 500, `{"serviceErrors":[{"message":"Server exploded"}]}`, "短信验证码校验失败（HTTP 500）：Server exploded"},
+		{"no detail", "两步验证码校验失败", 400, `not-json`, "两步验证码校验失败（HTTP 400）"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := appleCloudKitVerificationError(tc.prefix, tc.status, []byte(tc.body))
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("got %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestAppleCloudKitSessionJSONRoundTrip(t *testing.T) {
 	sess := &appleCloudKitSession{CKBaseURL: "https://ckdatabasews.icloud.com", SessionToken: "token", Cookies: []appleCloudKitCookie{{Name: "X-APPLE-WEBAUTH-USER", Value: "abc", Domain: ".icloud.com", Path: "/", Secure: true}}}
 	client, err := newAppleCloudKitClientFromSession(sess)
