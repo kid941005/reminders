@@ -96,16 +96,16 @@
         </p>
       </template>
 
-      <div v-if="withTime" class="mt-3 border-t border-border/70 pt-3">
+      <div v-if="withTime" class="sticky bottom-0 z-10 mt-3 border-t border-border/70 bg-surface pt-3">
         <!-- 桌面端与手机端统一用「时 / 分」下拉，避免系统时间表盘要先点开再滚动的两步操作。 -->
         <p class="mb-1.5 text-xs font-bold text-muted-foreground">时间</p>
         <div class="flex items-center gap-2">
           <select v-model="hourValue" class="time-select flex-1" aria-label="小时">
-            <option v-for="h in hourOptions" :key="h" :value="h">{{ h }} 时</option>
+            <option v-for="h in hourOptions" :key="h.value" :value="h.value" :disabled="h.disabled">{{ h.value }} 时</option>
           </select>
           <span class="text-sm font-bold text-muted-foreground" aria-hidden="true">:</span>
           <select v-model="minuteValue" class="time-select flex-1" aria-label="分钟">
-            <option v-for="m in minuteOptions" :key="m" :value="m">{{ m }} 分</option>
+            <option v-for="m in minuteOptions" :key="m.value" :value="m.value" :disabled="m.disabled">{{ m.value }} 分</option>
           </select>
         </div>
       </div>
@@ -166,6 +166,35 @@ const timeValue = ref('09:00')
 const rootEl = ref<HTMLElement | null>(null)
 const floatStyle = ref<Record<string, string>>({})
 let requestSeq = 0
+// 今天已经过去的时刻不能再选：每 30 秒刷新一次“现在”，
+// 弹层开着跨过整点时，时间选项也会跟着收窄。
+const nowTick = ref(new Date())
+let nowTimer: number | undefined
+let placeFrame: number | undefined
+let resizeObserver: ResizeObserver | undefined
+
+function pad2(value: number) { return String(value).padStart(2, '0') }
+function sameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+function formatTime(date: Date) { return `${pad2(date.getHours())}:${pad2(date.getMinutes())}` }
+// 新建提醒时的默认时间：至少留出 5 分钟，避免刚打开就落在过去。
+function nextAvailableDate(from = nowTick.value) {
+  const date = new Date(from.getTime() + 5 * 60 * 1000)
+  date.setSeconds(0, 0)
+  return date
+}
+// 选中今天且时间已经过去时，顺延到最近的未来时刻；其他日期保持用户选择。
+function clampToFuture(date: Date) {
+  if (!sameDay(date, nowTick.value)) return date
+  const cutoff = new Date(nowTick.value.getTime() + 60 * 1000)
+  if (date.getTime() >= cutoff.getTime()) return date
+  if (sameDay(cutoff, nowTick.value)) return cutoff
+  // 跨过午夜时当天只剩 23:59 这一分钟：能落在今天最后一秒就留在今天，
+  // 已经连 23:59:59 都过去时只能顺延到明天，避免生成过期提醒。
+  const endOfDay = new Date(nowTick.value.getFullYear(), nowTick.value.getMonth(), nowTick.value.getDate(), 23, 59, 59, 0)
+  return endOfDay.getTime() > nowTick.value.getTime() ? endOfDay : cutoff
+}
 
 const lunarView = reactive({ year: 0, month: 1, day: 1 })
 const lunarYearOptions = computed(() => {
@@ -295,6 +324,7 @@ function switchMode(next: 'solar' | 'lunar') {
   if (next === 'lunar') {
     syncLunarFromSolar()
   }
+  schedulePlace()
 }
 
 // 把当前公历视图（或选中日期）映射到农历视图
@@ -352,10 +382,10 @@ watch(() => props.modelValue, value => {
 }, { immediate: true })
 
 function syncView() {
-  const base = props.modelValue ?? new Date()
+  const base = props.modelValue ?? nextAvailableDate()
   viewYear.value = base.getFullYear()
   viewMonth.value = base.getMonth() + 1
-  timeValue.value = `${String(base.getHours()).padStart(2, '0')}:${String(base.getMinutes()).padStart(2, '0')}`
+  timeValue.value = formatTime(base)
 }
 
 async function loadMonth() {
@@ -366,10 +396,12 @@ async function loadMonth() {
     if (seq !== requestSeq) return
     const data = res.data.data as LunarCalendarMonth
     cells.value = data.days
+    schedulePlace()
   } catch {
     if (seq === requestSeq) cells.value = []
   } finally {
     if (seq === requestSeq) loading.value = false
+    schedulePlace()
   }
 }
 
@@ -431,13 +463,14 @@ function goToday() {
   viewMonth.value = now.getMonth() + 1
   mode.value = 'solar'
   pickSolar({ year: now.getFullYear(), month: now.getMonth() + 1, day: now.getDate() } as LunarDayInfo)
-  // 手机端抽屉保持打开，让用户按“确定”收起
-  if (!isMobile.value) emit('commit')
+  // “今天”是直接选中，不再让用户额外点一次确定；手机端也立即收起抽屉。
+  emit('commit')
 }
 
 function pickSolar(cell: LunarDayInfo) {
   const [h, m] = timeValue.value.split(':').map(Number)
-  const picked = new Date(cell.year, cell.month - 1, cell.day, h || 0, m || 0, 0, 0)
+  const picked = clampToFuture(new Date(cell.year, cell.month - 1, cell.day, h || 0, m || 0, 0, 0))
+  timeValue.value = formatTime(picked)
   emit('update:modelValue', picked)
 }
 
@@ -447,7 +480,8 @@ function pickLunar(day: number) {
   convertLunarDate({ lunar_year: lunarView.year, lunar_month: lunarView.month, lunar_day: day })
     .then(res => {
       const d = res.data.data
-      const picked = new Date(d.year, d.month - 1, d.day, h || 0, m || 0, 0, 0)
+      const picked = clampToFuture(new Date(d.year, d.month - 1, d.day, h || 0, m || 0, 0, 0))
+      timeValue.value = formatTime(picked)
       emit('update:modelValue', picked)
       // 手机端抽屉保持打开，让用户按“确定”收起
       if (!isMobile.value) emit('commit')
@@ -459,13 +493,51 @@ function pickLunar(day: number) {
 // 弹层保持打开便于继续调整。（此前这里只关闭弹层、不写回时间，导致“时间改了却不生效”。）
 function onTimeChange() {
   const [h, m] = timeValue.value.split(':').map(Number)
-  const base = props.modelValue ?? new Date()
-  emit('update:modelValue', new Date(base.getFullYear(), base.getMonth(), base.getDate(), h || 0, m || 0, 0, 0))
+  const base = props.modelValue ?? new Date(nowTick.value)
+  const picked = clampToFuture(new Date(base.getFullYear(), base.getMonth(), base.getDate(), h || 0, m || 0, 0, 0))
+  timeValue.value = formatTime(picked)
+  emit('update:modelValue', picked)
 }
 
-// 手机端时/分滚轮：与 timeValue 双向同步，变更立即生效。
-const hourOptions = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
-const minuteOptions = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
+// 时/分下拉：与 timeValue 双向同步，变更立即生效。
+// 选中今天时隐藏已经过去的整点与分钟；当前已选中的过去值保留为禁用项，
+// 这样编辑历史提醒时不会因为选项被移除而显示成空白。
+const selectedIsToday = computed(() => sameDay(props.modelValue ?? nowTick.value, nowTick.value))
+const minTime = computed(() => {
+  if (!selectedIsToday.value) return { hour: 0, minute: 0 }
+  const cutoff = new Date(nowTick.value.getTime() + 60 * 1000)
+  if (!sameDay(cutoff, nowTick.value)) {
+    const endOfDay = new Date(nowTick.value.getFullYear(), nowTick.value.getMonth(), nowTick.value.getDate(), 23, 59, 59, 0)
+    // 今天只剩 23:59 可选的这一分钟；连最后一秒都过去后不再提供任何时间。
+    return endOfDay.getTime() > nowTick.value.getTime() ? { hour: 23, minute: 59 } : { hour: 24, minute: 0 }
+  }
+  return { hour: cutoff.getHours(), minute: cutoff.getMinutes() }
+})
+const selectedHour = computed(() => Number(timeValue.value.split(':')[0] || 0))
+const selectedMinute = computed(() => Number(timeValue.value.split(':')[1] || 0))
+const hourOptions = computed(() => {
+  const start = selectedIsToday.value ? minTime.value.hour : 0
+  const options: Array<{ value: string; disabled: boolean }> = []
+  for (let h = 0; h < 24; h++) {
+    if (h < start && h !== selectedHour.value) continue
+    options.push({ value: pad2(h), disabled: h < start })
+  }
+  return options
+})
+const minuteOptions = computed(() => {
+  const hour = selectedHour.value
+  let start = 0
+  if (selectedIsToday.value) {
+    if (hour < minTime.value.hour) start = 60
+    else if (hour === minTime.value.hour) start = minTime.value.minute
+  }
+  const options: Array<{ value: string; disabled: boolean }> = []
+  for (let m = 0; m < 60; m++) {
+    if (m < start && m !== selectedMinute.value) continue
+    options.push({ value: pad2(m), disabled: m < start })
+  }
+  return options
+})
 const hourValue = computed({
   get: () => timeValue.value.split(':')[0] || '09',
   set: (h: string) => setTimeParts(h, timeValue.value.split(':')[1] || '00'),
@@ -479,8 +551,6 @@ function setTimeParts(h: string, m: string) {
   onTimeChange()
 }
 
-const anchor = computed(() => props.modelValue ?? new Date())
-
 // 以锚点元素计算 fixed 位置：默认在按钮下方左对齐；底部放不下时
 // 上翻到按钮上方；左右贴边时向内收。挂载与视口变化时都重新计算。
 function place() {
@@ -488,28 +558,60 @@ function place() {
   const el = rootEl.value
   const anchorNode = props.anchorEl
   if (!el) return
-  if (!anchorNode) {
-    floatStyle.value = { position: 'fixed', top: '30vh', left: '50%', transform: 'translateX(-50%)' }
-    return
-  }
-  const a = anchorNode.getBoundingClientRect()
-  const w = el.offsetWidth || 320
-  const h = el.offsetHeight || 380
   const margin = 8
-  let top = a.bottom + margin
-  if (top + h > innerHeight - margin && a.top - margin - h > margin) {
-    top = a.top - margin - h
+  const viewportW = window.innerWidth
+  const viewportH = window.innerHeight
+  let top = margin
+  let left = margin
+  let maxHeight = viewportH - margin * 2
+  if (!anchorNode) {
+    top = Math.max(margin, Math.round(viewportH * 0.2))
+    left = Math.max(margin, Math.round((viewportW - (el.offsetWidth || 320)) / 2))
+  } else {
+    const a = anchorNode.getBoundingClientRect()
+    // scrollHeight 是内容真实高度，不受上一次 max-height 影响；
+    // 异步加载农历后高度会变，ResizeObserver 会再次触发定位。
+    const naturalH = el.scrollHeight || el.offsetHeight || 380
+    const below = viewportH - a.bottom - margin * 2
+    const above = a.top - margin * 2
+    if (naturalH <= below) {
+      top = a.bottom + margin
+      maxHeight = below
+    } else if (naturalH <= above) {
+      top = a.top - margin - naturalH
+      maxHeight = above
+    } else if (below >= above) {
+      // 上下都放不下时用空间更大的一侧，并在弹层内部滚动，
+      // 保证最下面的“时间”一行不会被视口裁掉。
+      top = a.bottom + margin
+      maxHeight = below
+    } else {
+      top = margin
+      maxHeight = above
+    }
+    left = a.left
+    const w = el.offsetWidth || 320
+    if (left + w > viewportW - margin) left = Math.max(margin, viewportW - margin - w)
   }
-  top = Math.max(margin, Math.min(top, Math.max(margin, innerHeight - h - margin)))
-  let left = a.left
-  if (left + w > innerWidth - margin) {
-    left = Math.max(margin, innerWidth - margin - w)
+  floatStyle.value = {
+    position: 'fixed',
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    transform: 'none',
+    maxHeight: `${Math.max(160, Math.round(maxHeight))}px`,
+    overflowY: 'auto',
   }
-  floatStyle.value = { position: 'fixed', top: `${Math.round(top)}px`, left: `${Math.round(left)}px`, transform: 'none' }
-  // 弹层宽度可能超过窄视口：先落位再量实际宽度，超宽时固定 320px 上限并二次贴边。
-  if (el.offsetWidth > innerWidth - margin * 2) {
-    floatStyle.value = { ...floatStyle.value, width: `${innerWidth - margin * 2}px` }
+  // 弹层宽度可能超过窄视口：先落位再量实际宽度，超宽时固定上限并二次贴边。
+  if (el.offsetWidth > viewportW - margin * 2) {
+    floatStyle.value = { ...floatStyle.value, width: `${viewportW - margin * 2}px` }
   }
+}
+function schedulePlace() {
+  if (placeFrame !== undefined) return
+  placeFrame = requestAnimationFrame(() => {
+    placeFrame = undefined
+    place()
+  })
 }
 
 // 点击弹层外部关闭：仅桌面端（手机端由遮罩处理，且点遮罩=取消还原）。
@@ -525,13 +627,16 @@ onMounted(() => {
   sheetMediaQuery = window.matchMedia('(max-width: 639px)')
   syncSheetMode()
   sheetMediaQuery.addEventListener('change', syncSheetMode)
-  // 打开时还没有日期：默认选中今天（时间用当前时分），可直接按“确定”确认。
+  // 打开时还没有日期：默认选中今天最近的未来时刻，可直接按“确定”确认。
   // “取消”仍会还原为打开前的状态（不选日期）。
   if (!props.modelValue) {
-    const [h, m] = timeValue.value.split(':').map(Number)
-    const now = new Date()
-    emit('update:modelValue', new Date(now.getFullYear(), now.getMonth(), now.getDate(), h || 0, m || 0, 0, 0))
+    const picked = nextAvailableDate()
+    timeValue.value = formatTime(picked)
+    emit('update:modelValue', picked)
   }
+  nowTimer = window.setInterval(() => { nowTick.value = new Date() }, 30_000)
+  resizeObserver = new ResizeObserver(schedulePlace)
+  if (rootEl.value) resizeObserver.observe(rootEl.value)
   place()
   document.addEventListener('pointerdown', onDocumentPointerDown, true)
   window.addEventListener('resize', place)
@@ -539,6 +644,9 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   sheetMediaQuery?.removeEventListener('change', syncSheetMode)
+  if (nowTimer !== undefined) window.clearInterval(nowTimer)
+  if (placeFrame !== undefined) cancelAnimationFrame(placeFrame)
+  resizeObserver?.disconnect()
   document.removeEventListener('pointerdown', onDocumentPointerDown, true)
   window.removeEventListener('resize', place)
   window.removeEventListener('scroll', place, true)
@@ -556,7 +664,10 @@ void Promise.resolve().then(place)
 </script>
 
 <style scoped>
-.lunar-picker { @apply z-[80] w-[320px] max-w-full rounded-2xl border border-border bg-surface p-3 shadow-lg backdrop-blur; }
+.lunar-picker {
+  @apply z-[80] w-[320px] max-w-full overflow-y-auto overscroll-contain rounded-2xl border border-border bg-surface p-3 shadow-lg backdrop-blur;
+  max-height: calc(100dvh - 16px);
+}
 
 /* 手机端底部抽屉：固定贴底、圆角顶、内部可滚动，滑入动画呈现 */
 .lunar-sheet {

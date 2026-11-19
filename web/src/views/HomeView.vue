@@ -494,15 +494,38 @@ async function submitQuick() {
     quickInput.value?.focus()
   }
 }
+// 「今天」默认 20:00；若已过 20:00 则顺延到最近的未来时刻，
+// 避免点一下就生成一条已经过期的提醒。
+function nextTodayPreset(): Date {
+  const now = new Date()
+  const target = new Date(now)
+  target.setSeconds(0, 0)
+  target.setHours(20, 0, 0, 0)
+  if (target.getTime() > now.getTime()) return target
+  target.setTime(now.getTime() + 30 * 60 * 1000)
+  target.setSeconds(0, 0)
+  if (target.getDate() !== now.getDate()) {
+    // 23:30 之后默认时间会跨到明天：优先落在今天最后一秒，
+    // 连 23:59:59 都已过去时只能顺延到明天，避免生成过期提醒。
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 0)
+    target.setTime(endOfDay.getTime() > now.getTime() ? endOfDay.getTime() : now.getTime() + 60 * 1000)
+  }
+  return target
+}
 function setPreset(kind: string) {
   preset.value = preset.value === kind ? '' : kind
+  // 快捷按钮直接写回时间，同时收起可能开着的日期弹层。
+  quickDateOpen.value = false
   if (!preset.value) {
     quick.due_at = null
     return
   }
+  if (kind === 'today') {
+    quick.due_at = nextTodayPreset().toISOString()
+    return
+  }
   const d = new Date()
   d.setSeconds(0, 0)
-  if (kind === 'today') d.setHours(20, 0)
   if (kind === 'tomorrow') { d.setDate(d.getDate() + 1); d.setHours(9, 0) }
   if (kind === 'weekend') { const add = (6 - d.getDay() + 7) % 7 || 7; d.setDate(d.getDate() + add); d.setHours(9, 0) }
   quick.due_at = d.toISOString()
