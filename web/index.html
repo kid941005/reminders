@@ -103,17 +103,67 @@
       <p class="boot-title">提醒事项</p>
       <p class="boot-hint" id="boot-hint">正在加载…</p>
     </div>
-    <!-- 玻璃折射滤镜：供 backdrop-filter: url(#glass-lens) 使用。
-         低频噪声 + 轻微位移，让面板后的光斑产生「透镜」般的扭曲；
-         不支持 backdrop-filter: url() 的浏览器会整条声明回退到普通模糊。 -->
+    <!-- 液态玻璃折射滤镜
+         glass-lens：低频噪声位移，让面板后的光斑/文字产生透镜式扭曲；
+         glass-rim ：更强位移 + RGB 三通道分离，模拟玻璃切边的色散（边缘彩虹边）。
+         不支持 backdrop-filter: url() 的浏览器会整条声明回退为普通模糊。 -->
     <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;pointer-events:none">
       <filter id="glass-lens" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
         <feTurbulence type="fractalNoise" baseFrequency="0.006 0.01" numOctaves="2" seed="11" result="noise" />
         <feGaussianBlur in="noise" stdDeviation="1.6" result="soft" />
-        <feDisplacementMap in="SourceGraphic" in2="soft" scale="14" xChannelSelector="R" yChannelSelector="G" />
+        <feDisplacementMap in="SourceGraphic" in2="soft" scale="18" xChannelSelector="R" yChannelSelector="G" />
+      </filter>
+      <filter id="glass-rim" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
+        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.026" numOctaves="1" seed="7" result="noise" />
+        <feGaussianBlur in="noise" stdDeviation="1.1" result="soft" />
+        <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red" />
+        <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green" />
+        <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue" />
+        <feDisplacementMap in="red"   in2="soft" scale="8"  xChannelSelector="R" yChannelSelector="G" result="rd" />
+        <feDisplacementMap in="green" in2="soft" scale="16" xChannelSelector="R" yChannelSelector="G" result="gd" />
+        <feDisplacementMap in="blue"  in2="soft" scale="24" xChannelSelector="R" yChannelSelector="G" result="bd" />
+        <feBlend in="rd" in2="gd" mode="screen" result="rg" />
+        <feBlend in="rg" in2="bd" mode="screen" result="disp" />
       </filter>
     </svg>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
+    <script>
+      /* 液态玻璃「光影随动」：把指针位置写成 CSS 变量，供 .surface/.glass-row/.glass-bar
+         的镜面高光实时跟随；按下时加 .lg-press 触发轻微形变（弹性回弹由 CSS transition 完成）。
+         触摸设备与「减少动态效果」用户直接跳过，保持静态高光。 */
+      (function () {
+        if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        if (matchMedia('(hover: none), (pointer: coarse)').matches) return;
+        var SEL = '.surface,.glass-row,.glass-bar,.surface-modal';
+        var frame = 0, last = null, current = null;
+        function paint() {
+          frame = 0;
+          if (!last || !current || !current.isConnected) return;
+          var r = current.getBoundingClientRect();
+          if (!r.width || !r.height) return;
+          current.style.setProperty('--lg-px', (((last.clientX - r.left) / r.width) * 100).toFixed(2) + '%');
+          current.style.setProperty('--lg-py', (((last.clientY - r.top) / r.height) * 100).toFixed(2) + '%');
+        }
+        window.addEventListener('pointermove', function (e) {
+          var el = e.target && e.target.closest ? e.target.closest(SEL) : null;
+          if (!el) { current = null; return; }
+          current = el; last = e;
+          if (!frame) frame = requestAnimationFrame(paint);
+        }, { passive: true });
+        window.addEventListener('pointerdown', function (e) {
+          var el = e.target && e.target.closest ? e.target.closest('.surface,.glass-row') : null;
+          if (!el) return;
+          el.classList.add('lg-press');
+          var done = function () {
+            el.classList.remove('lg-press');
+            window.removeEventListener('pointerup', done);
+            window.removeEventListener('pointercancel', done);
+          };
+          window.addEventListener('pointerup', done);
+          window.addEventListener('pointercancel', done);
+        }, { passive: true });
+      })();
+    </script>
   </body>
 </html>

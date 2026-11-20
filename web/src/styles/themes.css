@@ -90,13 +90,18 @@
   --glass-specular:          255 255 255;
   --glass-specular-alpha:    0.62;
   --glass-specular-alpha-2:  0.22;
+  /* 液态玻璃：随指针移动的镜面高光强度、流动光泽、边缘色散与按压形变 */
+  --glass-sheen-alpha:       0.16;
+  --glass-chroma-alpha:      0.20;
+  --glass-press-scale:       0.982;
+  --glass-flow-speed:        16s;
   --glass-brightness:        1.08;
   /* 玻璃边缘的"切割线"：浅色主题下白描边落在白底上看不见，
      用极淡的深色发丝线勾出面板边界（深色主题改用白色）。 */
   --glass-hairline:          15 23 42;
   --glass-hairline-alpha:    0.12;
-  --glass-blur-md:           20px;
-  --glass-blur-lg:           34px;
+  --glass-blur-md:           18px;
+  --glass-blur-lg:           28px;
   --glass-saturate:          190%;
   --glass-sheet-tint:        255 255 255;
   --glass-sheet-alpha:       0.92;
@@ -126,6 +131,10 @@
   --glass-specular:          255 255 255;
   --glass-specular-alpha:    0.16;
   --glass-specular-alpha-2:  0.08;
+  --glass-sheen-alpha:       0.10;
+  --glass-chroma-alpha:      0.16;
+  --glass-press-scale:       0.985;
+  --glass-flow-speed:        18s;
   --glass-brightness:        1.05;
   --glass-hairline:          255 255 255;
   --glass-hairline-alpha:    0.14;

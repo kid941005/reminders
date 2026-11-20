@@ -158,7 +158,10 @@ textarea {
   .surface {
     @apply relative isolate border;
     background-image:
-      radial-gradient(125% 90% at 12% -18%, rgb(var(--glass-specular) / var(--glass-specular-alpha)) 0%, transparent 55%),
+      /* 跟随指针的紧凑镜面高光：液态玻璃的「光随手动」主体 */
+      radial-gradient(24% 18% at var(--lg-px, 16%) var(--lg-py, -6%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.95)) 0%, transparent 72%),
+      /* 常驻左上受光 + 右下回光 */
+      radial-gradient(125% 90% at var(--lg-px, 16%) var(--lg-py, -16%), rgb(var(--glass-specular) / var(--glass-specular-alpha)) 0%, transparent 55%),
       radial-gradient(80% 60% at 88% 112%, rgb(var(--glass-specular) / var(--glass-specular-alpha-2)) 0%, transparent 62%),
       linear-gradient(152deg, rgb(var(--glass-tint) / var(--glass-alpha-top)) 0%, rgb(var(--glass-tint) / var(--glass-alpha-bottom)) 100%);
     border-color: rgb(var(--glass-hairline) / var(--glass-hairline-alpha));
@@ -169,12 +172,53 @@ textarea {
       inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
       inset 0 -1px 0 rgb(var(--glass-inner) / 0.28),
       inset 0 0 44px rgb(var(--glass-inner) / 0.10),
-      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.10);
+      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.10),
+      /* 边缘色散：左青右品红的极细高光，模拟液态玻璃切边分光 */
+      inset 1px 0 0 rgb(90 200 255 / var(--glass-chroma-alpha)),
+      inset -1px 0 0 rgb(255 120 220 / calc(var(--glass-chroma-alpha) * 0.65));
     backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     /* 有 SVG 滤镜的宿主（Chromium）：再叠一层位移，制造真实折射；
        不支持 url() 的宿主会丢弃这一行，保留上面的常规模糊。 */
     backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness)) url(#glass-lens);
+    transition: transform .22s cubic-bezier(.2, .9, .25, 1), scale .22s cubic-bezier(.2, .9, .25, 1), box-shadow .22s ease;
+  }
+
+  /* 液态流动光泽：一条沿对角线缓慢扫过的柔光，让玻璃表面持续「流动」。
+     z-index:-1 位于面板底色之上、正文之下（.surface 已 isolation:isolate）。 */
+  .surface:not(.quick-card)::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    border-radius: inherit;
+    pointer-events: none;
+    /* 三段式流动光带：冷色折射 → 白色镜面 → 暖色折射 → 极淡灰影，
+       普通混合而非 screen，浅色主题下也能看到色散与明暗流动。 */
+    background: linear-gradient(
+      115deg,
+      transparent 24%,
+      rgb(110 190 255 / calc(var(--glass-chroma-alpha) * 0.9)) 37%,
+      rgb(var(--glass-specular) / var(--glass-sheen-alpha)) 46%,
+      rgb(255 150 225 / calc(var(--glass-chroma-alpha) * 0.75)) 55%,
+      rgb(90 110 150 / calc(var(--glass-chroma-alpha) * 0.22)) 63%,
+      transparent 74%
+    );
+    background-size: 230% 230%;
+    background-position: 115% -10%;
+    animation: lg-sheen var(--glass-flow-speed) ease-in-out infinite alternate;
+    mix-blend-mode: normal;
+    opacity: .9;
+  }
+  @keyframes lg-sheen {
+    from { background-position: 115% -10%; }
+    to   { background-position: -15% 110%; }
+  }
+
+  /* 按压形变：轻微缩小，松手按 transition 回弹，模拟液态材质受力 */
+  .surface.lg-press,
+  .glass-row.lg-press {
+    scale: var(--glass-press-scale);
   }
 
   /* 玻璃边缘折射：上亮下暗的 1px 渐变描边（mask 挖空中心只留边框），
@@ -203,6 +247,13 @@ textarea {
     pointer-events: none;
     opacity: 0.9;
   }
+  /* 边缘透镜：只在少量大面板（卡片/顶栏）上对 1px 边框做位移色散，
+     列表行数量多，按住滤镜会拖慢滚动，仅保留静态渐变描边。 */
+  .surface::after,
+  .glass-bar::after {
+    backdrop-filter: blur(2px) saturate(150%) url(#glass-rim);
+    -webkit-backdrop-filter: blur(2px) saturate(150%) url(#glass-rim);
+  }
   .dark .surface::after,
   .dark .glass-row::after,
   .dark .glass-bar::after {
@@ -222,7 +273,8 @@ textarea {
     @apply relative isolate border transition-all;
     border-radius: var(--glass-radius-md);
     background-image:
-      radial-gradient(120% 85% at 10% -20%, rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.72)) 0%, transparent 55%),
+      radial-gradient(30% 22% at var(--lg-px, 12%) var(--lg-py, -8%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.8)) 0%, transparent 72%),
+      radial-gradient(120% 85% at var(--lg-px, 12%) var(--lg-py, -20%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.72)) 0%, transparent 55%),
       radial-gradient(80% 60% at 92% 115%, rgb(var(--glass-specular) / calc(var(--glass-specular-alpha-2) * 0.7)) 0%, transparent 62%),
       linear-gradient(150deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.06)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.04)) 100%);
     border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) - 0.02));
@@ -247,7 +299,8 @@ textarea {
   .glass-bar {
     border-color: rgb(var(--glass-hairline) / var(--glass-hairline-alpha));
     background-image:
-      radial-gradient(140% 70% at 50% -30%, rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.5)) 0%, transparent 60%),
+      radial-gradient(26% 40% at var(--lg-px, 50%) var(--lg-py, -20%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.7)) 0%, transparent 72%),
+      radial-gradient(140% 70% at var(--lg-px, 50%) var(--lg-py, -30%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.5)) 0%, transparent 60%),
       linear-gradient(180deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) + 0.12)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) + 0.08)) 100%);
     backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
@@ -363,6 +416,8 @@ textarea {
     background-image: none;
     background-color: rgb(var(--color-surface));
   }
+  /* 无 backdrop-filter 的宿主不展示流动光泽，避免不透明卡片上出现彩带 */
+  .surface:not(.quick-card)::before { display: none; }
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -376,6 +431,14 @@ textarea {
   .glass-bar {
     background-image: none;
     background-color: rgb(var(--color-surface));
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  /* 降低透明度下不保留流动光泽与边缘透镜，避免半透明材质干扰阅读 */
+  .surface:not(.quick-card)::before { display: none; }
+  .surface::after,
+  .glass-row::after,
+  .glass-bar::after {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
@@ -399,10 +462,23 @@ textarea {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
+  /* 触摸设备停止扫光动画，静态高光足够表达材质 */
+  .surface:not(.quick-card)::before { animation: none; opacity: .55; }
+  .surface::after,
+  .glass-row::after,
+  .glass-bar::after {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .btn-premium::after {
+    transition: none;
+  }
+  .surface:not(.quick-card)::before { animation: none; }
+  .surface,
+  .glass-row {
     transition: none;
   }
 }
