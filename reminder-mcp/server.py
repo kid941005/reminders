@@ -35,6 +35,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger("reminder-mcp")
 
+__version__ = "0.19.10"
+
 def _env(name: str, default: str) -> str:
     return (os.getenv(name) or "").strip() or default
 
@@ -51,7 +53,7 @@ try:
 except ValueError:
     TIMEOUT = 8.0
 
-mcp = MCPServer("reminder")
+mcp = MCPServer("reminder", version=__version__)
 
 
 class ReminderAPIError(RuntimeError):

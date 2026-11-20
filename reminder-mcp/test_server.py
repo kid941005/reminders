@@ -169,6 +169,20 @@ class WeatherTest(unittest.TestCase):
         self.assertIn("过长", result["error"])
 
 
+class VersionTest(unittest.TestCase):
+    def test_mcp_reports_constant_version(self) -> None:
+        self.assertEqual(server.mcp.version, server.__version__)
+
+    def test_version_matches_repo_version(self) -> None:
+        from pathlib import Path
+
+        version_file = Path(__file__).resolve().parents[1] / "VERSION"
+        if not version_file.exists():
+            self.skipTest("VERSION file not found")
+        expected = version_file.read_text(encoding="utf-8").strip().lstrip("vV")
+        self.assertEqual(server.__version__, expected)
+
+
 class ToolRegistrationTest(unittest.TestCase):
     def test_official_mcp_server_exposes_six_tools(self) -> None:
         import asyncio
