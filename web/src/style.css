@@ -22,6 +22,7 @@ body {
   /* 液态玻璃需要「可被折射的光」：三层错位光斑构成环境底色，
      玻璃面板的 backdrop-blur/saturate 才有东西可采样。 */
   background-image:
+    radial-gradient(46% 34% at 50% -6%, rgb(var(--glass-light)) 0px, transparent 70%),
     radial-gradient(58% 52% at 6% -8%, rgb(var(--mesh-1)) 0px, transparent 62%),
     radial-gradient(46% 46% at 102% 2%, rgb(var(--mesh-2)) 0px, transparent 58%),
     radial-gradient(52% 46% at 48% 112%, rgb(var(--mesh-3)) 0px, transparent 62%);
@@ -39,6 +40,7 @@ textarea {
 .dark body {
   /* 深色模式的光斑由 --mesh-* 令牌接管，无需重复声明渐变。 */
   background-image:
+    radial-gradient(46% 34% at 50% -6%, rgb(var(--glass-light)) 0px, transparent 70%),
     radial-gradient(58% 52% at 6% -8%, rgb(var(--mesh-1)) 0px, transparent 62%),
     radial-gradient(46% 46% at 102% 2%, rgb(var(--mesh-2)) 0px, transparent 58%),
     radial-gradient(52% 46% at 48% 112%, rgb(var(--mesh-3)) 0px, transparent 62%);
@@ -86,22 +88,23 @@ textarea {
     border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) + 0.01));
     background-image: linear-gradient(
       160deg,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.18)) 0%,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.12)) 100%
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.06)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.04)) 100%
     );
-    box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.06), inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+    box-shadow:
+      inset 0 1px 3px rgb(15 23 42 / 0.10),
+      inset 0 -1px 0 rgb(var(--glass-inner) / 0.45),
+      inset 0 1px 0 rgb(var(--glass-inner) / 0.6);
   }
   .compact-input:focus { border-color: rgb(var(--color-brand-500) / 0.55); }
   .empty-state {
     @apply mt-4 flex min-h-[230px] flex-col items-center justify-center rounded-[28px] border border-dashed px-6 text-center sm:min-h-[280px];
     border-color: rgb(var(--glass-stroke) / 0.5);
-    background-image: linear-gradient(
-      160deg,
-      rgb(var(--glass-tint) / 0.36) 0%,
-      rgb(var(--glass-tint) / 0.18) 100%
-    );
-    backdrop-filter: blur(var(--glass-blur-md)) saturate(130%);
-    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(130%);
+    background-image:
+      radial-gradient(120% 90% at 50% -20%, rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.55)) 0%, transparent 58%),
+      linear-gradient(160deg, rgb(var(--glass-tint) / 0.30) 0%, rgb(var(--glass-tint) / 0.14) 100%);
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
   }
   .icon-button { @apply flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground sm:h-10 sm:w-10; }
 
@@ -154,55 +157,101 @@ textarea {
    * ------------------------------------------------------------------ */
   .surface {
     @apply relative isolate border;
-    background-image: linear-gradient(
-      152deg,
-      rgb(var(--glass-tint) / var(--glass-alpha-top)) 0%,
-      rgb(var(--glass-tint) / var(--glass-alpha-bottom)) 100%
-    );
+    background-image:
+      radial-gradient(125% 90% at 12% -18%, rgb(var(--glass-specular) / var(--glass-specular-alpha)) 0%, transparent 55%),
+      radial-gradient(80% 60% at 88% 112%, rgb(var(--glass-specular) / var(--glass-specular-alpha-2)) 0%, transparent 62%),
+      linear-gradient(152deg, rgb(var(--glass-tint) / var(--glass-alpha-top)) 0%, rgb(var(--glass-tint) / var(--glass-alpha-bottom)) 100%);
     border-color: rgb(var(--glass-hairline) / var(--glass-hairline-alpha));
     box-shadow:
+      var(--glass-glow),
       var(--glass-shadow-1),
       var(--glass-shadow-2),
       inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
-      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.12);
-    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+      inset 0 -1px 0 rgb(var(--glass-inner) / 0.28),
+      inset 0 0 44px rgb(var(--glass-inner) / 0.10),
+      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.10);
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    /* 有 SVG 滤镜的宿主（Chromium）：再叠一层位移，制造真实折射；
+       不支持 url() 的宿主会丢弃这一行，保留上面的常规模糊。 */
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness)) url(#glass-lens);
+  }
+
+  /* 玻璃边缘折射：上亮下暗的 1px 渐变描边（mask 挖空中心只留边框），
+     ::after 叠在内容之上但 pointer-events:none，不挡交互。 */
+  .surface::after,
+  .glass-row::after,
+  .glass-bar::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      145deg,
+      rgb(255 255 255 / 0.85) 0%,
+      rgb(255 255 255 / 0.20) 22%,
+      rgb(255 255 255 / 0) 46%,
+      rgb(255 255 255 / 0.10) 68%,
+      rgb(255 255 255 / 0.55) 100%
+    );
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.9;
+  }
+  .dark .surface::after,
+  .dark .glass-row::after,
+  .dark .glass-bar::after {
+    background: linear-gradient(
+      145deg,
+      rgb(255 255 255 / 0.55) 0%,
+      rgb(255 255 255 / 0.12) 24%,
+      rgb(255 255 255 / 0) 50%,
+      rgb(255 255 255 / 0.06) 72%,
+      rgb(255 255 255 / 0.30) 100%
+    );
+    opacity: 0.8;
   }
 
   /* 玻璃行/磁贴：列表项复用，hover 时抬升并加一层品牌色高光 */
   .glass-row {
     @apply relative isolate border transition-all;
     border-radius: var(--glass-radius-md);
-    background-image: linear-gradient(
-      150deg,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.1)) 0%,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.08)) 100%
-    );
+    background-image:
+      radial-gradient(120% 85% at 10% -20%, rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.72)) 0%, transparent 55%),
+      radial-gradient(80% 60% at 92% 115%, rgb(var(--glass-specular) / calc(var(--glass-specular-alpha-2) * 0.7)) 0%, transparent 62%),
+      linear-gradient(150deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.06)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.04)) 100%);
     border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) - 0.02));
     box-shadow:
       var(--glass-shadow-1),
-      inset 0 1px 0 rgb(var(--glass-inner) / calc(var(--glass-inner-alpha) - 0.1));
-    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
+      inset 0 1px 0 rgb(var(--glass-inner) / calc(var(--glass-inner-alpha) - 0.06)),
+      inset 0 -1px 0 rgb(var(--glass-inner) / 0.16);
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
   }
   .glass-row:hover {
-    border-color: rgb(var(--color-brand-500) / 0.20);
+    border-color: rgb(var(--color-brand-500) / 0.24);
     box-shadow:
+      var(--glass-glow),
       var(--glass-shadow-1),
       var(--glass-shadow-2),
-      inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha));
+      inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
+      inset 0 -1px 0 rgb(var(--glass-inner) / 0.20);
   }
 
   /* 导航栏（侧栏/顶栏/底部标签栏）：更低的透明度 + 更强的模糊 */
   .glass-bar {
-    border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) - 0.03));
-    background-image: linear-gradient(
-      180deg,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) + 0.06)) 0%,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) + 0.04)) 100%
-    );
-    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
-    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate));
+    border-color: rgb(var(--glass-hairline) / var(--glass-hairline-alpha));
+    background-image:
+      radial-gradient(140% 70% at 50% -30%, rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.5)) 0%, transparent 60%),
+      linear-gradient(180deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) + 0.12)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) + 0.08)) 100%);
+    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness)) url(#glass-lens);
   }
 
   /* 弹窗专用不透明表面：移动端禁用了 backdrop-blur（见上方媒体查询），
@@ -210,11 +259,9 @@ textarea {
      因此浮层弹窗必须用不透明背景。 */
   .surface-modal {
     @apply border;
-    background-image: linear-gradient(
-      160deg,
-      rgb(var(--glass-sheet-tint) / var(--glass-sheet-alpha)) 0%,
-      rgb(var(--glass-sheet-tint) / calc(var(--glass-sheet-alpha) - 0.05)) 100%
-    );
+    background-image:
+      radial-gradient(120% 65% at 50% -18%, rgb(var(--glass-specular) / 0.32) 0%, transparent 58%),
+      linear-gradient(160deg, rgb(var(--glass-sheet-tint) / var(--glass-sheet-alpha)) 0%, rgb(var(--glass-sheet-tint) / calc(var(--glass-sheet-alpha) - 0.05)) 100%);
     border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) + 0.03));
     box-shadow:
       var(--glass-shadow-2),
@@ -234,12 +281,10 @@ textarea {
   .btn-ghost {
     @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-sm font-medium text-foreground border active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none transition-all sm:px-4 sm:py-2.5;
     border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) + 0.01));
-    background-image: linear-gradient(
-      160deg,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.18)) 0%,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.12)) 100%
-    );
-    box-shadow: var(--glass-shadow-1), inset 0 1px 0 rgb(var(--glass-inner) / 0.55);
+    background-image:
+      radial-gradient(120% 100% at 20% -30%, rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.55)) 0%, transparent 60%),
+      linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.08)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.04)) 100%);
+    box-shadow: var(--glass-shadow-1), inset 0 1px 0 rgb(var(--glass-inner) / 0.65), inset 0 -1px 0 rgb(var(--glass-inner) / 0.22);
     backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
     -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
   }
@@ -250,10 +295,13 @@ textarea {
     border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.02));
     background-image: linear-gradient(
       160deg,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.16)) 0%,
-      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.1)) 100%
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.04)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.02)) 100%
     );
-    box-shadow: inset 0 1px 2px rgb(15 23 42 / 0.06), inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+    box-shadow:
+      inset 0 1px 3px rgb(15 23 42 / 0.10),
+      inset 0 -1px 0 rgb(var(--glass-inner) / 0.45),
+      inset 0 1px 0 rgb(var(--glass-inner) / 0.6);
   }
 
   .badge {
@@ -337,9 +385,19 @@ textarea {
   :root {
     --glass-blur-md: 0px;
     --glass-blur-lg: 0px;
-    --glass-alpha-top: 0.97;
-    --glass-alpha-bottom: 0.93;
-    --glass-sheet-alpha: 0.99;
+    --glass-alpha-top: 0.90;
+    --glass-alpha-bottom: 0.84;
+    --glass-sheet-alpha: 0.97;
+  }
+  /* 触摸设备不做实时模糊/折射（键盘动画期会重绘），只保留半透明底与高光。 */
+  .surface,
+  .glass-row,
+  .glass-bar,
+  .surface-modal,
+  .empty-state,
+  .btn-ghost {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 }
 

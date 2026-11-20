@@ -3,6 +3,7 @@
     <div class="ambient" aria-hidden="true">
       <span class="ambient-orb ambient-orb-one"></span>
       <span class="ambient-orb ambient-orb-two"></span>
+      <span class="ambient-orb ambient-orb-three"></span>
     </div>
 
     <aside class="sidebar glass-bar" :class="{ 'sidebar-open': mobileOpen }">
@@ -715,9 +716,16 @@ onBeforeUnmount(() => {
 /* 环境层只负责叠加可被玻璃折射的色团，底色交给 body 的三层光斑，
    避免透明面板后面是一块纯色板。 */
 .ambient { position: fixed; inset: 0; z-index: -20; overflow: hidden; pointer-events: none; background: transparent; }
-.ambient-orb { position: absolute; border-radius: 999px; filter: blur(120px); opacity: .18; will-change: transform; animation: ambient-drift 30s ease-in-out infinite alternate; }
-.ambient-orb-one { width: 34rem; height: 34rem; left: 10%; top: -18rem; background: radial-gradient(circle at 30% 30%, #60a5fa, transparent 70%); }
-.ambient-orb-two { width: 30rem; height: 30rem; right: -10rem; bottom: -13rem; background: radial-gradient(circle at 70% 70%, #a78bfa, transparent 70%); opacity: .13; animation-delay: -12s; }
+/* 环境光团是玻璃的「光源」：没有它们，半透明面板后面只是一块纯色，
+   backdrop-filter 再强也看不出折射。这里放三团较强的高饱和光斑，
+   面板扫过时能明显看到颜色在玻璃下流动。 */
+.ambient-orb { position: absolute; border-radius: 999px; filter: blur(96px); opacity: .42; will-change: transform; animation: ambient-drift 30s ease-in-out infinite alternate; }
+.ambient-orb-one { width: 42rem; height: 42rem; left: -8rem; top: -16rem; background: radial-gradient(circle at 35% 35%, #3b82f6, transparent 68%); }
+.ambient-orb-two { width: 36rem; height: 36rem; right: -10rem; top: 4%; background: radial-gradient(circle at 60% 40%, #a855f7, transparent 68%); opacity: .34; animation-delay: -12s; }
+.ambient-orb-three { width: 34rem; height: 34rem; left: 26%; bottom: -16rem; background: radial-gradient(circle at 50% 45%, #22d3ee, transparent 68%); opacity: .30; animation-delay: -21s; }
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orb { animation: none; }
+}
 @keyframes ambient-drift {
   from { transform: translate3d(0, 0, 0) scale(1); }
   to   { transform: translate3d(3rem, 2rem, 0) scale(1.08); }
