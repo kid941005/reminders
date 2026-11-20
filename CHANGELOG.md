@@ -2,6 +2,16 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.19.9（2026-11-20）
+
+### 变更
+
+- **reminder-mcp 升级到官方 MCP Python SDK 2.3**：MCP 适配器从 FastMCP 迁移到官方 `MCPServer`（`mcp>=2.3,<3`），移除 `fastmcp` 依赖；6 个工具的定义与调用行为保持不变，继续支持 stdio 以及 `mcp_pipe.py` 的 WebSocket 接入。
+
+### 构建
+
+- **CI 增加 MCP 适配器测试**：新增 `mcp` job，安装 `reminder-mcp/requirements.txt` 并运行 `python -m unittest -v test_server.py`；镜像与 Release 依赖该 job，避免适配器回归漏检。
+
 ## v0.19.8（2026-11-19）
 
 ### 修复
