@@ -17,6 +17,7 @@ ESP32 小智 --语音--> 小智服务端 / LLM --MCP(WebSocket)--> mcp_pipe.py
 - **ESP32 固件不用改**，设备只负责拾音和播报。
 - **Reminder 后端需 v0.18.0 或更高**（提供 `/weather/query` 天气接口），本目录只做 MCP 协议适配。
 - `server.py` 暴露 6 个工具：`get_current_time`、`list_todos`、`create_todo`、`complete_todo`、`snooze_todo`、`get_weather`。
+- 基于官方 MCP Python SDK 2.3 的 `MCPServer`（`mcp>=2.3,<3`），不再依赖 `fastmcp`。
 - `mcp_pipe.py` 负责 stdio ↔ WebSocket，把 MCP Server 接到小智的 MCP 接入点。
 
 ## 目录
@@ -114,7 +115,7 @@ python mcp_pipe.py
 ```
 
 `mcp_config.json` 里的 `command` 是 `python`，所以本机运行前要先激活虚拟环境，
-否则子进程会用到系统 Python 而找不到 `fastmcp`。
+否则子进程会用到系统 Python 而找不到项目依赖（`mcp` 等）。
 
 纯逻辑测试不访问网络：
 

@@ -169,5 +169,26 @@ class WeatherTest(unittest.TestCase):
         self.assertIn("过长", result["error"])
 
 
+class ToolRegistrationTest(unittest.TestCase):
+    def test_official_mcp_server_exposes_six_tools(self) -> None:
+        import asyncio
+
+        from mcp.server import MCPServer
+
+        self.assertIsInstance(server.mcp, MCPServer)
+        names = {tool.name for tool in asyncio.run(server.mcp.list_tools())}
+        self.assertEqual(
+            names,
+            {
+                "get_current_time",
+                "list_todos",
+                "create_todo",
+                "complete_todo",
+                "snooze_todo",
+                "get_weather",
+            },
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

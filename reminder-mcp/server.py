@@ -18,7 +18,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastmcp import FastMCP
+from mcp.server import MCPServer
 
 try:  # 允许直接运行 server.py 调试；mcp_pipe.py 也会加载 .env
     from dotenv import load_dotenv
@@ -51,7 +51,7 @@ try:
 except ValueError:
     TIMEOUT = 8.0
 
-mcp = FastMCP("reminder")
+mcp = MCPServer("reminder")
 
 
 class ReminderAPIError(RuntimeError):

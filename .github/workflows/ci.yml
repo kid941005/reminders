@@ -53,13 +53,33 @@ jobs:
         working-directory: web
         run: npm run build
 
+  mcp:
+    name: MCP 适配器测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: reminder-mcp/requirements.txt
+
+      - name: 安装依赖
+        working-directory: reminder-mcp
+        run: python -m pip install -r requirements.txt
+
+      - name: 测试
+        working-directory: reminder-mcp
+        run: python -m unittest -v test_server.py
+
   image:
     name: 构建并推送镜像
     # 只在打 tag 时执行。主目标是 ghcr.io：它用本 workflow 自带的 GITHUB_TOKEN
     # 就能推送，不需要仓库里配置任何 secret。Docker Hub 是可选附加目标，
     # 配了 DOCKERHUB_USERNAME / DOCKERHUB_TOKEN 才会多推一份。
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [backend, frontend]
+    needs: [backend, frontend, mcp]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -155,7 +175,7 @@ jobs:
   release:
     name: 创建 Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [backend, frontend]
+    needs: [backend, frontend, mcp]
     runs-on: ubuntu-latest
     permissions:
       contents: write
