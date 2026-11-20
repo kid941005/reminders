@@ -1,5 +1,7 @@
 <template>
   <div class="page-container animate-fade-in">
+    <PageHeader title="用户管理" description="管理系统账号、角色与状态" />
+
     <!-- Stat cards -->
     <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <div class="surface rounded-2xl p-4 sm:p-5">
@@ -197,14 +199,18 @@
     >
       <p v-if="deleteError" class="mt-2 rounded-lg bg-rose-500/10 px-3 py-2 text-xs text-rose-500">{{ deleteError }}</p>
     </ConfirmDialog>
+
+    <Toast :message="toast.message" :type="toast.type" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { getUsers, toggleUserStatus, deleteUser, resetUserPassword } from '../api/user'
 import { passwordValidationError } from '../utils/password'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import Toast from '../components/Toast.vue'
+import PageHeader from '../components/PageHeader.vue'
 
 const users = ref<any[]>([])
 const search = ref('')
@@ -227,6 +233,13 @@ const resetTarget = ref<any>(null)
 const resetNewPassword = ref('')
 const resetLoading = ref(false)
 const resetMsg = ref('')
+
+// 重置成功后弹窗会直接关闭，必须用 toast 给一次成功反馈，否则用户不知道是否生效。
+const toast = reactive<{ message: string; type: 'success' | 'error' }>({ message: '', type: 'success' })
+function showToast(message: string, type: 'success' | 'error' = 'success') {
+  toast.message = ''
+  setTimeout(() => Object.assign(toast, { message, type }), 0)
+}
 
 const avatarPalette = [
   'bg-gradient-to-br from-indigo-500 to-purple-500',
@@ -354,6 +367,7 @@ async function confirmResetPassword() {
     const res = await resetUserPassword(resetTarget.value.id, resetNewPassword.value)
     if (res.data?.code === 0) {
       resetModalVisible.value = false
+      showToast(`已重置 ${resetTarget.value?.username || '该用户'} 的密码`)
     } else {
       resetMsg.value = res.data?.message || '重置失败'
     }

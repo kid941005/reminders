@@ -86,9 +86,9 @@ func Init(appName, ver, deviceType, dataDir string) {
 
 // Start 启动心跳上报：启动时立即报第一次，之后每 60 分钟一次。
 // 重复调用是安全的（只生效第一次）。
-func Start(appName, ver, deviceType, dataDir string) {
-	// 未配置上报端点时直接不启动：独立发行版默认不外发任何请求。
-	if Endpoint() == "" {
+func Start(db *gorm.DB, appName, ver, deviceType, dataDir string) {
+	// 未配置上报端点或管理员已关闭统计时直接不启动。
+	if Endpoint() == "" || !enabled(db) {
 		return
 	}
 	Init(appName, ver, deviceType, dataDir)
@@ -103,7 +103,7 @@ func Start(appName, ver, deviceType, dataDir string) {
 	mu.Unlock()
 
 	go func() {
-		report()
+		report(db)
 		ticker := time.NewTicker(heartbeatInterval)
 		defer ticker.Stop()
 		for {
@@ -111,7 +111,9 @@ func Start(appName, ver, deviceType, dataDir string) {
 			case <-stopCh:
 				return
 			case <-ticker.C:
-				report()
+				// Re-read the switch every tick: an admin disabling stats
+				// at runtime must stop outgoing requests without a restart.
+				report(db)
 			}
 		}
 	}()
@@ -127,7 +129,10 @@ func Stop() {
 	}
 }
 
-func report() {
+func report(db *gorm.DB) {
+	if !enabled(db) || Endpoint() == "" {
+		return
+	}
 	mu.Lock()
 	req := base
 	mu.Unlock()
@@ -140,7 +145,10 @@ func report() {
 		fmt.Printf("使用统计上报失败: %v\n", err)
 		return
 	}
-	resp.Body.Close()
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		fmt.Printf("使用统计上报失败: HTTP %d\n", resp.StatusCode)
+	}
 }
 
 // DeviceID 计算设备唯一标识：机器标识优先，容器等无标识环境退回

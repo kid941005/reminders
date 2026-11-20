@@ -223,6 +223,10 @@ textarea {
      views (especially tables) don't waste space once a sidebar is present. */
   .page-container {
     @apply w-full space-y-4 sm:space-y-6;
+    width: 100%;
+    max-width: var(--page-max-width);
+    margin-left: auto;
+    margin-right: auto;
   }
 
   /* Premium gradient button with a light sweep on hover */

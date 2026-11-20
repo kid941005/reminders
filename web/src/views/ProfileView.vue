@@ -33,7 +33,7 @@
         <form @submit.prevent="handleChangePassword" class="space-y-3 sm:space-y-4">
           <div>
             <label class="block text-[13px] sm:text-sm font-medium text-foreground mb-1">当前密码</label>
-            <input v-model="oldPassword" type="password" required class="input-field" autofocus />
+            <input v-model="oldPassword" type="password" required class="input-field" />
           </div>
           <div>
             <label class="block text-[13px] sm:text-sm font-medium text-foreground mb-1">新密码</label>
@@ -82,8 +82,9 @@
         安全问题已设置，可用于找回密码
       </div>
 
-      <p class="text-[13px] sm:text-sm text-muted-foreground mb-3 sm:mb-4">{{ hasQuestions ? '修改安全问题，忘记密码时用于身份验证。' : '设置三组安全问题，忘记密码时用于身份验证。' }}</p>
-      <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+      <p v-if="secLoadError" class="mb-3 rounded-xl bg-rose-500/10 px-3 py-2 text-[13px] text-rose-600 dark:text-rose-400 sm:mb-4">{{ secLoadError }}</p>
+      <p v-if="!secLoadError" class="text-[13px] sm:text-sm text-muted-foreground mb-3 sm:mb-4">{{ hasQuestions ? '修改安全问题，忘记密码时用于身份验证。' : '设置三组安全问题，忘记密码时用于身份验证。' }}</p>
+      <div v-if="!secLoadError" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         <div v-for="n in 3" :key="n" class="space-y-2.5 sm:space-y-3">
           <div>
             <label class="block text-[13px] sm:text-sm font-medium text-foreground mb-1">问题 {{ n }}</label>
@@ -96,7 +97,7 @@
         </div>
       </div>
       <p v-if="secMsg" :class="secSuccess ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'" class="text-sm mt-3 sm:mt-4">{{ secMsg }}</p>
-      <button @click="handleSetQuestions" :disabled="secLoading" class="btn-brand mt-3 sm:mt-4">{{ secLoading ? '保存中...' : (hasQuestions ? '修改安全问题' : '设置安全问题') }}</button>
+      <button v-if="!secLoadError" @click="handleSetQuestions" :disabled="secLoading" class="btn-brand mt-3 sm:mt-4">{{ secLoading ? '保存中...' : (hasQuestions ? '修改安全问题' : '设置安全问题') }}</button>
     </section>
 
     <!-- 退出登录：顶栏在手机端收起了退出按钮，这里提供统一入口。 -->
@@ -148,11 +149,17 @@ function handleLogout() {
 
 async function confirmLogout() {
   logoutLoading.value = true
-  // 先让服务端记下这次主动登出（网关域上只清本地会被网关注入身份认回来）。
-  await authStore.endSession()
-  await router.push('/login')
-  logoutLoading.value = false
-  logoutVisible.value = false
+  try {
+    // 先让服务端记下这次主动登出（网关域上只清本地会被网关注入身份认回来）。
+    await authStore.endSession()
+  } catch (err) {
+    // 通知服务端失败也必须回登录页，否则用户会卡在被登出的状态里。
+    console.error('登出时通知服务端失败', err)
+  } finally {
+    logoutLoading.value = false
+    logoutVisible.value = false
+    await router.push('/login')
+  }
 }
 
 const oldPassword = ref('')
@@ -171,6 +178,8 @@ const qa = reactive([
 const secLoading = ref(false)
 const secMsg = ref('')
 const secSuccess = ref(false)
+// 读取安全问题失败时不能当成「还没设置」，否则会引导用户重新设置并覆盖已有问题。
+const secLoadError = ref('')
 
 const apiKey = ref('')
 const apiKeyLoading = ref(false)
@@ -196,7 +205,9 @@ onMounted(async () => {
       qa[1].q = res.data.data.question2 || ''
       qa[2].q = res.data.data.question3 || ''
     }
-  } catch {}
+  } catch (err: any) {
+    secLoadError.value = err.response?.data?.message || '读取安全问题失败，请刷新后重试'
+  }
 })
 
 async function handleChangePassword() {
@@ -265,7 +276,7 @@ async function handleRegenerateApiKey() {
   try {
     const res = await regenerateAPIKey()
     if (res.data?.code === 0) {
-      apiKey.value = res.data.data?.api_key || res.data.data?.apiKey || ''
+      apiKey.value = res.data.data?.api_key || ''
       apiKeyMsg.value = 'API Key 已重新生成'
       apiKeySuccess.value = true
     } else {

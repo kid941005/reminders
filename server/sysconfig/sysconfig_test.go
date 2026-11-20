@@ -215,3 +215,29 @@ func TestValidateAcceptsValidValues(t *testing.T) {
 		}
 	}
 }
+
+// TestGetPublicConfigsExcludesUserScopedRows guards the public bootstrap
+// endpoint: a user-owned row must never leak just because its Public flag was
+// set, since that endpoint is unauthenticated.
+func TestGetPublicConfigsExcludesUserScopedRows(t *testing.T) {
+	db := setupTestDB(t)
+	system := database.SystemConfig{UserID: 0, Key: "site_title", Value: "system", Public: true}
+	userRow := database.SystemConfig{UserID: 7, Key: "private_user_key", Value: "secret", Public: true}
+	if err := db.Create(&system).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&userRow).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := GetPublicConfigs(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got["site_title"] != "system" {
+		t.Fatalf("system public config missing: %#v", got)
+	}
+	if _, leaked := got["private_user_key"]; leaked {
+		t.Fatalf("user-scoped row leaked through GetPublicConfigs: %#v", got)
+	}
+}

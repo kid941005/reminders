@@ -118,6 +118,11 @@ func TestEscapeICS(t *testing.T) {
 	if got != want {
 		t.Fatalf("escapeICS = %q, want %q", got, want)
 	}
+	// A bare CR must not survive into the ICS body: some clients treat it as a
+	// line break and truncate the following property.
+	if got := escapeICS("line1\rline2"); got != `line1\nline2` {
+		t.Fatalf("escapeICS bare CR = %q, want %q", got, `line1\nline2`)
+	}
 }
 
 func TestCalendarFeedTokenLifecycle(t *testing.T) {

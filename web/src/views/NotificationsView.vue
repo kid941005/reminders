@@ -1,13 +1,10 @@
 <template>
-  <div class="mx-auto max-w-4xl">
-    <div class="mb-4 flex items-end justify-between sm:mb-7">
-      <div class="min-w-0">
-        <p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-brand-600 dark:text-brand-300 sm:mb-2">消息与动态</p>
-        <h1 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">通知中心</h1>
-        <p class="mt-0.5 text-[13px] text-muted-foreground sm:mt-2 sm:text-sm">{{ unread }} 条未读通知</p>
-      </div>
-      <button v-if="unread" class="shrink-0 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-bold text-foreground transition hover:bg-muted sm:px-4 sm:py-2" @click="readAll">全部标为已读</button>
-    </div>
+  <div class="page-container">
+    <PageHeader eyebrow="消息与动态" title="通知中心" :description="`${unread} 条未读通知`">
+      <template #actions>
+        <button v-if="unread" class="shrink-0 rounded-xl border border-border bg-surface px-3 py-1.5 text-xs font-bold text-foreground transition hover:bg-muted sm:px-4 sm:py-2" @click="readAll">全部标为已读</button>
+      </template>
+    </PageHeader>
 
     <div v-if="loading" class="space-y-3">
       <div v-for="n in 4" :key="n" class="h-24 animate-pulse rounded-2xl bg-surface"></div>
@@ -58,6 +55,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../api/reminder'
 import type { ReminderRealtimeEvent, RealtimeNotification } from '../services/reminderRealtime'
+import PageHeader from '../components/PageHeader.vue'
 
 type NotificationItem = RealtimeNotification
 

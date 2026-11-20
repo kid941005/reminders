@@ -430,6 +430,16 @@
         </button>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-model="confirmOpen"
+      :title="confirmTitle"
+      :message="confirmMessage"
+      :confirm-text="confirmConfirmText"
+      :loading="confirmLoading"
+      danger
+      @confirm="runConfirm"
+    />
   </div>
 </template>
 
@@ -437,6 +447,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import PageHeader from '../components/PageHeader.vue'
 import ConfigGroupList from '../components/ConfigGroupList.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { getUserConfigMeta, updateConfig } from '../api/config'
 import { getCalendarFeed, resetCalendarFeed } from '../api/countdown'
 import {
@@ -562,9 +573,42 @@ onMounted(() => {
   loadChannelStatuses()
 })
 
+// 原生 window.confirm 会阻塞渲染、不跟随主题，也无法显示 busy；统一走应用内浮层。
+const confirmOpen = ref(false)
+const confirmTitle = ref('确认操作')
+const confirmMessage = ref('')
+const confirmConfirmText = ref('确认')
+const confirmLoading = ref(false)
+let confirmAction: (() => void | Promise<void>) | null = null
+
+function askConfirm(message: string, action: () => void | Promise<void>, confirmText = '确认', title = '确认操作') {
+  confirmTitle.value = title
+  confirmMessage.value = message
+  confirmConfirmText.value = confirmText
+  confirmAction = action
+  confirmOpen.value = true
+}
+
+async function runConfirm() {
+  if (!confirmAction || confirmLoading.value) return
+  confirmLoading.value = true
+  try {
+    await confirmAction()
+    confirmOpen.value = false
+  } finally {
+    confirmLoading.value = false
+    confirmAction = null
+  }
+}
+
 async function loadCalendarSync() {
   try {
     const res = await getCalendarSync()
+    if (res.data?.code !== 0) {
+      syncCfg.value = null
+      notifySync(res.data?.message || '读取日历同步配置失败', 'error')
+      return
+    }
     const data = (res.data?.data || null) as CalendarSyncConfig | null
     syncCfg.value = data
     if (data) {
@@ -575,9 +619,10 @@ async function loadCalendarSync() {
       syncForm.server = 'calendar.dingtalk.com'
     }
     syncForm.password = ''
-  } catch {
-    // 未配置时后端返回 null，读取失败按未配置处理，不打断设置页。
+  } catch (err: any) {
+    // 未配置时后端返回 code 0 + null；请求失败要明确提示，不能静默当成「未配置」。
     syncCfg.value = null
+    notifySync(err.response?.data?.message || '读取日历同步配置失败（网络错误）', 'error')
   }
 }
 
@@ -633,26 +678,31 @@ async function runSync(silent = false) {
   }
 }
 
-async function disableSync() {
+function disableSync() {
   if (syncBusy.value) return
-  const ok = window.confirm('关闭同步后不再拉取钉钉日程，已导入的条目会保留。确定关闭吗？')
-  if (!ok) return
-  syncBusy.value = true
-  try {
-    await deleteCalendarSync()
-    syncCfg.value = null
-    notifySync('已关闭同步')
-  } catch (err: any) {
-    notifySync(err.response?.data?.message || '关闭失败', 'error')
-  } finally {
-    syncBusy.value = false
-  }
+  askConfirm('关闭同步后不再拉取钉钉日程，已导入的条目会保留。确定关闭吗？', async () => {
+    syncBusy.value = true
+    try {
+      await deleteCalendarSync()
+      syncCfg.value = null
+      notifySync('已关闭同步')
+    } catch (err: any) {
+      notifySync(err.response?.data?.message || '关闭失败', 'error')
+    } finally {
+      syncBusy.value = false
+    }
+  }, '关闭同步')
 }
 
 
 async function loadAppleReminders() {
   try {
     const res = await getAppleReminders()
+    if (res.data?.code !== 0) {
+      appleCfg.value = null
+      notifyApple(res.data?.message || '读取 Apple 同步配置失败', 'error')
+      return
+    }
     const data = (res.data?.data || null) as AppleReminderSyncConfig | null
     appleCfg.value = data
     if (data) {
@@ -670,9 +720,10 @@ async function loadAppleReminders() {
       appleForm.collection_url = ''
     }
     appleForm.password = ''
-  } catch {
-    // 未配置时后端返回 null；读取失败同样按未配置处理。
+  } catch (err: any) {
+    // 未配置时后端返回 code 0 + null；请求失败要明确提示，不能静默当成「未配置」。
     appleCfg.value = null
+    notifyApple(err.response?.data?.message || '读取 Apple 同步配置失败（网络错误）', 'error')
   }
 }
 
@@ -983,22 +1034,22 @@ async function runAppleSync(silent = false) {
   }
 }
 
-async function disableAppleSync() {
+function disableAppleSync() {
   if (appleBusy.value) return
-  const ok = window.confirm('关闭后不再把本地提醒推送到 Apple，已推送的条目会保留在 iCloud。确定关闭吗？')
-  if (!ok) return
-  appleBusy.value = true
-  try {
-    await deleteAppleReminders()
-    appleCfg.value = null
-    appleCollections.value = []
-    appleForm.collection_url = ''
-    notifyApple('已关闭同步')
-  } catch (err: any) {
-    notifyApple(err.response?.data?.message || '关闭失败', 'error')
-  } finally {
-    appleBusy.value = false
-  }
+  askConfirm('关闭后不再把本地提醒推送到 Apple，已推送的条目会保留在 iCloud。确定关闭吗？', async () => {
+    appleBusy.value = true
+    try {
+      await deleteAppleReminders()
+      appleCfg.value = null
+      appleCollections.value = []
+      appleForm.collection_url = ''
+      notifyApple('已关闭同步')
+    } catch (err: any) {
+      notifyApple(err.response?.data?.message || '关闭失败', 'error')
+    } finally {
+      appleBusy.value = false
+    }
+  }, '关闭同步')
 }
 
 async function loadFeed() {
@@ -1033,26 +1084,31 @@ async function copyFeed() {
   }
 }
 
-async function askRotateFeed() {
+function askRotateFeed() {
   if (feedBusy.value) return
   // 重置会让已经添加的日历全部失效，必须二次确认。
-  const ok = window.confirm('重置后旧地址立即失效，已添加到日历的订阅需要重新添加。确定重置吗？')
-  if (!ok) return
-  feedBusy.value = true
-  try {
-    const res = await resetCalendarFeed()
-    feedUrl.value = res.data?.data?.url || ''
-    notifyFeed('已重置，请用新地址重新订阅')
-  } catch (err: any) {
-    notifyFeed(err.response?.data?.message || '重置失败', 'error')
-  } finally {
-    feedBusy.value = false
-  }
+  askConfirm('重置后旧地址立即失效，已添加到日历的订阅需要重新添加。确定重置吗？', async () => {
+    feedBusy.value = true
+    try {
+      const res = await resetCalendarFeed()
+      feedUrl.value = res.data?.data?.url || ''
+      notifyFeed('已重置，请用新地址重新订阅')
+    } catch (err: any) {
+      notifyFeed(err.response?.data?.message || '重置失败', 'error')
+    } finally {
+      feedBusy.value = false
+    }
+  }, '重置地址')
 }
 
 async function loadWeather() {
   try {
     const res = await getWeatherConfig()
+    if (res.data?.code !== 0) {
+      weatherCfg.value = null
+      notifyWeather(res.data?.message || '读取天气配置失败', 'error')
+      return
+    }
     const data = (res.data?.data || null) as WeatherConfig | null
     weatherCfg.value = data
     if (data?.configured) {
@@ -1067,8 +1123,10 @@ async function loadWeather() {
       weatherForm.channels = []
       weatherForm.enabled = true
     }
-  } catch {
+  } catch (err: any) {
+    // 未配置时后端返回 code 0 + null；请求失败要明确提示，不能静默当成「未配置」。
     weatherCfg.value = null
+    notifyWeather(err.response?.data?.message || '读取天气配置失败（网络错误）', 'error')
   }
 }
 
@@ -1247,21 +1305,21 @@ async function runWeatherNow() {
   }
 }
 
-async function disableWeather() {
+function disableWeather() {
   if (weatherBusy.value) return
-  const ok = window.confirm('关闭后不再推送每日天气，已保存的地点配置会被删除。确定关闭吗？')
-  if (!ok) return
-  weatherBusy.value = true
-  try {
-    await deleteWeatherConfig()
-    weatherCfg.value = null
-    weatherPreview.value = null
-    notifyWeather('已关闭天气提醒')
-  } catch (err: any) {
-    notifyWeather(err.response?.data?.message || '关闭失败', 'error')
-  } finally {
-    weatherBusy.value = false
-  }
+  askConfirm('关闭后不再推送每日天气，已保存的地点配置会被删除。确定关闭吗？', async () => {
+    weatherBusy.value = true
+    try {
+      await deleteWeatherConfig()
+      weatherCfg.value = null
+      weatherPreview.value = null
+      notifyWeather('已关闭天气提醒')
+    } catch (err: any) {
+      notifyWeather(err.response?.data?.message || '关闭失败', 'error')
+    } finally {
+      weatherBusy.value = false
+    }
+  }, '关闭天气')
 }
 
 async function loadMeta() {

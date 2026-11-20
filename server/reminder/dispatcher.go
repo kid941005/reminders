@@ -168,7 +168,9 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 	}
 
 	attempt.Result = "transient"
-	delays := []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute}
+	// attemptNo is 1 or 2 here: a third failure takes the permanent branch
+	// above, so only two retry delays are reachable.
+	delays := []time.Duration{time.Minute, 5 * time.Minute}
 	next := time.Now().UTC().Add(delays[attemptNo-1])
 	_ = db.Transaction(func(tx *gorm.DB) error {
 		if e := tx.Create(&attempt).Error; e != nil {

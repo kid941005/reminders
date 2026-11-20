@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/http"
 	"unicode/utf8"
 
 	"smallgo/server/auth"
@@ -16,7 +15,13 @@ import (
 	"gorm.io/gorm"
 )
 
-var ErrAnswerTooLong = errors.New("安全问题答案不能超过72字节")
+var (
+	ErrAnswerTooLong = errors.New("安全问题答案不能超过72字节")
+	// ErrSecurityAnswerMismatch covers a missing user, an account without
+	// security questions, and wrong answers alike: distinguishing them would
+	// let an unauthenticated caller enumerate usernames.
+	ErrSecurityAnswerMismatch = errors.New("用户名或安全问题答案错误")
+)
 
 func SetSecurityQuestions(db *gorm.DB, userID uint, q1, a1, q2, a2, q3, a3 string) error {
 	var sq database.SecurityQuestion
@@ -101,19 +106,19 @@ func GetSecurityQuestionsByUsername(db *gorm.DB, username string) (map[string]in
 func VerifyAnswers(db *gorm.DB, username string, a1, a2, a3 string, a1md5, a2md5, a3md5 string) error {
 	var user database.User
 	if err := db.Where("username = ?", username).First(&user).Error; err != nil {
-		return fmt.Errorf("用户不存在")
+		return ErrSecurityAnswerMismatch
 	}
 
 	var sq database.SecurityQuestion
 	if err := db.Where("user_id = ?", user.ID).First(&sq).Error; err != nil {
-		return fmt.Errorf("未设置安全问题")
+		return ErrSecurityAnswerMismatch
 	}
 
 	ok1, migrate1 := verifyAnswer(sq.Answer1, a1, a1md5)
 	ok2, migrate2 := verifyAnswer(sq.Answer2, a2, a2md5)
 	ok3, migrate3 := verifyAnswer(sq.Answer3, a3, a3md5)
 	if !ok1 || !ok2 || !ok3 {
-		return fmt.Errorf("安全问题验证失败")
+		return ErrSecurityAnswerMismatch
 	}
 	if migrate1 || migrate2 || migrate3 {
 		hashedA1, err := auth.HashPassword(a1)
@@ -236,8 +241,17 @@ func handleGetQuestionsByUsername(db *gorm.DB) gin.HandlerFunc {
 		}
 
 		questions, err := GetSecurityQuestionsByUsername(db, req.Username)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			// Return the same shape as an account that never configured
+			// questions, so this public endpoint cannot be used to test whether
+			// a username exists.
+			response.Success(c, map[string]interface{}{
+				"question1": "", "question2": "", "question3": "", "has_questions": false,
+			})
+			return
+		}
 		if err != nil {
-			response.Error(c, http.StatusNotFound, response.CodeNotFound, "用户不存在")
+			response.ErrorInternal(c, "读取安全问题失败")
 			return
 		}
 

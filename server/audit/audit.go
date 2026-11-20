@@ -41,7 +41,7 @@ func Log(db *gorm.DB, c *gin.Context, action, targetType string, targetID uint, 
 		TargetID:   targetID,
 		Detail:     detail,
 		IP:         c.ClientIP(),
-		CreatedAt:  time.Now(),
+		CreatedAt:  time.Now().UTC(),
 	}
 	if err := db.Create(&entry).Error; err != nil {
 		logger.Error("audit: failed to write entry for action %q: %v", action, err)
@@ -98,7 +98,7 @@ func cleanup(db *gorm.DB) {
 	if err != nil || days <= 0 {
 		return
 	}
-	cutoff := time.Now().AddDate(0, 0, -days)
+	cutoff := time.Now().UTC().AddDate(0, 0, -days)
 	if result := db.Where("created_at < ?", cutoff).Delete(&database.AuditLog{}); result.Error != nil {
 		logger.Error("audit: cleanup failed: %v", result.Error)
 	} else if result.RowsAffected > 0 {
@@ -136,13 +136,24 @@ func buildQuery(db *gorm.DB, c *gin.Context) *gorm.DB {
 	return q
 }
 
+// auditLocation is the display timezone for the admin audit table and CSV.
+// Rows are stored in UTC; showing raw UTC on a container-hosted instance was
+// confusing because the rest of the product speaks Asia/Shanghai.
+func auditLocation() *time.Location {
+	if loc, err := time.LoadLocation("Asia/Shanghai"); err == nil {
+		return loc
+	}
+	return time.FixedZone("CST", 8*60*60)
+}
+
 func toViews(logs []database.AuditLog) []entryView {
 	views := make([]entryView, 0, len(logs))
+	loc := auditLocation()
 	for _, l := range logs {
 		views = append(views, entryView{
 			ID: l.ID, UserID: l.UserID, Username: l.Username, Action: l.Action,
 			TargetType: l.TargetType, TargetID: l.TargetID, Detail: l.Detail, IP: l.IP,
-			CreatedAt: l.CreatedAt.Format("2006-01-02 15:04:05"),
+			CreatedAt: l.CreatedAt.In(loc).Format("2006-01-02 15:04:05"),
 		})
 	}
 	return views

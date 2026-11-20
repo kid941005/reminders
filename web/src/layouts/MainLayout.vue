@@ -317,12 +317,20 @@ function listColor(color: string) {
   return ({ blue: '#3182f6', violet: '#8b5cf6', rose: '#f43f5e', amber: '#f59e0b', emerald: '#10b981' } as Record<string, string>)[color] || '#3182f6'
 }
 // 只有 HomeView 监听 open-quick-reminder（见 HomeView 的 onMounted）。
-// 之前用一个硬编码的 4 个页面名做排除，结果在纪念日/用户管理/周视图等页面上
-// 点「新建提醒」没有任何反应；这里改为「当前路由是否就是 HomeView」。
-const HOME_ROUTE_NAMES = ['Home', 'Planned', 'DayView', 'AllReminders', 'Completed', 'ReminderList']
-function openQuickAdd() {
-  if (!HOME_ROUTE_NAMES.includes(String(route.name))) router.push('/admin')
+// 注意 WeekView/MonthView 也有 reminderView meta，但它们渲染的是 CalendarView、
+// 并不监听该事件，所以必须按「真正挂载 HomeView 的路由名」判断。
+const QUICK_ADD_ROUTE_NAMES = new Set([
+  'Home', 'Planned', 'DayView', 'AllReminders', 'Completed', 'ReminderList',
+])
+async function openQuickAdd() {
+  const onHomeView = QUICK_ADD_ROUTE_NAMES.has(String(route.name))
+  if (!onHomeView) {
+    await router.push('/admin')
+    await nextTick()
+  }
   mobileOpen.value = false
+  // 等 HomeView 的 onMounted 挂上 open-quick-reminder 监听后再广播，
+  // 否则从周/月/设置等页面点「新建提醒」会丢事件。
   setTimeout(() => window.dispatchEvent(new CustomEvent('open-quick-reminder')), 80)
 }
 async function submitList() {
@@ -405,7 +413,10 @@ async function refreshNavigation() {
     const [listRes, summaryRes] = await Promise.all([getLists(), getSummary()])
     lists.value = listRes.data.data || []
     summary.value = summaryRes.data.data || {}
-  } catch {}
+  } catch (err) {
+    // 侧栏数字过期不影响主流程，但必须留痕，否则接口坏了完全无从排查。
+    console.error('刷新侧栏清单/汇总失败', err)
+  }
 }
 async function loadVersion() {
   try {
@@ -420,12 +431,18 @@ async function loadVersion() {
     if (authStore.isAdmin) await supportStore.init(true)
   }
 }
-function logout() {
+async function logout() {
   stopRealtime?.()
-  // 服务端要先记下「主动登出」才轮得到清本地：网关域上只清前端会被网关注入的
-  // NAS 身份立刻认回来，那正是用户报的「退不出去」（见 stores/auth.ts）。
-  void authStore.endSession()
-  router.push('/login')
+  try {
+    // 服务端要先记下「主动登出」才轮得到清本地：网关域上只清前端会被网关注入的
+    // NAS 身份立刻认回来，那正是用户报的「退不出去」（见 stores/auth.ts）。
+    await authStore.endSession()
+  } catch (err) {
+    // 通知服务端失败也必须回登录页，否则用户会卡在被登出的状态里。
+    console.error('登出时通知服务端失败', err)
+  } finally {
+    await router.push('/login')
+  }
 }
 
 
@@ -438,7 +455,15 @@ function unlockReminderSound() {
 }
 
 function playReminderSound() {
-  if (!audioContext || audioContext.state !== 'running') return
+  if (!audioContext) return
+  if (audioContext.state === 'running') { playTone(); return }
+  // 自动播放策略可能让 AudioContext 停在 suspended；恢复成功后补播，
+  // 否则一旦首次解锁失败，整场会话都会静音。
+  void audioContext.resume().then(() => { if (audioContext?.state === 'running') playTone() }).catch(() => {})
+}
+
+function playTone() {
+  if (!audioContext) return
   const start = audioContext.currentTime
   const gain = audioContext.createGain()
   gain.gain.setValueAtTime(0.0001, start)
@@ -543,10 +568,16 @@ function snoozeCurrentAlert() {
 
 function dismissCurrentAlert() {
   if (alertBusy.value) return
+  // 连点会 ack 两次并 shift 两次，把队列里的下一条提醒一起吞掉。
+  alertBusy.value = true
   void (async () => {
-    await acknowledgeCurrentAlert()
-    shiftAlert()
-    refreshNavigation()
+    try {
+      await acknowledgeCurrentAlert()
+      shiftAlert()
+      refreshNavigation()
+    } finally {
+      alertBusy.value = false
+    }
   })()
 }
 

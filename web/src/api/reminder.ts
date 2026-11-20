@@ -135,7 +135,8 @@ export const updateList = (id: number, data: Partial<ReminderList>) =>
 export const deleteList = (id: number) => request.delete(`/api/reminder/lists/${id}`)
 
 // from/to 仅对 view=calendar 生效，格式 YYYY-MM-DD，to 为开区间上界。
-export const getReminders = (params: { view?: string; list_id?: number; q?: string; from?: string; to?: string }) =>
+// 传 page/page_size 时返回 { items, total, page, pageSize }，不传时仍是数组。
+export const getReminders = (params: { view?: string; list_id?: number; q?: string; from?: string; to?: string; page?: number; page_size?: number }) =>
   request.get('/api/reminder/items', { params })
 export const getReminder = (id: number) => request.get(`/api/reminder/items/${id}`)
 export const createReminder = (data: SaveReminderInput) => request.post('/api/reminder/items', data)

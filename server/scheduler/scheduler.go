@@ -99,16 +99,28 @@ func (s *Scheduler) run(j Job) {
 	}
 }
 
+// scheduleLocation is the wall clock used by Daily jobs. The product contract
+// is Asia/Shanghai regardless of the host timezone (containers usually run in
+// UTC), so a fixed-offset fallback keeps scheduling correct even without tzdata.
+func scheduleLocation() *time.Location {
+	if loc, err := time.LoadLocation("Asia/Shanghai"); err == nil {
+		return loc
+	}
+	return time.FixedZone("CST", 8*60*60)
+}
+
 // untilNext returns the duration from now until the next occurrence of the
-// "15:04" local time hhmm. Falls back to one hour on a parse error.
+// "15:04" Asia/Shanghai wall-clock time hhmm. Falls back to one hour on a
+// parse error.
 func untilNext(hhmm string) time.Duration {
-	now := time.Now()
-	t, err := time.ParseInLocation("15:04", hhmm, now.Location())
+	loc := scheduleLocation()
+	now := time.Now().In(loc)
+	t, err := time.ParseInLocation("15:04", hhmm, loc)
 	if err != nil {
 		logger.Warn("scheduler: invalid Daily time %q, retrying in 1h", hhmm)
 		return time.Hour
 	}
-	next := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, now.Location())
+	next := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, loc)
 	if !next.After(now) {
 		next = next.Add(24 * time.Hour)
 	}

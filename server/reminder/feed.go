@@ -334,6 +334,7 @@ func escapeICS(value string) string {
 	value = strings.ReplaceAll(value, ";", `\;`)
 	value = strings.ReplaceAll(value, ",", `\,`)
 	value = strings.ReplaceAll(value, "\r\n", `\n`)
+	value = strings.ReplaceAll(value, "\r", `\n`)
 	value = strings.ReplaceAll(value, "\n", `\n`)
 	return value
 }

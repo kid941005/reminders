@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"smallgo/server/lunar"
+	"smallgo/server/utils"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -422,11 +423,11 @@ func parseChannelTargets(raw string) []uint {
 	return ids
 }
 
-// listReminders 返回某个视图下的提醒。from/to 只对 view=calendar 生效，
+// buildReminderQuery 构造视图过滤条件。from/to 只对 view=calendar 生效，
 // 表示一个左闭右开的查询区间（to 通常传「最后一天的下一天」）；两者为零值时
 // 说明调用方没有提供区间，calendar 视图会拒绝执行，而不是静默返回空列表。
-func listReminders(db *gorm.DB, userID uint, view, query string, listID uint, from, to time.Time) ([]ReminderDTO, error) {
-	var rows []Reminder
+// 分页与整表读取共用这一份条件，避免两处过滤逻辑漂移。
+func buildReminderQuery(db *gorm.DB, userID uint, view, query string, listID uint, from, to time.Time) (*gorm.DB, error) {
 	q := db.Where("user_id = ? AND deleted_at IS NULL", userID)
 	now := time.Now()
 	loc := shanghai()
@@ -458,9 +459,11 @@ func listReminders(db *gorm.DB, userID uint, view, query string, listID uint, fr
 		like := "%" + query + "%"
 		q = q.Where("(title LIKE ? OR notes LIKE ?)", like, like)
 	}
-	if err := q.Order("CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at ASC, priority DESC, position ASC, id DESC").Find(&rows).Error; err != nil {
-		return nil, err
-	}
+	return q.Order("CASE WHEN due_at IS NULL THEN 1 ELSE 0 END, due_at ASC, priority DESC, position ASC, id DESC"), nil
+}
+
+// hydrateReminders 为查询结果补齐渠道、邮件收件目标与清单名。
+func hydrateReminders(db *gorm.DB, userID uint, rows []Reminder) ([]ReminderDTO, error) {
 	if len(rows) == 0 {
 		return []ReminderDTO{}, nil
 	}
@@ -511,6 +514,46 @@ func listReminders(db *gorm.DB, userID uint, view, query string, listID uint, fr
 		})
 	}
 	return result, nil
+}
+
+// listReminders 返回某个视图下的全部提醒。保留给 MCP、内部调用与既有测试，
+// HTTP 列表接口在带 page/page_size 时改用 listRemindersPage。
+func listReminders(db *gorm.DB, userID uint, view, query string, listID uint, from, to time.Time) ([]ReminderDTO, error) {
+	q, err := buildReminderQuery(db, userID, view, query, listID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	var rows []Reminder
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return hydrateReminders(db, userID, rows)
+}
+
+// listRemindersPage 是 listReminders 的分页版本，返回当前页数据与总数。
+func listRemindersPage(db *gorm.DB, userID uint, view, query string, listID uint, from, to time.Time, page, pageSize int) ([]ReminderDTO, int64, int, int, error) {
+	page, pageSize = utils.NormalizePage(page, pageSize)
+	countQuery, err := buildReminderQuery(db, userID, view, query, listID, from, to)
+	if err != nil {
+		return nil, 0, page, pageSize, err
+	}
+	var total int64
+	if err := countQuery.Model(&Reminder{}).Count(&total).Error; err != nil {
+		return nil, 0, page, pageSize, err
+	}
+	dataQuery, err := buildReminderQuery(db, userID, view, query, listID, from, to)
+	if err != nil {
+		return nil, 0, page, pageSize, err
+	}
+	var rows []Reminder
+	if err := dataQuery.Offset(utils.Offset(page, pageSize)).Limit(pageSize).Find(&rows).Error; err != nil {
+		return nil, 0, page, pageSize, err
+	}
+	items, err := hydrateReminders(db, userID, rows)
+	if err != nil {
+		return nil, 0, page, pageSize, err
+	}
+	return items, total, page, pageSize, nil
 }
 
 // retireDueNotifications 把一条提醒仍未读的到点通知标为已读，供完成、稍后提醒、

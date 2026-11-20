@@ -114,7 +114,12 @@ func handleSaveProvider(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 		case ChannelSMS:
-			valid = values["webhook_url"] != ""
+			webhook, err := url.ParseRequestURI(values["webhook_url"])
+			valid = err == nil && (webhook.Scheme == "https" || webhook.Scheme == "http") && webhook.Host != ""
+			if !valid {
+				response.ErrorBadRequest(c, "短信 Webhook 应填写有效的 http 或 https 地址")
+				return
+			}
 		case ChannelQQ:
 			valid = values["app_id"] != "" && values["app_secret"] != ""
 			if link := values["bot_link"]; link != "" {
@@ -404,9 +409,11 @@ func channelStatuses(db *gorm.DB, userID uint) []ChannelStatus {
 		}
 		defs[i].Bound = true
 		defs[i].Status, defs[i].TargetMasked = list[0].Status, list[0].TargetMasked
+		defs[i].LastErrorCode = list[0].LastErrorCode
 		for _, binding := range list {
 			if binding.Status == "active" {
 				defs[i].Status, defs[i].TargetMasked = binding.Status, binding.TargetMasked
+				defs[i].LastErrorCode = binding.LastErrorCode
 				break
 			}
 		}
@@ -416,6 +423,7 @@ func channelStatuses(db *gorm.DB, userID uint) []ChannelStatus {
 			for _, binding := range list {
 				defs[i].Bindings = append(defs[i].Bindings, ChannelBindingItem{
 					ID: binding.ID, TargetMasked: binding.TargetMasked, Status: binding.Status,
+					LastErrorCode: binding.LastErrorCode,
 				})
 			}
 		}

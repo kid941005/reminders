@@ -61,11 +61,6 @@ docker compose up -d
 >   Public，匿名用户才能直接拉取；私有状态下需先 `docker login ghcr.io`。
 > - 数据卷挂载到容器内 `/app/data`（数据库、上传文件、日志），删除容器不会丢数据。
 
-### 自行构建二进制包（可选）
-
-仓库 CI 只构建镜像并创建 Release，**Release 页面不附带预编译二进制附件**。需要各平台压缩包时，
-可在本地执行 `make package PACKAGE_TARGET=apps` 自行生成（见「构建与发布」）。
-
 ## 功能一览
 
 ### 清单与提醒
@@ -236,6 +231,8 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 | 节假日与农历 | `GET /api/reminder/holidays`、`GET /api/reminder/lunar`、`GET /api/reminder/lunar/convert` |
 | 管理 | `GET /api/users`、`PUT/DELETE /api/users/:id`、`PUT /api/users/:id/status`、`PUT /api/users/:id/password`、`GET /api/audit-logs`、`GET /api/audit-logs/export`、`GET /api/reminder/admin/deliveries`、`GET /api/reminder/admin/providers`、`PUT /api/reminder/admin/providers/:provider`、`GET/PUT /api/reminder/admin/weather` |
 
+`GET /api/reminder/items` 支持可选 `page` / `page_size`（默认 20，最大 100）；带参数时返回 `{items,total,page,pageSize}`，不带时保持原有数组响应以兼容旧调用。
+
 `GET /api/reminder/feed.ics?token=...` 是免登录的日历订阅入口，token 由系统生成、可重置；
 其余接口都需要认证。
 
@@ -338,17 +335,12 @@ cd server && go test ./...
 # 前端构建（vue-tsc 类型检查 + vite 打包）
 cd web && npm run build
 
-# 生成各平台压缩包：release/<version>/
-make package PACKAGE_TARGET=apps
-
 # 构建本地 Docker 镜像
 make package PACKAGE_TARGET=docker
 ```
 
-- `PACKAGE_TARGET=apps` 会产出 linux/darwin/windows 的压缩包；其中 Linux 目标在
-  `golang:1.26-alpine` 容器内编译（需要本机 Docker），macOS/Windows 目标需要对应的交叉编译器。
 - **打 tag 推送后，CI 自动构建并推送 `linux/amd64` 镜像、创建 Release**（发布说明取自 CHANGELOG），
-  无需本地执行上述打包命令。
+  无需本地执行打包命令。
 - 发版前必须同步 `VERSION`（带 `v`）与 `app.json`（不带 `v`），并在 `CHANGELOG.md` 顶部新增版本小节；
   数据库迁移版本只升不降，缺少版本号会导致预埋迁移不执行。
 
@@ -366,7 +358,7 @@ make package PACKAGE_TARGET=docker
 | `server/stats/` `server/audit/` | 匿名统计（默认关闭）与操作审计日志 |
 | `web/src/api/` | 所有 HTTP 调用集中在此，页面不直接写 `axios` |
 | `web/src/stores/` | Pinia：`auth`、`theme`、`support` |
-| `scripts/` | 各平台打包与本地 Docker 构建脚本 |
+| `scripts/` | 构建与本地 Docker 构建脚本 |
 
 ## 常见问题
 

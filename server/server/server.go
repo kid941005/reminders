@@ -142,7 +142,7 @@ func Start() {
 	// 匿名使用统计心跳：本发行版默认关闭（DisableStats 默认 true），且
 	// stats.Start 在未配置 STATS_ENDPOINT 时直接返回，不会外发任何请求。
 	if !cfg.DisableStats {
-		stats.Start(version.AppID, version.Version, cfg.DeviceType, cfg.DataDir)
+		stats.Start(db, version.AppID, version.Version, cfg.DeviceType, cfg.DataDir)
 		defer stats.Stop()
 	}
 
@@ -366,7 +366,8 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 		logger.Warn("load holiday data: %v", err)
 	}
 
-	// Register apps from the registry (includes the qrcode example app).
+	// Register apps from the registry. The bundled qrcode package is an example
+	// and is intentionally not blank-imported by main.go.
 	apps.SetupAll(publicGroup, db)
 	apps.SetupProtectedAll(authGroup, adminGroup, db)
 

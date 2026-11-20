@@ -56,7 +56,7 @@ func handleRegister(db *gorm.DB) gin.HandlerFunc {
 				response.Error(c, http.StatusForbidden, response.CodeRegisterDisabled, err.Error())
 			case errors.Is(err, ErrUserExists):
 				response.Error(c, http.StatusConflict, response.CodeUserExists, err.Error())
-			case errors.Is(err, ErrPasswordTooShort), errors.Is(err, ErrPasswordTooLong):
+			case errors.Is(err, ErrUsernameInvalid), errors.Is(err, ErrPasswordTooShort), errors.Is(err, ErrPasswordTooLong):
 				response.ErrorBadRequest(c, err.Error())
 			default:
 				response.ErrorInternal(c, "注册失败")

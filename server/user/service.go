@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"unicode/utf8"
 
 	"smallgo/server/apps"
@@ -21,6 +22,7 @@ import (
 var (
 	ErrRegisterDisabled = errors.New("注册功能已关闭")
 	ErrUserExists       = errors.New("用户名已存在")
+	ErrUsernameInvalid  = errors.New("用户名应为 1–50 个字符")
 	ErrPasswordTooShort = errors.New("密码长度不能少于6位")
 	ErrPasswordTooLong  = errors.New("密码长度不能超过72字节")
 	ErrLastAdmin        = errors.New("不能降级、禁用或删除最后一个管理员")
@@ -58,6 +60,10 @@ func verifyStoredPassword(stored, raw, legacyMD5 string) (bool, bool) {
 }
 
 func Register(db *gorm.DB, username string, password string, jwtSecret string) (map[string]interface{}, error) {
+	username = strings.TrimSpace(username)
+	if n := utf8.RuneCountInString(username); n == 0 || n > 50 {
+		return nil, ErrUsernameInvalid
+	}
 	var result map[string]interface{}
 	err := db.Transaction(func(tx *gorm.DB) error {
 		var userCount int64

@@ -1,6 +1,7 @@
 package reminder
 
 import (
+	"fmt"
 	"path/filepath"
 	"sync/atomic"
 	"testing"
@@ -60,6 +61,38 @@ func TestCreateAndUpdateReminderRebuildsJobIdempotently(t *testing.T) {
 	}
 	if activeJobs != 2 {
 		t.Fatalf("expected 2 active jobs, got %d", activeJobs)
+	}
+}
+
+func TestListRemindersPageReturnsTotalAndClamps(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	due := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	for i := 0; i < 25; i++ {
+		d := due.Add(time.Duration(i) * time.Minute)
+		if _, err := createReminder(appDB, 88, SaveReminderInput{
+			Title: fmt.Sprintf("分页测试 %02d", i), DueAt: &d, RepeatRule: "none",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	items, total, page, pageSize, err := listRemindersPage(appDB, 88, "planned", "", 0, time.Time{}, time.Time{}, 2, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if total != 25 || len(items) != 10 || page != 2 || pageSize != 10 {
+		t.Fatalf("unexpected page result: total=%d len=%d page=%d pageSize=%d", total, len(items), page, pageSize)
+	}
+
+	// 非法页码/页大小应被收敛到安全范围。
+	_, _, page, pageSize, err = listRemindersPage(appDB, 88, "planned", "", 0, time.Time{}, time.Time{}, 0, 1000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page != 1 || pageSize != 100 {
+		t.Fatalf("expected clamped page=1 pageSize=100, got %d/%d", page, pageSize)
 	}
 }
 

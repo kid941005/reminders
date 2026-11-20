@@ -10,6 +10,7 @@ import (
 	"smallgo/server/holiday"
 	"smallgo/server/lunar"
 	"smallgo/server/response"
+	"smallgo/server/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -317,6 +318,19 @@ func handleListReminders(db *gorm.DB) gin.HandlerFunc {
 		// 「这段时间没有提醒」。
 		if view == "calendar" && (from.IsZero() || to.IsZero() || !to.After(from)) {
 			response.ErrorBadRequest(c, "时间范围无效，需要 from 与 to（YYYY-MM-DD，to 为开区间）")
+			return
+		}
+		// 带 page/page_size 时返回 {items,total,page,pageSize}，供前端「加载更多」；
+		// 不带时保持旧的数组响应，兼容 MCP 与既有调用方。
+		if c.Query("page") != "" || c.Query("page_size") != "" {
+			page := utils.Atoi(c.Query("page"), 1)
+			pageSize := utils.Atoi(c.Query("page_size"), utils.DefaultPageSize)
+			items, total, page, pageSize, err := listRemindersPage(db, currentUserID(c), view, c.Query("q"), listID, from, to, page, pageSize)
+			if err != nil {
+				response.ErrorInternal(c, "读取提醒失败")
+				return
+			}
+			response.SuccessPage(c, items, total, page, pageSize)
 			return
 		}
 		items, err := listReminders(db, currentUserID(c), view, c.Query("q"), listID, from, to)

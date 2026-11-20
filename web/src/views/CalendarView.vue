@@ -24,6 +24,12 @@
       <div v-for="n in 6" :key="n" class="h-16 animate-pulse rounded-2xl bg-surface/80"></div>
     </section>
 
+    <!-- 加载失败：给出重试，而不是渲染一片空格子 -->
+    <section v-else-if="errorMsg" class="flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-rose-500/30 bg-rose-500/[.04] px-6 py-14 text-center">
+      <p class="text-sm font-semibold text-rose-500">{{ errorMsg }}</p>
+      <button type="button" class="rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-foreground transition hover:bg-muted" @click="load">重试</button>
+    </section>
+
     <!-- 周视图：桌面 7 列，手机单列堆叠（避免 7 列挤成一条线） -->
     <section v-else-if="isWeek" class="grid gap-2 sm:grid-cols-7 sm:gap-1.5">
       <article
@@ -174,6 +180,9 @@ function weekdayIndex(date: Date): number {
 const anchor = ref(todayKey())
 const items = ref<ReminderItem[]>([])
 const loading = ref(true)
+// 加载失败与「本月没有提醒」必须分开：月视图永远渲染 6 周空格子，
+// 失败若只清空 items，用户会误以为这个月真的没有安排。
+const errorMsg = ref('')
 
 // 月视图的节日数据。后端 DayInfo 已经带 festival（国际节日 + 农历传统节日）与
 // term（节气），直接复用农历接口即可，前端不再维护第二份节日表。
@@ -302,7 +311,7 @@ const rangeLabel = computed(() => {
       : `${start.getUTCFullYear()}年${start.getUTCMonth() + 1}月${start.getUTCDate()}日`
     return `${left} – ${last.getUTCMonth() + 1}月${last.getUTCDate()}日`
   }
-  return `${start.getUTCFullYear()}年${parseKey(anchor.value).getUTCMonth() + 1}月`
+  return `${parseKey(anchor.value).getUTCFullYear()}年${parseKey(anchor.value).getUTCMonth() + 1}月`
 })
 
 function timeLabel(item: ReminderItem): string {
@@ -313,16 +322,19 @@ function timeLabel(item: ReminderItem): string {
 
 async function load() {
   loading.value = true
+  errorMsg.value = ''
   try {
     const res = await getReminders({
       view: 'calendar',
       from: keyOf(range.value.start),
       to: keyOf(range.value.end),
     })
+    if (res.data?.code !== 0) throw new Error(res.data?.message || '加载日历失败')
     items.value = res.data?.data || []
     await Promise.all([loadFestivals(), loadHolidays()])
-  } catch {
+  } catch (err: any) {
     items.value = []
+    errorMsg.value = err.response?.data?.message || err.message || '加载失败，请重试'
   } finally {
     loading.value = false
   }

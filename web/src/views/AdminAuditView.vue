@@ -1,11 +1,8 @@
 <template>
   <div class="page-container animate-fade-in">
+    <PageHeader title="操作日志" description="追踪系统中的关键操作记录" />
     <div class="surface rounded-2xl overflow-hidden">
       <div class="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6 border-b border-border">
-        <div>
-          <h2 class="text-lg font-bold text-foreground">操作日志</h2>
-          <p class="text-sm text-muted-foreground">追踪系统中的关键操作记录</p>
-        </div>
         <div class="flex flex-wrap items-center gap-2">
           <input
             v-model="filterUsername"
@@ -67,7 +64,15 @@
                 <code class="text-xs text-muted-foreground">{{ log.ip }}</code>
               </td>
             </tr>
-            <tr v-if="logs.length === 0">
+            <tr v-if="loadError">
+              <td colspan="6" class="py-16 text-center">
+                <div class="flex flex-col items-center gap-3">
+                  <span class="text-sm text-rose-500">{{ loadError }}</span>
+                  <button class="btn-ghost !px-4 !py-2" @click="load">重试</button>
+                </div>
+              </td>
+            </tr>
+            <tr v-else-if="logs.length === 0">
               <td colspan="6" class="py-16 text-center">
                 <div class="flex flex-col items-center gap-3 text-muted-foreground">
                   <svg class="w-12 h-12 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
@@ -95,8 +100,11 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { getAuditLogs, exportAuditLogs } from '../api/audit'
+import PageHeader from '../components/PageHeader.vue'
 
 const logs = ref<any[]>([])
+// 请求失败时不能展示「暂无日志记录」——那会让管理员误以为系统真的没有操作。
+const loadError = ref('')
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -140,13 +148,22 @@ function queryParams() {
 }
 
 async function load() {
+  loadError.value = ''
   try {
     const res = await getAuditLogs(queryParams())
     if (res.data?.code === 0) {
       logs.value = res.data.data?.items || []
       total.value = res.data.data?.total || 0
+    } else {
+      logs.value = []
+      total.value = 0
+      loadError.value = res.data?.message || '加载操作日志失败'
     }
-  } catch {}
+  } catch (err: any) {
+    logs.value = []
+    total.value = 0
+    loadError.value = err.response?.data?.message || '网络错误，加载操作日志失败'
+  }
 }
 
 function reload() {

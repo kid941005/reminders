@@ -1,15 +1,14 @@
 <template>
-  <div class="mx-auto max-w-5xl">
-    <section class="mb-5 flex items-end justify-between gap-3 sm:mb-7">
-      <div class="min-w-0">
-        <p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-brand-600 dark:text-brand-300">重要日子</p>
-        <h1 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">倒数纪念日</h1>
-        <p class="mt-1 text-[13px] text-muted-foreground sm:text-sm">
-          {{ items.length ? `共 ${items.length} 个日子，最近的一个还有 ${nearestDays} 天` : '记录生日、纪念日与倒计时' }}
-        </p>
-      </div>
-      <button class="btn-brand shrink-0" @click="openCreate">新建</button>
-    </section>
+  <div class="page-container">
+    <PageHeader
+      eyebrow="重要日子"
+      title="倒数纪念日"
+      :description="items.length ? (nearestDays === null ? `共 ${items.length} 个日子，暂无未到期` : `共 ${items.length} 个日子，最近的一个还有 ${nearestDays} 天`) : '记录生日、纪念日与倒计时'"
+    >
+      <template #actions>
+        <button class="btn-brand shrink-0" @click="openCreate">新建</button>
+      </template>
+    </PageHeader>
 
     <section v-if="loading" class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
       <div v-for="n in 3" :key="n" class="h-36 animate-pulse rounded-2xl bg-surface/80"></div>
@@ -124,6 +123,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import Toast from '../components/Toast.vue'
+import PageHeader from '../components/PageHeader.vue'
 import {
   createCountdown, deleteCountdown, getCountdowns, updateCountdown,
   type CountdownItem,
@@ -168,9 +168,10 @@ const sorted = computed(() => [...items.value].sort((a, b) => {
   return a.days_left - b.days_left
 }))
 
-const nearestDays = computed(() => {
+// 没有未到期的条目时返回 null（而不是 0），否则文案会出现「最近的一个还有 0 天」。
+const nearestDays = computed<number | null>(() => {
   const upcoming = items.value.filter(item => item.days_left >= 0).map(item => item.days_left)
-  return upcoming.length ? Math.min(...upcoming) : 0
+  return upcoming.length ? Math.min(...upcoming) : null
 })
 
 function colorHex(key: string): string {

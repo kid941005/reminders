@@ -201,17 +201,21 @@ type ChannelStatus struct {
 	Bound        bool   `json:"bound"`
 	Status       string `json:"status"`
 	TargetMasked string `json:"target_masked,omitempty"`
-	BotLink      string `json:"bot_link,omitempty"`
-	Description  string `json:"description"`
+	// LastErrorCode is the most recent delivery failure recorded on the
+	// binding, so the UI can explain why a channel is unhealthy.
+	LastErrorCode string `json:"last_error_code,omitempty"`
+	BotLink       string `json:"bot_link,omitempty"`
+	Description   string `json:"description"`
 	// Bindings lists every bound target for channels that allow more than
 	// one (currently email). Each item exposes only the masked address.
 	Bindings []ChannelBindingItem `json:"bindings,omitempty"`
 }
 
 type ChannelBindingItem struct {
-	ID           uint   `json:"id"`
-	TargetMasked string `json:"target_masked"`
-	Status       string `json:"status"`
+	ID            uint   `json:"id"`
+	TargetMasked  string `json:"target_masked"`
+	Status        string `json:"status"`
+	LastErrorCode string `json:"last_error_code,omitempty"`
 }
 
 // Countdown 表示一个「倒数 / 纪念」条目：生日、结婚纪念日、考试倒计时等。

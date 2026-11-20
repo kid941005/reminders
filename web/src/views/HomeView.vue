@@ -128,7 +128,7 @@
 
     <div class="mb-2 mt-5 flex items-center justify-between">
       <div class="flex items-center gap-2">
-        <h2 class="text-sm font-bold">{{ items.length }} 项</h2>
+        <h2 class="text-sm font-bold">{{ itemTotal }} 项</h2>
         <span v-if="overdueCount" class="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-bold text-rose-500">{{ overdueCount }} 项已过期</span>
       </div>
       <button class="text-xs font-semibold text-muted-foreground hover:text-foreground" @click="loadData">刷新</button>
@@ -176,6 +176,9 @@
           </button>
         </div>
       </article>
+      <div v-if="items.length < itemTotal" class="pt-2 text-center">
+        <button class="btn-ghost" :disabled="loadingMore" @click="loadMore">{{ loadingMore ? '加载中…' : `加载更多（还有 ${itemTotal - items.length} 项）` }}</button>
+      </div>
     </section>
 
     <section v-else class="empty-state">
@@ -289,6 +292,11 @@ import { getUserConfigMeta } from '../api/config'
 const route = useRoute()
 const router = useRouter()
 const items = ref<ReminderItem[]>([])
+// 列表分页：默认每页 50 条，滚动到底点「加载更多」按页追加。
+const itemTotal = ref(0)
+const currentPage = ref(1)
+const pageSize = 50
+const loadingMore = ref(false)
 const lists = ref<ReminderList[]>([])
 const selectableChannels = ref<ChannelStatus[]>([])
 const loading = ref(true)
@@ -369,8 +377,10 @@ function nextDayKey(key: string): string {
 }
 
 // 日视图里新建提醒时，默认落在当天 09:00，省掉再选一次日期。
+// 用浏览器本地时区构造再序列化，避免硬编码 +08:00 在非中国时区偏移 8 小时。
 function dayDefaultDue(): string {
-  return `${dayKey.value}T09:00:00+08:00`
+  const [y, m, d] = dayKey.value.split('-').map(Number)
+  return toLocalIso(new Date(y, m - 1, d, 9, 0, 0))
 }
 
 const pageTitle = computed(() => selectedList.value?.name
@@ -487,18 +497,49 @@ async function loadRouteData() {
     loading.value = false
   }
 }
-async function loadItems() {
+async function loadItems(reset = true) {
   // 日视图走 calendar 区间查询（含已完成项），其余视图沿用原来的语义过滤。
-  const params = dayKey.value
+  const params: {
+    view?: string; list_id?: number; q?: string; from?: string; to?: string; page?: number; page_size?: number
+  } = dayKey.value
     ? { view: 'calendar', from: dayKey.value, to: nextDayKey(dayKey.value), q: search.value || undefined }
     : { view: view.value, list_id: selectedListID.value, q: search.value || undefined }
+  params.page = reset ? 1 : currentPage.value + 1
+  params.page_size = pageSize
   // 搜索防抖与实时刷新都是裸调用，这里必须自己兜住错误，
   // 否则请求失败时用户只看到列表不变，控制台留一条 unhandled rejection。
   try {
     const res = await getReminders(params)
-    items.value = res.data.data || []
+    const payload: any = res.data.data
+    if (Array.isArray(payload)) {
+      // 兼容旧版后端：仍返回数组时按单页处理。
+      items.value = payload
+      itemTotal.value = payload.length
+      currentPage.value = 1
+      return
+    }
+    const pageItems: ReminderItem[] = payload?.items || []
+    itemTotal.value = Number(payload?.total || 0)
+    if (reset) {
+      items.value = pageItems
+    } else {
+      // 翻页期间可能有条目被删除，按 id 去重避免重复渲染。
+      const merged = new Map<number, ReminderItem>()
+      for (const item of [...items.value, ...pageItems]) merged.set(item.id, item)
+      items.value = Array.from(merged.values())
+    }
+    currentPage.value = Number(payload?.page || params.page)
   } catch (err: any) {
     showToast(err.response?.data?.message || '加载失败，请重试', 'error')
+  }
+}
+async function loadMore() {
+  if (loadingMore.value || items.value.length >= itemTotal.value) return
+  loadingMore.value = true
+  try {
+    await loadItems(false)
+  } finally {
+    loadingMore.value = false
   }
 }
 async function submitQuick() {
@@ -878,7 +919,16 @@ onBeforeUnmount(() => {
   clearInterval(clockTimer)
 })
 function onShortcut(e: KeyboardEvent) {
-  if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey && !(e.target instanceof HTMLInputElement) && !(e.target instanceof HTMLTextAreaElement)) {
+  const target = e.target as HTMLElement | null
+  // 输入框、下拉框、可编辑区域里按 n 是在打字，不能抢去开会话。
+  const typing = !!target && (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable ||
+    target.closest('[contenteditable="true"], [role="textbox"]') !== null
+  )
+  if (e.key.toLowerCase() === 'n' && !e.metaKey && !e.ctrlKey && !typing) {
     e.preventDefault(); focusQuickAdd()
   }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {

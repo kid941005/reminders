@@ -43,6 +43,9 @@
   --color-ring:                var(--color-brand-500);
   --color-accent:              168 85 247;
   --color-destructive:         220 38 38;
+
+  /* 页面统一最大宽度（所有 .page-container 页面共用） */
+  --page-max-width: 80rem;
 }
 
 .dark {

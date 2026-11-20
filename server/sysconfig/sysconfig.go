@@ -48,7 +48,7 @@ func InitDefaultConfigs(db *gorm.DB) error {
 
 func GetPublicConfigs(db *gorm.DB) (map[string]string, error) {
 	var configs []database.SystemConfig
-	if err := db.Where("public = ?", true).Find(&configs).Error; err != nil {
+	if err := db.Where("user_id = ? AND public = ?", 0, true).Find(&configs).Error; err != nil {
 		return nil, err
 	}
 	result := make(map[string]string)

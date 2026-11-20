@@ -1,10 +1,10 @@
 <template>
-  <div class="mx-auto max-w-5xl">
-    <div class="mb-4 sm:mb-7">
-      <p class="mb-1 text-xs font-extrabold uppercase tracking-[.18em] text-violet-500 sm:mb-2">随时触达</p>
-      <h1 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl">通知方式</h1>
-      <p class="mt-0.5 max-w-2xl text-[13px] leading-5 text-muted-foreground sm:mt-2 sm:text-sm sm:leading-6">站内消息默认关闭，需要时在单条提醒里勾选。已开通的方式，绑定一次即可在每条提醒中自由选择。</p>
-    </div>
+  <div class="page-container">
+    <PageHeader
+      eyebrow="随时触达"
+      title="通知方式"
+      description="站内消息默认关闭，需要时在单条提醒里勾选。已开通的方式，绑定一次即可在每条提醒中自由选择。"
+    />
 
     <div class="mb-4 rounded-2xl border border-blue-500/15 bg-blue-500/[.06] px-3.5 py-2.5 text-xs leading-5 text-blue-700 dark:text-blue-200 sm:mb-5 sm:px-4 sm:py-3">
       选择你想接收提醒的方式即可。邮件需要先配置“发件邮箱”，再绑定“接收邮箱”；接收邮箱可以绑定多个，到点的提醒会同时发给全部已启用的邮箱。飞书请填写接收提醒消息的工作邮箱或手机号，不需要查找 OpenID。
@@ -39,7 +39,7 @@
             </div>
             <p class="mt-1 text-xs leading-5 text-muted-foreground">{{ channel.description }}</p>
           </div>
-          <button v-if="channel.channel !== 'inapp' && channel.bound && channel.configured" class="toggle" :class="{ on: channel.status === 'active' }" :aria-label="channel.status === 'active' ? '关闭渠道' : '开启渠道'" @click="toggle(channel)">
+          <button v-if="channel.channel !== 'inapp' && channel.bound && channel.configured" class="toggle" :class="{ on: channel.status === 'active', 'opacity-50': busy === 'toggle-' + channel.channel }" :disabled="busy === 'toggle-' + channel.channel" :aria-label="channel.status === 'active' ? '关闭渠道' : '开启渠道'" @click="toggle(channel)">
             <span></span>
           </button>
         </div>
@@ -67,12 +67,12 @@
           </div>
           <form class="mt-3 flex gap-2" @submit.prevent="bind(channel)">
             <input v-model="targets[channel.channel]" class="bind-input" type="email" placeholder="添加新的接收邮箱" />
-            <button class="bind-button" :disabled="busy === channel.channel || !targets[channel.channel]?.trim()">{{ busy === channel.channel ? '添加中' : '添加' }}</button>
+            <button class="bind-button" :disabled="busy === 'bind-' + channel.channel || !targets[channel.channel]?.trim()">{{ busy === 'bind-' + channel.channel ? '添加中' : '添加' }}</button>
           </form>
           <p class="mt-2 text-[10px] leading-4 text-muted-foreground">到点的提醒会发送给以上全部已启用的接收邮箱；每个邮箱都可以单独删除。</p>
           <div class="mt-3 flex gap-2">
-            <button class="channel-button primary" :disabled="busy === channel.channel || !channel.configured" @click="test(channel)">
-              {{ busy === channel.channel ? '发送中…' : channel.configured ? '发送测试' : '服务端未配置' }}
+            <button class="channel-button primary" :disabled="busy === 'test-' + channel.channel || !channel.configured" @click="test(channel)">
+              {{ busy === 'test-' + channel.channel ? '发送中…' : channel.configured ? '发送测试' : '服务端未配置' }}
             </button>
           </div>
         </div>
@@ -86,8 +86,8 @@
             <span class="h-2.5 w-2.5 rounded-full" :class="channel.configured && channel.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'"></span>
           </div>
           <div class="mt-3 flex gap-2">
-            <button class="channel-button primary" :disabled="busy === channel.channel || !channel.configured" @click="test(channel)">
-              {{ busy === channel.channel ? '发送中…' : channel.configured ? '发送测试' : '服务端未配置' }}
+            <button class="channel-button primary" :disabled="busy === 'test-' + channel.channel || !channel.configured" @click="test(channel)">
+              {{ busy === 'test-' + channel.channel ? '发送中…' : channel.configured ? '发送测试' : '服务端未配置' }}
             </button>
             <button class="channel-button" @click="startRebind(channel)">更换</button>
             <button class="channel-button danger" @click="remove(channel)">解绑</button>
@@ -183,7 +183,7 @@
               <input v-model.trim="secrets[channel.channel]" class="bind-input mt-2 w-full" type="password" placeholder="安全设置选「加签」时填写，以 SEC 开头" autocomplete="new-password" />
               <p class="mt-1 text-[10px] leading-4 text-muted-foreground">留空则按「自定义关键词」模式发送，消息里已固定包含“提醒”二字。</p>
             </div>
-            <button class="bind-button w-full" :disabled="busy === channel.channel || !targets[channel.channel]?.trim()">{{ busy === channel.channel ? '绑定中' : '绑定' }}</button>
+            <button class="bind-button w-full" :disabled="busy === 'bind-' + channel.channel || !targets[channel.channel]?.trim()">{{ busy === 'bind-' + channel.channel ? '绑定中' : '绑定' }}</button>
           </form>
         </div>
 
@@ -191,7 +191,7 @@
           <label class="text-[11px] font-bold text-muted-foreground">{{ inputLabel(channel.channel) }}</label>
           <div class="mt-2 flex gap-2">
             <input v-model="targets[channel.channel]" class="bind-input" :placeholder="placeholder(channel.channel)" :type="channel.channel === 'email' ? 'email' : 'text'" />
-            <button class="bind-button" :disabled="busy === channel.channel || !targets[channel.channel]?.trim()">{{ busy === channel.channel ? '绑定中' : '绑定' }}</button>
+            <button class="bind-button" :disabled="busy === 'bind-' + channel.channel || !targets[channel.channel]?.trim()">{{ busy === 'bind-' + channel.channel ? '绑定中' : '绑定' }}</button>
           </div>
           <p v-if="channel.channel === 'email'" class="mt-2 text-[10px] leading-4 text-muted-foreground">填写提醒实际送达的接收邮箱。它可以与发件邮箱相同，也可以不同；绑定后还可以继续添加多个。</p>
           <p v-else-if="channel.channel === 'feishu'" class="mt-2 text-[10px] leading-4 text-muted-foreground">填写你在飞书中要接收提醒消息的工作邮箱或手机号。</p>
@@ -213,6 +213,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import Toast from '../components/Toast.vue'
+import PageHeader from '../components/PageHeader.vue'
 import {
   bindChannel, createQQBindCode, getChannelStatuses, getNotificationBrand, saveFeishuProvider, saveNotificationBrand, saveProvider, testChannel, toggleChannel, unbindChannel, unbindChannelTarget,
   type ChannelBindingItem, type ChannelStatus, type ReminderChannel
@@ -276,7 +277,7 @@ async function saveBrand() {
   finally { busy.value = '' }
 }
 async function bind(channel: ChannelStatus) {
-  busy.value = channel.channel
+  busy.value = 'bind-' + channel.channel
   try {
     await bindChannel(channel.channel, targets[channel.channel] || '', secrets[channel.channel])
     targets[channel.channel] = ''
@@ -352,7 +353,8 @@ async function copyQQBindCommand() {
   } catch { show('复制失败，请手动复制绑定消息', 'error') }
 }
 async function test(channel: ChannelStatus) {
-  busy.value = channel.channel
+  // 与「绑定」用不同的 busy key：否则同一渠道绑定时，测试按钮会被一起禁用。
+  busy.value = 'test-' + channel.channel
   try {
     await testChannel(channel.channel)
     show(`测试${channel.label}已发送`)
@@ -360,10 +362,14 @@ async function test(channel: ChannelStatus) {
   finally { busy.value = '' }
 }
 async function toggle(channel: ChannelStatus) {
+  // 开关没有防重：连点会发两次相反请求，最终状态取决于响应顺序。
+  if (busy.value === 'toggle-' + channel.channel) return
+  busy.value = 'toggle-' + channel.channel
   try {
     await toggleChannel(channel.channel, channel.status !== 'active')
     await load()
   } catch (err: any) { show(err.response?.data?.message || '更新失败', 'error') }
+  finally { busy.value = '' }
 }
 async function remove(channel: ChannelStatus) {
   confirmChannel.value = channel

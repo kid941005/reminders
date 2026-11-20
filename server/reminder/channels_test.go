@@ -217,6 +217,10 @@ func TestChannelStatusesExposeEmailBindingList(t *testing.T) {
 	const userID = 7
 	first := createEmailBinding(t, userID, "one@qq.com", "active")
 	second := createEmailBinding(t, userID, "two@163.com", "disabled")
+	if err := appDB.Model(&ChannelBinding{}).Where("id = ?", first.ID).
+		Update("last_error_code", "SMTP_TIMEOUT").Error; err != nil {
+		t.Fatal(err)
+	}
 
 	for _, status := range channelStatuses(appDB, userID) {
 		if status.Channel != ChannelEmail {
@@ -227,6 +231,9 @@ func TestChannelStatusesExposeEmailBindingList(t *testing.T) {
 		}
 		if status.Status != "active" {
 			t.Fatalf("expected overall active status, got %q", status.Status)
+		}
+		if status.LastErrorCode != "SMTP_TIMEOUT" {
+			t.Fatalf("expected last error code to surface, got %q", status.LastErrorCode)
 		}
 		if len(status.Bindings) != 2 {
 			t.Fatalf("expected 2 binding items, got %v", status.Bindings)
