@@ -35,7 +35,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("reminder-mcp")
 
-__version__ = "0.19.10"
+__version__ = "0.19.11"
 
 def _env(name: str, default: str) -> str:
     return (os.getenv(name) or "").strip() or default

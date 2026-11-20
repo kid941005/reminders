@@ -2,6 +2,36 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.19.11（2026-11-20）
+
+### 修复
+
+- **公开「忘记密码」接口可枚举账号**：用户不存在与安全问题错误原先可区分，现统一为模糊提示；查询安全问题对不存在的用户返回空 `has_questions`，不再暴露账号是否注册。
+- **月视图年份可能显示上一年**：日历标题的年份原先取自含上月补格的起始日期，1 月会显示成上一年；改用当前锚点月份。
+- **页面加载失败与「无数据」不可区分**：`CalendarView`、`AdminAuditView` 增加错误态与重试；`ChannelsView`、`CountdownsView`、`NotificationsView` 等补响应 `code` 校验与失败提示。
+- **设置页原生 `window.confirm` 在 WebView 内可能失效**：改用统一的 `ConfirmDialog`；配置读取区分「未配置」与网络错误。
+- **个人资料页退出登录可能卡在 loading**：补齐 `try/finally`；安全问题读取失败时不再引导覆盖已有问题；移除会抢焦点的 `autofocus` 与失效的 `apiKey` 回退。
+- **快捷添加在部分页面失效**：`MainLayout` 改用可配置的路由白名单，并在 `await router.push` + `nextTick` 后广播事件，修复路由竞态；提醒弹窗补 `alertBusy` 防重复确认；退出登录改为 `await endSession()`。
+- **通知渠道的「最后错误」不显示**：`ChannelStatus`/`ChannelBindingItem` 增加 `last_error_code` 并前后端打通；通知方式开关新增 `busy` 防连点重复请求。
+- **使用统计运行时开关不生效**：`stats.Start` 入口与每次上报都检查 `stats_enabled`，非 2xx 也会记录，关闭后不再外发。
+- **每日清理任务时区错误**：调度器固定按 `Asia/Shanghai` 计算下一次执行时间，避免 UTC 容器在错误的本地时刻运行。
+- **ICS 转义不完整**：补对裸 `\r` 的转义，避免日历内容被破坏。
+- **短信 Webhook 未校验地址**：保存通知服务配置时校验 `http/https` 与 Host，降低配置层 SSRF 风险。
+- **公开配置可能读到用户级数据**：`GetPublicConfigs` 增加 `user_id = 0` 约束，只返回系统级公开配置。
+
+### 优化
+
+- **列表接口支持分页**：`GET /api/reminder/items` 新增可选 `page` / `page_size`（默认 20，上限 100），带参数返回 `{items,total,page,pageSize}`，不带参数保持原数组以兼容旧调用；前端列表改「加载更多」按页追加。
+- **注册用户名校验**：`Register` 去除首尾空白并限制 1–50 个字符，超限返回 400。
+- **统一页面头部与容器宽度**：`PageHeader` 支持 `eyebrow` 并统一字号，新增 `--page-max-width` 设计令牌，`.page-container` 统一最大宽度与居中；通知方式、倒数纪念日、通知中心、操作日志、用户管理改用统一页头。
+- **默认时间不再硬编码时区**：日视图新建提醒的默认时间改用浏览器本地时区，非中国时区不再偏移 8 小时。
+- **审计日志时间**：统一按 UTC 入库、按 `Asia/Shanghai` 展示。
+- **清理死代码与死组件**：删除未使用的 `Button.vue`、`Card.vue`、`Modal.vue`、`QrcodeDialog.vue` 与路由已重定向的 `AdminProvidersView.vue`。
+
+### 文档
+
+- **README 移除各平台压缩包说明**：Release 只承诺 Docker 镜像与 CI 构建，删除手工 `make package` 生成各平台压缩包的描述；补充列表接口分页参数说明。
+
 ## v0.19.10（2026-11-20）
 
 ### 优化
