@@ -16,10 +16,10 @@
             </span>
             <span>
               <span class="flex items-center gap-2">
-                <span class="font-display text-lg font-extrabold tracking-tight">{{ authStore.siteTitle || '提醒事项' }}</span>
+                <span class="font-display text-lg font-bold tracking-tight">{{ authStore.siteTitle || '提醒事项' }}</span>
                 <span v-if="appVersion" class="version-badge" :title="appBuildTime ? `构建时间：${appBuildTime}` : ''">{{ appVersion }}</span>
               </span>
-              <span class="block text-[11px] font-medium text-muted-foreground">把重要的事，放心交给我</span>
+              <span class="block text-xs font-medium text-muted-foreground">把重要的事，放心交给我</span>
             </span>
           </RouterLink>
           <button class="icon-button mobile-only" aria-label="关闭菜单" @click="mobileOpen = false">
@@ -32,7 +32,7 @@
             <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M12 5v14M5 12h14" stroke-width="2.2" stroke-linecap="round"/></svg>
           </span>
           新建提醒
-          <kbd class="ml-auto hidden rounded-md bg-black/10 px-1.5 py-0.5 text-[10px] sm:inline">N</kbd>
+          <kbd class="ml-auto hidden rounded-md bg-black/10 px-1.5 py-0.5 text-2xs sm:inline">N</kbd>
         </button>
 
         <nav class="mt-6 flex-1 overflow-y-auto px-3 pb-5">
@@ -109,13 +109,13 @@
 
         <div class="border-t border-border/70 p-3">
           <RouterLink to="/admin/channels" class="nav-row" :class="{ 'nav-row-active': route.path === '/admin/channels' }">
-            <span class="nav-symbol bg-violet-500/12 text-violet-500">
+            <span class="nav-symbol">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M8 12h8m-8 4h5m6-11H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h4l3 3 3-3h4a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
             <span class="flex-1">通知方式</span>
           </RouterLink>
           <RouterLink to="/admin/settings" class="nav-row" :class="{ 'nav-row-active': route.path === '/admin/settings' }">
-            <span class="nav-symbol bg-slate-500/10 text-slate-500">
+            <span class="nav-symbol">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.38.35.72.65 1 .3.28.7.42 1.1.4H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </span>
             <span class="flex-1">偏好设置</span>
@@ -139,7 +139,7 @@
           <svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M4 7h16M4 12h16M4 17h16" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
         <div class="hidden min-w-0 sm:block">
-          <p class="text-[11px] font-bold uppercase tracking-[0.18em] text-muted-foreground">{{ dayLabel }}</p>
+          <p class="text-xs font-bold uppercase tracking-[0.18em] text-muted-foreground">{{ dayLabel }}</p>
           <h2 class="truncate text-base font-bold">{{ greeting }}，{{ authStore.user?.username }}</h2>
         </div>
         <div class="ml-auto flex items-center gap-1 sm:gap-2">
@@ -280,17 +280,17 @@ const icons = {
 // key 对应后端 handleSummary 返回的计数字段；本周/本月/纪念日后端没有对应计数，
 // 留空串而不是写一个取不到值的键，避免读代码时误以为有徽标。
 const smartNav = [
-  { to: '/admin', label: '今日待办', key: 'today', tone: 'bg-blue-500/12 text-blue-500', icon: icons.today },
-  { to: '/admin/week', label: '本周安排', key: '', tone: 'bg-teal-500/12 text-teal-500', icon: icons.week },
-  { to: '/admin/month', label: '本月计划', key: '', tone: 'bg-indigo-500/12 text-indigo-500', icon: icons.month },
-  { to: '/admin/completed', label: '已完成', key: 'completed', tone: 'bg-emerald-500/12 text-emerald-500', icon: icons.completed },
-  { to: '/admin/all', label: '全部清单', key: 'all', tone: 'bg-violet-500/12 text-violet-500', icon: icons.all },
-  { to: '/admin/countdowns', label: '纪念日', key: '', tone: 'bg-rose-500/12 text-rose-500', icon: icons.countdown },
+  { to: '/admin', label: '今日待办', key: 'today', tone: '', icon: icons.today },
+  { to: '/admin/week', label: '本周安排', key: '', tone: '', icon: icons.week },
+  { to: '/admin/month', label: '本月计划', key: '', tone: '', icon: icons.month },
+  { to: '/admin/completed', label: '已完成', key: 'completed', tone: '', icon: icons.completed },
+  { to: '/admin/all', label: '全部清单', key: 'all', tone: '', icon: icons.all },
+  { to: '/admin/countdowns', label: '纪念日', key: '', tone: '', icon: icons.countdown },
 ]
 const adminNav = [
-  { to: '/admin/users', label: '用户管理', tone: 'bg-blue-500/12 text-blue-500', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20M9.5 10.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM21 20v-1.5a4 4 0 0 0-3-3.87M16.5 3.6a3.5 3.5 0 0 1 0 6.79" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
-  { to: '/admin/configs', label: '系统配置', tone: 'bg-violet-500/12 text-violet-500', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.38.35.72.65 1 .3.28.7.42 1.1.4H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
-  { to: '/admin/audit', label: '操作日志', tone: 'bg-amber-500/12 text-amber-500', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="4" width="14" height="17" rx="2" stroke-width="1.8"/><path d="M9 4h6v3H9zM9 11h6M9 15h4" stroke-width="1.8" stroke-linecap="round"/></svg>' },
+  { to: '/admin/users', label: '用户管理', tone: '', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20M9.5 10.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM21 20v-1.5a4 4 0 0 0-3-3.87M16.5 3.6a3.5 3.5 0 0 1 0 6.79" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
+  { to: '/admin/configs', label: '系统配置', tone: '', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3" stroke-width="1.8"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21h-4v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3v-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.4 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.13.38.35.72.65 1 .3.28.7.42 1.1.4H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>' },
+  { to: '/admin/audit', label: '操作日志', tone: '', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="5" y="4" width="14" height="17" rx="2" stroke-width="1.8"/><path d="M9 4h6v3H9zM9 11h6M9 15h4" stroke-width="1.8" stroke-linecap="round"/></svg>' },
 ]
 
 const userInitial = computed(() => (authStore.user?.username || 'R').charAt(0).toUpperCase())
@@ -733,20 +733,20 @@ onBeforeUnmount(() => {
 }
 .sidebar-open { @apply translate-x-0; }
 .logo-mark {
-  @apply flex h-11 w-11 items-center justify-center rounded-[15px] bg-gradient-to-br from-blue-500 to-indigo-500 text-white;
+  @apply flex h-11 w-11 items-center justify-center rounded-[15px] bg-brand-gradient text-white;
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.45),
     inset 0 -1px 0 rgb(0 0 0 / 0.12),
-    0 10px 30px -10px rgb(59 130 246 / 0.75);
+    0 10px 30px -12px rgb(var(--color-brand-500) / 0.55);
 }
-.version-badge { @apply rounded-full border border-brand-500/25 bg-brand-500/10 px-2 py-0.5 text-[11px] font-bold leading-none text-brand-600 dark:text-brand-300; }
+.version-badge { @apply rounded-full border border-brand-500/25 bg-brand-500/10 px-2 py-0.5 text-xs font-bold leading-none text-brand-600 dark:text-brand-300; }
 /* 主操作按钮：渐变 + 顶部内高光 + hover 掠过的一道高光，是最典型的液态玻璃按钮。 */
 .new-reminder-button {
-  @apply relative flex h-12 items-center gap-3 overflow-hidden rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 px-3.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0;
+  @apply relative flex h-12 items-center gap-3 overflow-hidden rounded-2xl bg-brand-gradient px-3.5 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:brightness-105 active:translate-y-0;
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.4),
     inset 0 -1px 0 rgb(0 0 0 / 0.14),
-    0 14px 30px -14px rgb(59 130 246 / 0.8);
+    0 14px 30px -16px rgb(var(--color-brand-500) / 0.55);
 }
 .new-reminder-button::after {
   content: '';
@@ -759,7 +759,7 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 .new-reminder-button:hover::after { transform: translateX(120%); }
-.nav-caption { @apply px-3 pb-2 text-[10px] font-extrabold uppercase tracking-[.18em] text-muted-foreground/75; }
+.nav-caption { @apply px-3 pb-2 text-2xs font-bold uppercase tracking-[.18em] text-muted-foreground/75; }
 .nav-row { @apply my-0.5 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-foreground/80 transition-all hover:bg-foreground/[.04] hover:text-foreground dark:hover:bg-white/[.06]; }
 /* 选中态做成玻璃胶囊：品牌色淡染 + 顶部内高光 + 极细描边，替代旧版左侧色条。 */
 .nav-row-active {
@@ -776,9 +776,11 @@ onBeforeUnmount(() => {
     inset 0 0 0 1px rgb(var(--color-brand-400) / 0.22),
     0 4px 14px -8px rgb(0 0 0 / 0.6);
 }
-.nav-symbol { @apply flex h-8 w-8 items-center justify-center rounded-[10px]; box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.35); }
+.nav-symbol { @apply flex h-8 w-8 items-center justify-center rounded-[10px] text-muted-foreground/80 transition-colors; }
+.nav-row-active .nav-symbol { color: rgb(var(--color-brand-600)); }
+.dark .nav-row-active .nav-symbol { color: rgb(var(--color-brand-300)); }
 .nav-symbol :deep(svg), .mobile-tab :deep(svg) { width: 18px; height: 18px; }
-.nav-count { @apply min-w-6 rounded-full bg-muted px-1.5 py-0.5 text-center text-[10px] font-bold text-muted-foreground; }
+.nav-count { @apply min-w-6 rounded-full bg-muted px-1.5 py-0.5 text-center text-2xs font-bold text-muted-foreground; }
 .tiny-add { @apply flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground; }
 .sub-link { @apply ml-11 block rounded-lg px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground; }
 .topbar {
@@ -789,8 +791,8 @@ onBeforeUnmount(() => {
     0 12px 28px -24px rgb(15 23 42 / 0.4);
 }
 .avatar {
-  @apply flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-indigo-500 text-sm font-extrabold text-white sm:h-9 sm:w-9;
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 4px 12px -6px rgb(56 189 248 / 0.7);
+  @apply flex h-8 w-8 items-center justify-center rounded-xl bg-brand-gradient text-sm font-bold text-white sm:h-9 sm:w-9;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.4), 0 4px 12px -8px rgb(var(--color-brand-500) / 0.45);
 }
 /* 底部标签栏：悬浮玻璃条 —— 圆角、亮描边、内高光、投射阴影。 */
 .mobile-tabbar {
@@ -804,9 +806,9 @@ onBeforeUnmount(() => {
 .mobile-tabbar-hidden { @apply pointer-events-none translate-y-28 opacity-0; }
 .mobile-tab { @apply flex w-14 flex-col items-center gap-0.5 text-muted-foreground transition; }
 .mobile-tab span { @apply flex h-6 w-6 items-center justify-center; }
-.mobile-tab small { @apply text-[10px] font-semibold; }
+.mobile-tab small { @apply text-2xs font-semibold; }
 .mobile-tab.active { @apply text-brand-600 dark:text-brand-300; }
-.mobile-add { @apply -mt-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-background bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-[0_12px_28px_-8px_rgba(59,130,246,.8)]; }
+.mobile-add { @apply -mt-6 flex h-12 w-12 items-center justify-center rounded-full border-4 border-background bg-brand-gradient text-white shadow-[0_12px_28px_-10px_rgb(var(--color-brand-500)/0.55)]; }
 .page-enter-active, .page-leave-active { transition: opacity .18s ease, transform .18s ease; }
 .page-enter-from { opacity: 0; transform: translateY(5px); }
 .page-leave-to { opacity: 0; transform: translateY(-3px); }

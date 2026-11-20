@@ -12,7 +12,7 @@
 
     <div v-else-if="errorMsg" class="flex min-h-[300px] flex-col items-center justify-center gap-3 rounded-[28px] border border-dashed border-rose-500/30 bg-rose-500/[.04] px-6 text-center sm:min-h-[420px]">
       <svg viewBox="0 0 24 24" class="h-8 w-8 text-rose-500/70" fill="none" stroke="currentColor"><path d="M12 9v4m0 4h.01M10.3 3.8 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <h2 class="text-base font-extrabold text-rose-500">{{ errorMsg }}</h2>
+      <h2 class="text-base font-bold text-rose-500">{{ errorMsg }}</h2>
       <button class="rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-foreground transition hover:bg-muted" @click="load()">重试</button>
     </div>
 
@@ -24,7 +24,7 @@
         :class="{ unread: !item.read_at }"
         @click="read(item)"
       >
-        <span class="notification-icon" :class="item.type === 'channel_failed' ? 'failure' : item.type === 'weather' ? 'weather' : 'due'">
+        <span class="icon-chip">
           <svg v-if="item.type === 'channel_failed'" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M12 9v4m0 4h.01M10.3 3.8 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z" stroke-width="1.8" stroke-linecap="round"/></svg>
           <svg v-else-if="item.type === 'weather'" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.2 9.2 4.4 4.4 0 0 1 17 18H7Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <svg v-else viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -35,7 +35,7 @@
             <span v-if="!item.read_at" class="h-2 w-2 shrink-0 rounded-full bg-brand-500"></span>
           </span>
           <span class="mt-0.5 block whitespace-pre-line text-xs leading-5 text-muted-foreground sm:mt-1">{{ item.body }}</span>
-          <span class="mt-1 block text-[11px] font-medium text-muted-foreground/70 sm:mt-2">{{ formatTime(item.created_at) }}</span>
+          <span class="mt-1 block text-xs font-medium text-muted-foreground/70 sm:mt-2">{{ formatTime(item.created_at) }}</span>
         </span>
         <svg class="h-4 w-4 text-muted-foreground/40 opacity-0 transition group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m9 5 7 7-7 7" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
@@ -45,7 +45,7 @@
       <span class="flex h-16 w-16 items-center justify-center rounded-[20px] bg-brand-500/10 text-brand-500 sm:h-20 sm:w-20 sm:rounded-[24px]">
         <svg viewBox="0 0 24 24" class="h-8 w-8 sm:h-9 sm:w-9" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke-width="1.6" stroke-linecap="round"/></svg>
       </span>
-      <h2 class="mt-4 text-lg font-extrabold sm:mt-5">这里很安静</h2>
+      <h2 class="mt-4 type-h3 sm:mt-5">这里很安静</h2>
       <p class="mt-1 text-sm text-muted-foreground">到期提醒、天气和渠道状态会出现在这里。</p>
     </div>
   </div>
@@ -130,8 +130,4 @@ onBeforeUnmount(() => {
 .notification-row { @apply relative flex w-full items-center gap-3 border-b px-4 py-3 transition last:border-b-0 hover:bg-foreground/[.035] dark:hover:bg-white/[.05] sm:gap-4 sm:px-5 sm:py-5; border-bottom-color: rgb(var(--color-border) / 0.6); }
 .notification-row.unread { @apply bg-brand-500/[.035]; }
 .notification-row.unread::before { content: ''; position: absolute; inset: 12px auto 12px 0; width: 3px; border-radius: 0 4px 4px 0; background: rgb(var(--color-brand-500)); }
-.notification-icon { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl sm:h-11 sm:w-11 sm:rounded-2xl; }
-.notification-icon.due { @apply bg-blue-500/10 text-blue-500; }
-.notification-icon.failure { @apply bg-rose-500/10 text-rose-500; }
-.notification-icon.weather { @apply bg-sky-500/10 text-sky-500; }
 </style>

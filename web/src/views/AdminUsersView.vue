@@ -7,45 +7,45 @@
       <div class="surface rounded-2xl p-4 sm:p-5">
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-sm text-muted-foreground">用户总数</div>
-            <div class="text-2xl font-extrabold text-foreground mt-1">{{ total }}</div>
+            <div class="type-caption">用户总数</div>
+            <div class="type-num text-2xl font-bold text-foreground mt-1">{{ total }}</div>
           </div>
-          <div class="w-11 h-11 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-300 flex items-center justify-center">
+          <span class="icon-chip !h-11 !w-11">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-3.13a4 4 0 10-4-4 4 4 0 004 4z"/></svg>
-          </div>
+          </span>
         </div>
       </div>
       <div class="surface rounded-2xl p-4 sm:p-5">
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-sm text-muted-foreground">本页管理员</div>
-            <div class="text-2xl font-extrabold text-foreground mt-1">{{ adminCount }}</div>
+            <div class="type-caption">本页管理员</div>
+            <div class="type-num text-2xl font-bold text-foreground mt-1">{{ adminCount }}</div>
           </div>
-          <div class="w-11 h-11 rounded-xl bg-violet-50 dark:bg-violet-500/15 text-violet-600 dark:text-violet-300 flex items-center justify-center">
+          <span class="icon-chip !h-11 !w-11">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-          </div>
+          </span>
         </div>
       </div>
       <div class="surface rounded-2xl p-4 sm:p-5">
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-sm text-muted-foreground">本页已启用</div>
-            <div class="text-2xl font-extrabold text-foreground mt-1">{{ activeCount }}</div>
+            <div class="type-caption">本页已启用</div>
+            <div class="type-num text-2xl font-bold text-foreground mt-1">{{ activeCount }}</div>
           </div>
-          <div class="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center">
+          <span class="icon-chip !h-11 !w-11">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-          </div>
+          </span>
         </div>
       </div>
       <div class="surface rounded-2xl p-4 sm:p-5">
         <div class="flex items-center justify-between">
           <div>
-            <div class="text-sm text-muted-foreground">本页已禁用</div>
-            <div class="text-2xl font-extrabold text-foreground mt-1">{{ disabledCount }}</div>
+            <div class="type-caption">本页已禁用</div>
+            <div class="type-num text-2xl font-bold text-foreground mt-1">{{ disabledCount }}</div>
           </div>
-          <div class="w-11 h-11 rounded-xl bg-rose-50 dark:bg-rose-500/15 text-rose-600 dark:text-rose-300 flex items-center justify-center">
+          <span class="icon-chip !h-11 !w-11">
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
-          </div>
+          </span>
         </div>
       </div>
     </div>
@@ -54,8 +54,8 @@
     <div class="surface rounded-2xl overflow-hidden">
       <div class="flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6 border-b border-border">
         <div>
-          <h2 class="text-lg font-bold text-foreground">用户列表</h2>
-          <p class="text-sm text-muted-foreground">管理系统中的所有账户</p>
+          <h2 class="type-h2 text-foreground">用户列表</h2>
+          <p class="type-body-sm text-muted-foreground">管理系统中的所有账户</p>
         </div>
         <div class="flex items-center gap-2 w-full sm:w-auto">
           <div class="relative flex-1 sm:flex-none">
@@ -75,7 +75,7 @@
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="text-left text-xs uppercase tracking-wider text-muted-foreground bg-muted/60">
+            <tr class="text-left type-label bg-muted/60">
               <th class="py-3.5 px-6 font-semibold">用户</th>
               <th class="py-3.5 px-4 font-semibold">角色</th>
               <th class="py-3.5 px-4 font-semibold">状态</th>
@@ -92,7 +92,7 @@
                   </div>
                   <div>
                     <div class="font-semibold text-foreground">{{ user.username }}</div>
-                    <div class="text-xs text-muted-foreground">ID #{{ user.id }}</div>
+                    <div class="type-caption">ID #{{ user.id }}</div>
                   </div>
                 </div>
               </td>
@@ -132,7 +132,7 @@
                 <div class="flex flex-col items-center gap-3 text-rose-500">
                   <svg class="w-12 h-12 opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 9v4m0 4h.01M10.3 3.8 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z"/></svg>
                   <span class="text-sm">{{ errorMsg }}</span>
-                  <button class="rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-foreground transition hover:bg-muted" @click="loadUsers()">重试</button>
+                  <button class="btn-ghost !px-4 !py-2" @click="loadUsers()">重试</button>
                 </div>
               </td>
             </tr>
@@ -140,7 +140,7 @@
               <td colspan="5" class="py-16 text-center">
                 <div class="flex flex-col items-center gap-3 text-muted-foreground">
                   <svg class="w-12 h-12 opacity-40" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-3.13a4 4 0 10-4-4 4 4 0 004 4z"/></svg>
-                  <span class="text-sm">暂无用户数据</span>
+                  <span class="type-caption">暂无用户数据</span>
                 </div>
               </td>
             </tr>
@@ -149,8 +149,8 @@
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3 p-5 sm:px-6 border-t border-border">
-        <div class="text-sm text-muted-foreground">
-          共 <span class="font-semibold text-foreground">{{ total }}</span> 条 · 第 {{ page }} / {{ totalPages }} 页
+        <div class="type-caption">
+          共 <span class="type-num font-semibold text-foreground">{{ total }}</span> 条 · 第 {{ page }} / {{ totalPages }} 页
         </div>
         <div class="flex items-center gap-2">
           <button @click="prevPage" :disabled="page <= 1" class="btn-ghost !px-3 !py-2">上一页</button>
@@ -162,14 +162,14 @@
     <!-- Reset password modal -->
     <transition enter-active-class="transition-opacity duration-200" enter-from-class="opacity-0" leave-active-class="transition-opacity duration-150" leave-to-class="opacity-0">
       <div v-if="resetModalVisible" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-foreground/50 backdrop-blur-sm" @click.self="resetModalVisible = false">
-        <div class="surface rounded-2xl shadow-2xl p-6 w-full max-w-md animate-scale-in">
+        <div class="surface-modal rounded-2xl shadow-2xl p-6 w-full max-w-md animate-scale-in">
           <div class="flex items-center gap-3 mb-5">
-            <div class="w-11 h-11 rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-300 flex items-center justify-center">
+            <span class="icon-chip is-brand !h-11 !w-11">
               <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-            </div>
+            </span>
             <div>
-              <h3 class="text-lg font-bold text-foreground">重置密码</h3>
-              <p class="text-sm text-muted-foreground">用户：{{ resetTarget?.username }}</p>
+              <h3 class="type-h3 text-foreground">重置密码</h3>
+              <p class="type-caption">用户：{{ resetTarget?.username }}</p>
             </div>
           </div>
           <div class="space-y-4">

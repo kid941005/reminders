@@ -29,7 +29,7 @@
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead>
-            <tr class="text-left text-xs uppercase tracking-wider text-muted-foreground bg-muted/60">
+            <tr class="text-left type-label bg-muted/60">
               <th class="py-3.5 px-6 font-semibold">时间</th>
               <th class="py-3.5 px-4 font-semibold">用户</th>
               <th class="py-3.5 px-4 font-semibold">操作</th>
@@ -43,12 +43,12 @@
               <td class="py-3.5 px-6 text-muted-foreground whitespace-nowrap">{{ log.created_at }}</td>
               <td class="py-3.5 px-4">
                 <div class="flex items-center gap-2.5">
-                  <div class="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-[11px] shrink-0" :class="avatarClass(log.username || '?')">
+                  <div class="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs shrink-0" :class="avatarClass(log.username || '?')">
                     {{ (log.username || '?').charAt(0).toUpperCase() }}
                   </div>
                   <div>
                     <div class="font-medium text-foreground leading-tight">{{ log.username }}</div>
-                    <div class="text-xs text-muted-foreground">#{{ log.user_id }}</div>
+                    <div class="type-caption">#{{ log.user_id }}</div>
                   </div>
                 </div>
               </td>
@@ -85,8 +85,8 @@
       </div>
 
       <div class="flex flex-wrap items-center justify-between gap-3 p-5 sm:px-6 border-t border-border">
-        <div class="text-sm text-muted-foreground">
-          共 <span class="font-semibold text-foreground">{{ total }}</span> 条 · 第 {{ page }} / {{ totalPages }} 页
+        <div class="type-caption">
+          共 <span class="type-num font-semibold text-foreground">{{ total }}</span> 条 · 第 {{ page }} / {{ totalPages }} 页
         </div>
         <div class="flex items-center gap-2">
           <button @click="prevPage" :disabled="page <= 1" class="btn-ghost !px-3 !py-2">上一页</button>

@@ -32,7 +32,7 @@
   --color-brand-900: 30 58 138;
 
   /* Surfaces and content */
-  --color-background:          247 248 250;
+  --color-background:          243 246 251;
   --color-foreground:          24 28 36;
   --color-surface:             255 255 255;
   --color-surface-foreground:  17 24 39;
@@ -62,64 +62,85 @@
 }
 
 /* ------------------------------------------------------------------
- * Liquid Glass 设计令牌（Apple HIG / Liquid Glass 视觉语言）
+ * Liquid Glass 设计令牌（v2：更轻的玻璃层级）
  *
- * 关键分层：
- *   tint     玻璃本身的色素（浅色=白，深色=深蓝黑），配 alpha 形成半透明
+ * 关键分层（从低到高，共 3 级）：
+ *   surface     内容面板 —— 最轻，几乎只是一层薄雾
+ *   glass-bar   导航条/侧栏 —— 中等，需要压住后面的滚动内容
+ *   surface-modal 弹窗 —— 最实，保证在任意内容上都能阅读
+ *
+ *   tint     玻璃色素（浅色=白，深色=深蓝黑），alpha 决定"透"的程度
  *   stroke   外描边高光（1px 亮线，模拟玻璃边缘折射）
  *   inner    顶部内高光（inset 0 1px，模拟受光面）
- *   shadow   三级投影：贴地 1px、近场柔影、远场大范围扩散
- *   blur/sat Card 用 md，浮层/导航用 lg，饱和提高让背后的色彩"透"出来
- *   mesh     页面底色的环境光斑（玻璃需要有东西可折射才成立）
+ *   shadow   两级投影：贴地 1px + 近场柔影（不再叠第三层远场扩散）
+ *   blur/sat 12-14px 中等模糊，饱和度 135%——够"透"，不抢内容
+ *   mesh     页面底色的环境光斑，比 v1 更淡，避免彩色雾感
  * ------------------------------------------------------------------ */
 :root {
   --glass-tint:              255 255 255;
-  --glass-alpha-top:         0.74;
-  --glass-alpha-bottom:      0.54;
+  --glass-alpha-top:         0.62;
+  --glass-alpha-bottom:      0.46;
   --glass-stroke:            255 255 255;
-  --glass-stroke-alpha:      0.72;
+  --glass-stroke-alpha:      0.55;
   --glass-inner:             255 255 255;
-  --glass-inner-alpha:       0.92;
+  --glass-inner-alpha:       0.70;
   /* 玻璃边缘的"切割线"：浅色主题下白描边落在白底上看不见，
      用极淡的深色发丝线勾出面板边界（深色主题改用白色）。 */
   --glass-hairline:          15 23 42;
   --glass-hairline-alpha:    0.09;
-  --glass-blur-md:           18px;
-  --glass-blur-lg:           30px;
-  --glass-saturate:          180%;
+  --glass-blur-md:           14px;
+  --glass-blur-lg:           24px;
+  --glass-saturate:          140%;
   --glass-sheet-tint:        255 255 255;
-  --glass-sheet-alpha:       0.94;
+  --glass-sheet-alpha:       0.93;
   --glass-shadow-1:          0 1px 2px rgb(15 23 42 / 0.05);
-  --glass-shadow-2:          0 12px 32px -16px rgb(15 23 42 / 0.18);
-  --glass-shadow-3:          0 40px 90px -48px rgb(15 23 42 / 0.3);
-  --glass-radius-lg:         26px;
-  --glass-radius-md:         18px;
+  --glass-shadow-2:          0 10px 26px -20px rgb(15 23 42 / 0.16);
+  --glass-shadow-3:          0 28px 64px -44px rgb(15 23 42 / 0.20);
+  --glass-radius-lg:         24px;
+  --glass-radius-md:         16px;
   --glass-radius-sm:         12px;
-  /* 页面环境光斑 */
-  --mesh-1:                  49 130 246 / 0.26;
-  --mesh-2:                  168 85 247 / 0.21;
-  --mesh-3:                  34 211 238 / 0.15;
+  /* 页面环境光斑（v1 偏艳，v2 收到很淡，只留一点点色温） */
+  --mesh-1:                  49 130 246 / 0.17;
+  --mesh-2:                  168 85 247 / 0.12;
+  --mesh-3:                  34 211 238 / 0.08;
 }
 
 .dark {
   --glass-tint:              22 30 48;
-  --glass-alpha-top:         0.66;
-  --glass-alpha-bottom:      0.46;
+  --glass-alpha-top:         0.56;
+  --glass-alpha-bottom:      0.42;
   --glass-stroke:            255 255 255;
-  --glass-stroke-alpha:      0.12;
+  --glass-stroke-alpha:      0.10;
   --glass-inner:             255 255 255;
-  --glass-inner-alpha:       0.09;
+  --glass-inner-alpha:       0.08;
   --glass-hairline:          255 255 255;
-  --glass-hairline-alpha:    0.12;
+  --glass-hairline-alpha:    0.10;
   --glass-sheet-tint:        18 24 40;
-  --glass-sheet-alpha:       0.95;
-  --glass-shadow-1:          0 1px 1px rgb(0 0 0 / 0.3);
-  --glass-shadow-2:          0 14px 34px -18px rgb(0 0 0 / 0.65);
-  --glass-shadow-3:          0 44px 96px -48px rgb(0 0 0 / 0.8);
-  --mesh-1:                  59 130 246 / 0.24;
-  --mesh-2:                  168 85 247 / 0.2;
-  --mesh-3:                  34 211 238 / 0.12;
+  --glass-sheet-alpha:       0.94;
+  --glass-shadow-1:          0 1px 1px rgb(0 0 0 / 0.28);
+  --glass-shadow-2:          0 12px 30px -22px rgb(0 0 0 / 0.55);
+  --glass-shadow-3:          0 30px 70px -46px rgb(0 0 0 / 0.65);
+  --mesh-1:                  59 130 246 / 0.13;
+  --mesh-2:                  168 85 247 / 0.12;
+  --mesh-3:                  34 211 238 / 0.06;
 }
+
+/* ------------------------------------------------------------------
+ * 字号阶梯（与 tailwind.config.js 的 fontSize 一一对应）
+ *
+ *   display  34px / 700   页面级大标题（目前仅个别页使用）
+ *   h1       29px / 700   页面标题（PageHeader）
+ *   h2       23px / 650   区块标题
+ *   h3       19px / 600   卡片/小节标题
+ *   body     15px / 400   正文
+ *   body-sm  13.5px / 400 紧凑正文（列表副标题、表单说明）
+ *   caption  11.5px / 500 注释、时间、次要信息
+ *   micro    10px / 600   角标、极小的状态字样
+ *
+ * 约定：不要再写 text-[13px] 这类魔法值，统一用上面的语义类
+ * （.type-display / .type-h1 / .type-h2 / .type-h3 / .type-body /
+ *  .type-caption / .type-label / .type-micro）。
+ * ------------------------------------------------------------------ */
 
 /* White-label brand overrides.
  *

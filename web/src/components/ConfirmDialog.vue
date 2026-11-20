@@ -22,7 +22,7 @@
             </span>
             <div class="min-w-0 flex-1">
               <h3 class="text-base font-bold text-foreground">{{ title }}</h3>
-              <p v-if="message" class="mt-1 text-[13px] leading-5 text-muted-foreground">{{ message }}</p>
+              <p v-if="message" class="mt-1 text-sm leading-5 text-muted-foreground">{{ message }}</p>
               <slot />
             </div>
           </div>

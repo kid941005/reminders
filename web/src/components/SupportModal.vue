@@ -15,8 +15,8 @@
           </button>
 
           <div class="px-4 pb-5 pt-5 sm:px-6 sm:pb-6 sm:pt-7">
-            <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gradient shadow-glow">
-              <span class="text-2xl">☕</span>
+            <div class="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-gradient text-white shadow-glow">
+              <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h12v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5V9Z"/><path d="M16 10h1.5a2.5 2.5 0 0 1 0 5H16"/><path d="M7 3v2M10.5 3v2M14 3v2"/></svg>
             </div>
             <h3 id="support-modal-title" class="mb-2 text-lg font-bold text-foreground">请作者喝杯咖啡</h3>
 

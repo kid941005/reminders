@@ -80,7 +80,7 @@ textarea {
 @layer components {
   /* 通用表单与空状态样式。这些类名在多个页面复用，必须放在全局层：
      Vue 的 scoped 样式带组件专属属性选择器，写在某个视图里对其它页面不生效。 */
-  .field-label { @apply block text-[11px] font-bold text-muted-foreground; }
+  .field-label { @apply block text-xs font-semibold text-muted-foreground; }
   .compact-input {
     @apply mt-1.5 h-9 w-full rounded-xl border px-3 text-xs font-medium text-foreground outline-none transition;
     border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) + 0.01));
@@ -100,10 +100,52 @@ textarea {
       rgb(var(--glass-tint) / 0.36) 0%,
       rgb(var(--glass-tint) / 0.18) 100%
     );
-    backdrop-filter: blur(var(--glass-blur-md)) saturate(150%);
-    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(150%);
+    backdrop-filter: blur(var(--glass-blur-md)) saturate(130%);
+    -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(130%);
   }
   .icon-button { @apply flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground sm:h-10 sm:w-10; }
+
+  /* ------------------------------------------------------------------
+   * 统一图标块（v2）
+   *
+   * 旧版每个页面给图标块上不同的品牌色（蓝/紫/青/玫红/琥珀…），
+   * 视觉上像一排彩色糖果，抢了内容的注意力。v2 收敛成一种中性玻璃块：
+   * 图标本身用中性前景色，只有「当前/主操作」才允许 .is-brand 加一点品牌蓝。
+   *   用法：<span class="icon-chip"><svg .../></span>
+   * ------------------------------------------------------------------ */
+  .icon-chip {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border text-muted-foreground sm:h-10 sm:w-10;
+    border-color: rgb(var(--glass-hairline) / calc(var(--glass-hairline-alpha) + 0.03));
+    background-image: linear-gradient(
+      160deg,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.28)) 0%,
+      rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.22)) 100%
+    );
+    box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
+  }
+  .icon-chip.is-brand {
+    color: rgb(var(--color-brand-600));
+    border-color: rgb(var(--color-brand-500) / 0.14);
+    background-image: none;
+    background-color: rgb(var(--color-brand-500) / 0.09);
+  }
+  .dark .icon-chip.is-brand { color: rgb(var(--color-brand-300)); }
+
+  /* ------------------------------------------------------------------
+   * 语义字号阶梯（与 tailwind.config fontSize 一一对应）
+   * 页面标题统一用 .type-h1，区块/卡片标题用 .type-h2 / .type-h3，
+   * 段落说明用 .type-body-sm，注释/时间用 .type-caption，角标用 .type-micro。禁止魔法 px 值。
+   * ------------------------------------------------------------------ */
+  .type-display { @apply font-display text-4xl font-bold tracking-tight; }
+  .type-h1      { @apply font-display text-3xl font-bold tracking-tight; }
+  .type-h2      { @apply font-display text-2xl font-bold tracking-tight; }
+  .type-h3      { @apply text-lg font-semibold; }
+  .type-body    { @apply text-base; }
+  .type-body-sm { @apply text-sm; }
+  .type-caption { @apply text-xs text-muted-foreground; }
+  .type-label   { @apply text-xs font-semibold uppercase tracking-[.14em] text-muted-foreground; }
+  .type-micro   { @apply text-2xs font-semibold; }
+  .type-num     { @apply font-display tabular-nums tracking-tight; }
   /* ------------------------------------------------------------------
    * Liquid Glass 基元
    * .surface / .surface-modal 是所有页面的通用面板；其余 .glass-* 用于
@@ -121,9 +163,8 @@ textarea {
     box-shadow:
       var(--glass-shadow-1),
       var(--glass-shadow-2),
-      var(--glass-shadow-3),
       inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
-      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.16);
+      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.12);
     backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
     -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
   }
@@ -145,7 +186,7 @@ textarea {
     -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate));
   }
   .glass-row:hover {
-    border-color: rgb(var(--color-brand-500) / 0.28);
+    border-color: rgb(var(--color-brand-500) / 0.20);
     box-shadow:
       var(--glass-shadow-1),
       var(--glass-shadow-2),

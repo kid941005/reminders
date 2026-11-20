@@ -1,21 +1,21 @@
 <template>
   <div class="page-container animate-fade-in">
     <!-- Profile hero：手机端收成一行式紧凑头部，桌面端保持大卡 -->
-    <div class="relative overflow-hidden rounded-2xl bg-brand-gradient p-4 sm:p-8 shadow-glow">
-      <div class="absolute -top-16 -right-10 w-64 h-64 rounded-full bg-white/10 blur-2xl"></div>
-      <div class="absolute -bottom-20 -left-10 w-56 h-56 rounded-full bg-black/10 blur-2xl"></div>
+    <div class="relative overflow-hidden rounded-2xl surface p-4 sm:p-8">
+      <div class="absolute -top-16 -right-10 w-64 h-64 rounded-full bg-brand-500/15 blur-2xl"></div>
+      <div class="absolute -bottom-20 -left-10 w-56 h-56 rounded-full bg-brand-400/10 blur-2xl"></div>
       <div class="relative flex items-center gap-3 sm:gap-5">
-        <div class="w-12 h-12 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-white/15 backdrop-blur ring-1 ring-white/25 flex items-center justify-center text-white font-display font-extrabold text-xl sm:text-3xl shrink-0">
+        <div class="w-12 h-12 sm:w-20 sm:h-20 rounded-xl sm:rounded-2xl bg-brand-500/12 ring-1 ring-brand-500/20 flex items-center justify-center text-brand-600 dark:text-brand-300 font-display font-bold text-xl sm:text-3xl shrink-0">
           {{ userInitial }}
         </div>
         <div class="min-w-0">
-          <h1 class="text-lg sm:text-2xl font-display font-extrabold text-white truncate">{{ authStore.user?.username }}</h1>
+          <h1 class="type-h2 text-foreground truncate">{{ authStore.user?.username }}</h1>
           <div class="flex items-center gap-2 mt-1 sm:mt-2">
-            <span class="badge bg-white/20 text-white backdrop-blur">
+            <span class="badge bg-brand-500/12 text-brand-700 dark:text-brand-200">
               <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M10 1l2.39 4.84L18 6.66l-4 3.9.94 5.5L10 13.5l-4.94 2.56.94-5.5-4-3.9 5.61-.82L10 1z"/></svg>
               {{ authStore.isAdmin ? '管理员' : '普通用户' }}
             </span>
-            <span class="text-white/70 text-xs sm:text-sm truncate">@{{ authStore.user?.username }}</span>
+            <span class="text-muted-foreground type-caption truncate">@{{ authStore.user?.username }}</span>
           </div>
         </div>
       </div>
@@ -25,22 +25,22 @@
       <!-- Change password -->
       <section class="surface rounded-2xl p-4 sm:p-7">
         <div class="flex items-center gap-2.5 sm:gap-3 mb-3 sm:mb-5">
-          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-brand-50 dark:bg-brand-500/15 text-brand-600 dark:text-brand-300 flex items-center justify-center shrink-0">
+          <span class="icon-chip">
             <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2" stroke-width="2"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 11V8a4 4 0 118 0v3"/></svg>
-          </div>
-          <h2 class="text-base sm:text-lg font-bold text-foreground">修改密码</h2>
+          </span>
+          <h2 class="type-h3 text-foreground">修改密码</h2>
         </div>
         <form @submit.prevent="handleChangePassword" class="space-y-3 sm:space-y-4">
           <div>
-            <label class="block text-[13px] sm:text-sm font-medium text-foreground mb-1">当前密码</label>
+            <label class="block text-sm sm:text-sm font-medium text-foreground mb-1">当前密码</label>
             <input v-model="oldPassword" type="password" required class="input-field" />
           </div>
           <div>
-            <label class="block text-[13px] sm:text-sm font-medium text-foreground mb-1">新密码</label>
+            <label class="block text-sm sm:text-sm font-medium text-foreground mb-1">新密码</label>
             <input v-model="newPassword" type="password" required class="input-field" />
           </div>
           <div>
-            <label class="block text-[13px] sm:text-sm font-medium text-foreground mb-1">确认新密码</label>
+            <label class="block text-sm sm:text-sm font-medium text-foreground mb-1">确认新密码</label>
             <input v-model="confirmPassword" type="password" required class="input-field" />
           </div>
           <p v-if="pwdMsg" :class="pwdSuccess ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'" class="text-sm">{{ pwdMsg }}</p>
@@ -51,15 +51,15 @@
       <!-- API Key -->
       <section class="surface rounded-2xl p-4 sm:p-7">
         <div class="flex items-center gap-2.5 sm:gap-3 mb-3 sm:mb-5">
-          <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-300 flex items-center justify-center shrink-0">
+          <span class="icon-chip">
             <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/></svg>
-          </div>
-          <h2 class="text-base sm:text-lg font-bold text-foreground">API Key</h2>
+          </span>
+          <h2 class="type-h3 text-foreground">API Key</h2>
         </div>
         <div class="space-y-3 sm:space-y-4">
-          <p class="text-[13px] sm:text-sm text-muted-foreground">用于以编程方式访问接口，请妥善保管，泄露后请立即重新生成。</p>
+          <p class="type-body-sm text-muted-foreground">用于以编程方式访问接口，请妥善保管，泄露后请立即重新生成。</p>
           <div v-if="apiKey" class="flex items-center gap-2">
-            <code class="flex-1 px-3 py-2 rounded-xl bg-muted border border-border text-[13px] sm:text-sm text-foreground font-mono break-all">{{ apiKey }}</code>
+            <code class="flex-1 px-3 py-2 rounded-xl bg-muted border border-border text-sm sm:text-sm text-foreground font-mono break-all">{{ apiKey }}</code>
             <button @click="copyApiKey" class="btn-ghost !px-3 !py-2 shrink-0">复制</button>
           </div>
           <p v-if="apiKeyMsg" :class="apiKeySuccess ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'" class="text-sm">{{ apiKeyMsg }}</p>
@@ -71,27 +71,27 @@
     <!-- Security questions -->
     <section class="surface rounded-2xl p-4 sm:p-7">
       <div class="flex items-center gap-2.5 sm:gap-3 mb-3 sm:mb-5">
-        <div class="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-emerald-50 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 flex items-center justify-center shrink-0">
+        <span class="icon-chip">
           <svg class="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
-        </div>
-        <h2 class="text-base sm:text-lg font-bold text-foreground">安全问题</h2>
+        </span>
+        <h2 class="type-h3 text-foreground">安全问题</h2>
       </div>
 
-      <div v-if="hasQuestions" class="flex items-center gap-2 text-[13px] sm:text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl px-3 py-2 sm:px-4 sm:py-3 mb-3 sm:mb-4">
+      <div v-if="hasQuestions" class="flex items-center gap-2 text-sm sm:text-sm text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20 rounded-xl px-3 py-2 sm:px-4 sm:py-3 mb-3 sm:mb-4">
         <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         安全问题已设置，可用于找回密码
       </div>
 
-      <p v-if="secLoadError" class="mb-3 rounded-xl bg-rose-500/10 px-3 py-2 text-[13px] text-rose-600 dark:text-rose-400 sm:mb-4">{{ secLoadError }}</p>
-      <p v-if="!secLoadError" class="text-[13px] sm:text-sm text-muted-foreground mb-3 sm:mb-4">{{ hasQuestions ? '修改安全问题，忘记密码时用于身份验证。' : '设置三组安全问题，忘记密码时用于身份验证。' }}</p>
+      <p v-if="secLoadError" class="mb-3 rounded-xl bg-rose-500/10 px-3 py-2 text-sm text-rose-600 dark:text-rose-400 sm:mb-4">{{ secLoadError }}</p>
+      <p v-if="!secLoadError" class="type-body-sm text-muted-foreground mb-3 sm:mb-4">{{ hasQuestions ? '修改安全问题，忘记密码时用于身份验证。' : '设置三组安全问题，忘记密码时用于身份验证。' }}</p>
       <div v-if="!secLoadError" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
         <div v-for="n in 3" :key="n" class="space-y-2.5 sm:space-y-3">
           <div>
-            <label class="block text-[13px] sm:text-sm font-medium text-foreground mb-1">问题 {{ n }}</label>
+            <label class="block text-sm sm:text-sm font-medium text-foreground mb-1">问题 {{ n }}</label>
             <input v-model="qa[n - 1].q" type="text" class="input-field" :placeholder="`安全问题 ${n}`" />
           </div>
           <div>
-            <label class="block text-[13px] sm:text-sm font-medium text-foreground mb-1">答案 {{ n }}</label>
+            <label class="block text-sm sm:text-sm font-medium text-foreground mb-1">答案 {{ n }}</label>
             <input v-model="qa[n - 1].a" type="text" class="input-field" :placeholder="`答案 ${n}`" />
           </div>
         </div>
@@ -104,8 +104,8 @@
     <section class="surface rounded-2xl p-4 sm:p-7">
       <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h2 class="text-base sm:text-lg font-bold text-foreground">退出登录</h2>
-          <p class="mt-0.5 sm:mt-1 text-[13px] sm:text-sm text-muted-foreground">
+          <h2 class="type-h3 text-foreground">退出登录</h2>
+          <p class="mt-0.5 sm:mt-1 type-caption">
             退出后需要重新输入账号密码才能访问你的提醒。
           </p>
         </div>

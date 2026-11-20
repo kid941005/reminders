@@ -15,7 +15,7 @@
         <!-- Brand -->
         <div class="flex flex-col items-center text-center mb-7 animate-fade-in">
           <div class="logo-badge">
-            <span class="font-display font-extrabold text-xl text-white">{{ siteInitial }}</span>
+            <span class="font-display font-bold text-xl text-white">{{ siteInitial }}</span>
           </div>
           <h1 class="mt-4 font-display text-lg font-bold tracking-tight text-white/90">{{ authStore.siteTitle }}</h1>
         </div>
@@ -25,7 +25,7 @@
           <div class="card-glow"></div>
           <div class="auth-card">
             <div class="relative z-10">
-              <h2 class="font-display text-[1.75rem] leading-tight font-extrabold tracking-tight text-white">{{ title }}</h2>
+              <h2 class="font-display text-[1.75rem] leading-tight font-bold tracking-tight text-white">{{ title }}</h2>
               <p v-if="subtitle" class="mt-2 text-sm text-white/50">{{ subtitle }}</p>
               <div class="mt-7">
                 <slot />

@@ -31,7 +31,7 @@
             </button>
           </div>
         </div>
-        <div class="grid grid-cols-7 border-b border-border/70 pb-1 text-center text-[10px] font-bold text-muted-foreground">
+        <div class="grid grid-cols-7 border-b border-border/70 pb-1 text-center text-2xs font-bold text-muted-foreground">
           <span v-for="w in weekdays" :key="w">{{ w }}</span>
         </div>
         <div v-if="loading" class="grid h-[240px] place-items-center text-xs text-muted-foreground">加载农历…</div>
@@ -70,7 +70,7 @@
               <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor"><path d="m9 6 6 6-6 6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
             </button>
           </div>
-          <span class="text-[10px] text-muted-foreground">{{ lunarViewYearName }}</span>
+          <span class="text-2xs text-muted-foreground">{{ lunarViewYearName }}</span>
         </div>
         <!-- 农历格子按 7 列顺序排布、与星期无关，且每个日期已带公历标注，
              不放表头以免误导 -->
@@ -88,10 +88,10 @@
             <span class="day-sub">{{ lunarCellSub(d) }}</span>
           </button>
         </div>
-        <p v-if="lunarView.month < 0" class="px-1 pt-2 text-[10px] leading-4 text-muted-foreground">
+        <p v-if="lunarView.month < 0" class="px-1 pt-2 text-2xs leading-4 text-muted-foreground">
           闰月生日在无闰月的年份自动用对应平月。
         </p>
-        <p v-if="lunarView.day === 30 && lunarViewDays.length === 29" class="px-1 pt-2 text-[10px] leading-4 text-amber-600 dark:text-amber-400">
+        <p v-if="lunarView.day === 30 && lunarViewDays.length === 29" class="px-1 pt-2 text-2xs leading-4 text-amber-600 dark:text-amber-400">
           本月只有廿九，选三十将落在除夕当天。
         </p>
       </template>
@@ -685,15 +685,15 @@ void Promise.resolve().then(place)
 .tab-btn.active { @apply bg-surface text-foreground shadow-sm; }
 .nav-btn { @apply flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-muted hover:text-foreground; }
 .today-btn { @apply rounded-lg border border-border px-3 py-2 text-xs font-bold text-muted-foreground transition hover:border-brand-500/40 hover:text-brand-600; }
-.lunar-select { @apply h-9 rounded-lg border border-border bg-surface px-2 text-[16px] sm:text-xs font-bold text-foreground outline-none focus:border-brand-500/50; }
+.lunar-select { @apply h-9 rounded-lg border border-border bg-surface px-2 text-base sm:text-xs font-bold text-foreground outline-none focus:border-brand-500/50; }
 .day-cell { @apply flex h-[46px] flex-col items-center justify-center rounded-xl px-0.5 py-1 transition hover:bg-muted; }
 .day-cell.dim { @apply opacity-35; }
 .day-cell.today .day-num { @apply text-brand-600 dark:text-brand-300; }
 .day-cell.selected { @apply bg-brand-500/10 ring-2 ring-brand-500/40; }
-.day-num { @apply text-[13px] font-bold leading-none text-foreground; }
+.day-num { @apply text-sm font-bold leading-none text-foreground; }
 .festival-num { @apply text-rose-500; }
-.day-sub { @apply mt-1 max-w-full truncate text-[9px] leading-none text-muted-foreground; }
+.day-sub { @apply mt-1 max-w-full truncate text-2xs leading-none text-muted-foreground; }
 .festival-sub { @apply font-bold text-rose-500; }
 .term-sub { @apply font-bold text-emerald-600 dark:text-emerald-400; }
-.time-select { @apply h-10 min-w-[96px] rounded-xl border border-border bg-surface px-2 text-[16px] font-medium text-foreground outline-none focus:border-brand-500/50; }
+.time-select { @apply h-10 min-w-[96px] rounded-xl border border-border bg-surface px-2 text-base font-medium text-foreground outline-none focus:border-brand-500/50; }
 </style>

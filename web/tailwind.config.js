@@ -45,6 +45,20 @@ export default {
         sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
         display: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'sans-serif'],
       },
+      // 统一字号阶梯（v2）——全站只允许这 9 级，禁止再写 text-[13px] 这类魔法值。
+      // 语义对应：2xs=micro 角标 / xs=caption 注释 / sm=body-sm 紧凑正文 /
+      // base=body 正文 / lg=h3 卡片标题 / xl 少用 / 2xl=h2 / 3xl=h1 页面标题 / 4xl=display。
+      fontSize: {
+        '2xs': ['10px', { lineHeight: '1.45' }],
+        xs: ['11.5px', { lineHeight: '1.5' }],
+        sm: ['13.5px', { lineHeight: '1.6' }],
+        base: ['15px', { lineHeight: '1.65' }],
+        lg: ['17px', { lineHeight: '1.45' }],
+        xl: ['19px', { lineHeight: '1.4' }],
+        '2xl': ['23px', { lineHeight: '1.3', letterSpacing: '-0.015em' }],
+        '3xl': ['29px', { lineHeight: '1.2', letterSpacing: '-0.02em' }],
+        '4xl': ['34px', { lineHeight: '1.15', letterSpacing: '-0.03em' }],
+      },
       boxShadow: {
         soft: '0 2px 8px -2px rgba(16, 24, 40, 0.06), 0 4px 16px -4px rgba(16, 24, 40, 0.08)',
         card: '0 1px 3px rgba(16, 24, 40, 0.04), 0 12px 32px -8px rgba(16, 24, 40, 0.08)',

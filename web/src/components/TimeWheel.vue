@@ -254,13 +254,13 @@ onBeforeUnmount(() => {
   height: 80px;
 }
 .wheel-item {
-  @apply flex h-10 w-full shrink-0 items-center justify-center whitespace-nowrap text-[15px] font-semibold text-muted-foreground/55 transition-colors;
+  @apply flex h-10 w-full shrink-0 items-center justify-center whitespace-nowrap text-base font-semibold text-muted-foreground/55 transition-colors;
   scroll-snap-align: center;
 }
 .wheel-item.active {
   @apply text-foreground;
 }
 .wheel-period .wheel-item {
-  @apply text-[13px];
+  @apply text-sm;
 }
 </style>

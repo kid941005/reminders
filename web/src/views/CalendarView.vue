@@ -3,8 +3,8 @@
     <!-- 头部：范围标题 + 翻页 -->
     <section class="mb-4 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p class="text-[11px] font-bold uppercase tracking-[.16em] text-brand-600 dark:text-brand-300">{{ isWeek ? '周视图' : '月视图' }}</p>
-        <h1 class="mt-1 text-2xl font-extrabold text-foreground sm:text-3xl">{{ rangeLabel }}</h1>
+        <p class="text-xs font-bold uppercase tracking-[.16em] text-brand-600 dark:text-brand-300">{{ isWeek ? '周视图' : '月视图' }}</p>
+        <h1 class="mt-1 type-h1 text-foreground">{{ rangeLabel }}</h1>
         <p class="mt-1 text-xs text-muted-foreground">
           共 {{ totalItems }} 项提醒<span v-if="completedCount">，已完成 {{ completedCount }} 项</span>
           <span v-if="uncoveredYears.length" class="font-semibold text-amber-600 dark:text-amber-400">
@@ -391,40 +391,40 @@ onBeforeUnmount(() => {
 .week-col { @apply cursor-pointer rounded-[20px] p-2 hover:border-brand-500/25; }
 .week-col-today { @apply border-brand-500/40 bg-brand-500/[.06]; }
 .week-head { @apply flex w-full items-center gap-2 rounded-lg px-1 py-1 text-left transition hover:bg-muted/60; }
-.week-name { @apply text-[11px] font-bold leading-5 text-muted-foreground; }
-.week-num { @apply text-lg font-extrabold leading-7 text-foreground; }
-.week-count { @apply ml-auto rounded-full bg-brand-500/10 px-1.5 text-[11px] font-bold leading-5 text-brand-600 dark:text-brand-300; }
+.week-name { @apply text-xs font-bold leading-5 text-muted-foreground; }
+.week-num { @apply text-lg font-bold leading-7 text-foreground; }
+.week-count { @apply ml-auto rounded-full bg-brand-500/10 px-1.5 text-xs font-bold leading-5 text-brand-600 dark:text-brand-300; }
 .week-body { @apply mt-1 flex flex-col gap-1; }
-.week-empty { @apply py-2 text-center text-[10px] text-muted-foreground/60; }
-.week-fest { @apply mt-0.5 truncate px-1 text-[10px] font-bold leading-5 text-rose-500; }
+.week-empty { @apply py-2 text-center text-2xs text-muted-foreground/60; }
+.week-fest { @apply mt-0.5 truncate px-1 text-2xs font-bold leading-5 text-rose-500; }
 .week-fest-term { @apply text-emerald-600 dark:text-emerald-400; }
 
 .cal-chip { @apply flex w-full items-start gap-1 rounded-lg bg-foreground/[.055] px-1.5 py-1.5 text-left transition hover:bg-brand-500/10 dark:bg-white/[.07]; }
-.cal-chip-time { @apply shrink-0 text-[10px] font-bold leading-5 tabular-nums text-muted-foreground; }
-.cal-chip-title { @apply min-w-0 flex-1 truncate text-[12px] font-semibold leading-5 text-foreground; }
+.cal-chip-time { @apply shrink-0 text-2xs font-bold leading-5 tabular-nums text-muted-foreground; }
+.cal-chip-title { @apply min-w-0 flex-1 truncate text-xs font-semibold leading-5 text-foreground; }
 .cal-chip-done .cal-chip-title { @apply text-muted-foreground line-through; }
 
 .month-wrap { @apply rounded-[24px] p-2 sm:p-3; }
-.month-weekdays { @apply mb-1.5 grid grid-cols-7 gap-1 text-center text-[11px] font-bold leading-6 text-muted-foreground; }
+.month-weekdays { @apply mb-1.5 grid grid-cols-7 gap-1 text-center text-xs font-bold leading-6 text-muted-foreground; }
 .month-grid { @apply grid grid-cols-7 gap-1; }
 .month-cell { @apply relative flex min-h-[76px] flex-col items-start rounded-xl border border-transparent p-2 text-left transition hover:border-brand-500/25 hover:bg-brand-500/[.05] sm:min-h-28; }
-.holiday-badge { @apply absolute right-1 top-1 rounded px-1 text-[10px] font-bold leading-[18px]; }
-.holiday-badge-inline { @apply shrink-0 rounded px-1 text-[10px] font-bold leading-[18px]; }
+.holiday-badge { @apply absolute right-1 top-1 rounded px-1 text-2xs font-bold leading-[18px]; }
+.holiday-badge-inline { @apply shrink-0 rounded px-1 text-2xs font-bold leading-[18px]; }
 .holiday-off { @apply bg-rose-500 text-white; }
 .holiday-work { @apply bg-slate-400 text-white; }
 .month-cell-today { @apply border-brand-500/40 bg-brand-500/[.06]; }
 .month-cell-outside { @apply opacity-45; }
-.month-num { @apply text-[13px] font-bold leading-6 text-foreground sm:text-[15px] sm:leading-7; }
+.month-num { @apply text-sm font-bold leading-6 text-foreground sm:text-base sm:leading-7; }
 .month-num-today { @apply flex h-6 min-w-6 items-center justify-center rounded-full bg-brand-500 px-1.5 text-white; }
 .month-num-festival { @apply text-rose-500; }
 .month-num-term { @apply text-emerald-600 dark:text-emerald-400; }
-.month-fest { @apply mt-0.5 w-full truncate text-[10px] font-bold leading-[1.6] text-rose-500 sm:text-[11px]; }
+.month-fest { @apply mt-0.5 w-full truncate text-2xs font-bold leading-[1.6] text-rose-500 sm:text-xs; }
 .month-fest-term { @apply text-emerald-600 dark:text-emerald-400; }
-.month-item { @apply flex items-center gap-1 text-[11px] font-medium leading-5 text-foreground; }
+.month-item { @apply flex items-center gap-1 text-xs font-medium leading-5 text-foreground; }
 .month-item-done { @apply text-muted-foreground line-through; }
 .month-dot { @apply h-1 w-1 shrink-0 rounded-full bg-brand-500; }
 .month-item-done .month-dot { @apply bg-muted-foreground; }
-.month-more { @apply pl-2 text-[10px] font-bold leading-5 text-muted-foreground; }
+.month-more { @apply pl-2 text-2xs font-bold leading-5 text-muted-foreground; }
 .month-pip { @apply h-1 w-1 rounded-full bg-brand-500; }
 .month-pip-done { @apply bg-muted-foreground; }
 </style>

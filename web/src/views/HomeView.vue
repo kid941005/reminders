@@ -2,20 +2,20 @@
   <div class="mx-auto max-w-6xl">
     <section class="mb-3 flex flex-col gap-2.5 sm:mb-6 sm:flex-row sm:items-end sm:justify-between sm:gap-4">
       <div class="min-w-0">
-        <div class="mb-2 hidden items-center gap-2 text-xs font-bold uppercase tracking-[.18em] text-muted-foreground sm:flex">
+        <div class="mb-2 hidden items-center gap-2 type-label sm:flex">
           <span class="h-2 w-2 rounded-full" :style="{ background: accentColor }"></span>
           {{ eyebrow }}
         </div>
         <div class="flex flex-wrap items-baseline gap-x-2">
-          <h1 class="font-display text-2xl font-extrabold tracking-tight sm:text-3xl lg:text-4xl">{{ pageTitle }}</h1>
-          <p class="truncate text-xs text-muted-foreground sm:hidden">{{ subtitle }}</p>
+          <h1 class="type-h1">{{ pageTitle }}</h1>
+          <p class="truncate type-caption sm:hidden">{{ subtitle }}</p>
         </div>
-        <p class="mt-2 hidden text-sm text-muted-foreground sm:block">{{ subtitle }}</p>
+        <p class="mt-2 hidden type-body-sm text-muted-foreground sm:block">{{ subtitle }}</p>
       </div>
       <label class="search-box">
         <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7" stroke-width="1.8"/><path d="m16.5 16.5 4 4" stroke-width="1.8" stroke-linecap="round"/></svg>
         <input v-model="search" placeholder="搜索提醒…" @input="debouncedLoad" />
-        <kbd class="hidden rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] sm:inline">⌘ K</kbd>
+        <kbd class="hidden rounded-md border border-border bg-muted px-1.5 py-0.5 text-2xs sm:inline">⌘ K</kbd>
       </label>
     </section>
 
@@ -28,7 +28,7 @@
           <input
             ref="quickInput"
             v-model="quick.title"
-            class="w-full bg-transparent text-[17px] font-semibold outline-none placeholder:font-medium placeholder:text-muted-foreground/65"
+            class="w-full bg-transparent text-lg font-semibold outline-none placeholder:font-medium placeholder:text-muted-foreground/65"
             placeholder="添加一条提醒…"
             maxlength="200"
             @keydown.enter.prevent="submitQuick"
@@ -107,7 +107,7 @@
             <label class="field-label">提前提醒<RemindBeforeSelect :model-value="quick.remind_before_minutes ?? 15" @update:model-value="quick.remind_before_minutes = $event" /></label>
             <label class="field-label">过期提醒频率<RepeatNotifySelect :model-value="quick.repeat_notify_minutes ?? 0" @update:model-value="quick.repeat_notify_minutes = $event" /></label>
             <label v-if="(quick.repeat_notify_minutes ?? 0) > 0" class="field-label">过期提醒次数<RepeatTimesSelect :model-value="quick.repeat_notify_times ?? 0" @update:model-value="quick.repeat_notify_times = $event" /></label>
-            <p v-if="quick.calendar === 'lunar'" class="text-[10px] leading-4 text-muted-foreground sm:col-span-2 lg:col-span-4">已按农历循环：提醒按所选日期的农历月/日重复，腊月三十遇小年自动改为除夕当天，闰月日期遇无闰月年份自动用对应平月。</p>
+            <p v-if="quick.calendar === 'lunar'" class="text-2xs leading-4 text-muted-foreground sm:col-span-2 lg:col-span-4">已按农历循环：提醒按所选日期的农历月/日重复，腊月三十遇小年自动改为除夕当天，闰月日期遇无闰月年份自动用对应平月。</p>
             <div class="sm:col-span-2 lg:col-span-4">
               <p class="field-label mb-2">通知方式</p>
               <div class="flex flex-wrap gap-2">
@@ -115,7 +115,7 @@
                   {{ channel.label }}
                 </button>
               </div>
-              <p v-if="!quick.channels?.length" class="mt-2 text-[10px] leading-4 text-muted-foreground">未选择通知方式：提醒仍会出现在列表和日历中，但不会主动推送。</p>
+              <p v-if="!quick.channels?.length" class="mt-2 text-2xs leading-4 text-muted-foreground">未选择通知方式：提醒仍会出现在列表和日历中，但不会主动推送。</p>
             </div>
             <!-- 底部提交按钮：手机端填完下方字段后无需滚回顶部再点添加 -->
             <div class="sm:col-span-2 lg:col-span-4">
@@ -129,7 +129,7 @@
     <div class="mb-2 mt-5 flex items-center justify-between">
       <div class="flex items-center gap-2">
         <h2 class="text-sm font-bold">{{ itemTotal }} 项</h2>
-        <span v-if="overdueCount" class="rounded-full bg-rose-500/10 px-2 py-0.5 text-[11px] font-bold text-rose-500">{{ overdueCount }} 项已过期</span>
+        <span v-if="overdueCount" class="rounded-full bg-rose-500/10 px-2 py-0.5 text-xs font-bold text-rose-500">{{ overdueCount }} 项已过期</span>
       </div>
       <button class="text-xs font-semibold text-muted-foreground hover:text-foreground" @click="loadData">刷新</button>
     </div>
@@ -150,13 +150,13 @@
         </button>
         <button class="min-w-0 flex-1 text-left" @click="editItem(item)">
           <div class="flex items-center gap-2">
-            <h3 class="truncate text-sm font-bold sm:text-[15px]">{{ item.title }}</h3>
+            <h3 class="truncate type-h3">{{ item.title }}</h3>
             <span v-if="item.priority" class="priority-mark" :class="`priority-${item.priority}`">{{ '!'.repeat(item.priority) }}</span>
             <span v-if="item.repeat_rule !== 'none'" class="tiny-badge">{{ item.calendar === 'lunar' ? `农历${ruleLabel(item.repeat_rule)}` : ruleLabel(item.repeat_rule) }}</span>
             <span v-if="item.repeat_notify_minutes" class="tiny-badge">过期提醒</span>
           </div>
           <p v-if="item.notes" class="mt-0.5 truncate text-xs text-muted-foreground sm:mt-1">{{ item.notes }}</p>
-          <div class="mt-1 flex flex-wrap items-center gap-2 text-[11px] font-medium text-muted-foreground sm:mt-2">
+          <div class="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground sm:mt-2">
             <span class="inline-flex items-center gap-1" :class="{ 'text-rose-500': isOverdue(item) }">
               <svg viewBox="0 0 24 24" class="h-3.5 w-3.5" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9" stroke-width="1.8"/><path d="M12 7v5l3 2" stroke-width="1.8" stroke-linecap="round"/></svg>
               {{ item.due_at ? formatDue(item.snoozed_until || item.due_at) : '无日期' }}
@@ -187,8 +187,8 @@
         <span class="empty-check"><svg viewBox="0 0 24 24" class="h-8 w-8" fill="none" stroke="currentColor"><path d="m6 12 4 4 8-9" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         <span class="empty-dot dot-one"></span><span class="empty-dot dot-two"></span><span class="empty-dot dot-three"></span>
       </div>
-      <h3 class="mt-5 text-lg font-extrabold">{{ emptyTitle }}</h3>
-      <p class="mt-1 max-w-sm text-sm leading-6 text-muted-foreground">{{ emptyText }}</p>
+      <h3 class="mt-5 type-h3">{{ emptyTitle }}</h3>
+      <p class="mt-1 max-w-sm type-caption leading-6">{{ emptyText }}</p>
       <button v-if="view !== 'completed' && !searching" class="btn-primary mt-5" @click="focusQuickAdd">添加第一条提醒</button>
     </section>
 
@@ -198,8 +198,8 @@
         <aside class="editor-panel">
           <div class="flex items-center justify-between border-b border-border px-4 py-3 sm:px-6 sm:py-5">
             <div>
-              <p class="text-[10px] font-extrabold uppercase tracking-[.18em] text-muted-foreground">提醒详情</p>
-              <h2 class="mt-0.5 text-base font-extrabold sm:mt-1 sm:text-lg">{{ editing.id ? '编辑提醒' : '新提醒' }}</h2>
+              <p class="text-2xs font-bold uppercase tracking-[.18em] text-muted-foreground">提醒详情</p>
+              <h2 class="mt-0.5 type-h3 sm:mt-1">{{ editing.id ? '编辑提醒' : '新提醒' }}</h2>
             </div>
             <button class="row-action !opacity-100" aria-label="关闭" @click="closeEditor"><svg viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="m6 6 12 12M18 6 6 18" stroke-width="2" stroke-linecap="round"/></svg></button>
           </div>
@@ -223,8 +223,8 @@
                 <label class="editor-field"><span>提前提醒</span><RemindBeforeSelect :model-value="editing.remind_before_minutes ?? 15" @update:model-value="editing.remind_before_minutes = $event" /></label>
                 <label class="editor-field"><span>过期提醒频率</span><RepeatNotifySelect :model-value="editing.repeat_notify_minutes ?? 0" @update:model-value="editing.repeat_notify_minutes = $event" /></label>
                 <label v-if="(editing.repeat_notify_minutes ?? 0) > 0" class="editor-field"><span>过期提醒次数</span><RepeatTimesSelect :model-value="editing.repeat_notify_times ?? 0" @update:model-value="editing.repeat_notify_times = $event" /></label>
-                <p class="col-span-2 mt-1 text-[10px] leading-4 text-muted-foreground">“提前提醒”在到期前若干分钟先通知一次（默认 15 分钟）；“过期提醒频率”在到点未完成时按所选间隔重复通知，配合“过期提醒次数”可限定最多重复几次（不限则直到完成）。</p>
-                <p v-if="editing.calendar === 'lunar'" class="col-span-2 -mt-3 text-[10px] leading-4 text-muted-foreground">“按农历循环”按所选日期对应的农历月/日重复，适合农历生日等纪念日期；腊月三十遇小年自动改为除夕当天，闰月日期遇无闰月年份自动用对应平月。</p>
+                <p class="col-span-2 mt-1 text-2xs leading-4 text-muted-foreground">“提前提醒”在到期前若干分钟先通知一次（默认 15 分钟）；“过期提醒频率”在到点未完成时按所选间隔重复通知，配合“过期提醒次数”可限定最多重复几次（不限则直到完成）。</p>
+                <p v-if="editing.calendar === 'lunar'" class="col-span-2 -mt-3 text-2xs leading-4 text-muted-foreground">“按农历循环”按所选日期对应的农历月/日重复，适合农历生日等纪念日期；腊月三十遇小年自动改为除夕当天，闰月日期遇无闰月年份自动用对应平月。</p>
               </div>
               <div>
                 <p class="mb-3 text-xs font-bold text-muted-foreground">通知方式</p>
@@ -234,7 +234,7 @@
                     <span class="text-left"><strong>{{ channel.label }}</strong><small>{{ channel.bound || channel.channel === 'inapp' ? '可用' : '未绑定' }}</small></span>
                   </button>
                 </div>
-                <p v-if="!editing.channels?.length" class="mt-3 text-[10px] leading-4 text-muted-foreground">未选择通知方式：提醒仍会出现在列表和日历中，但不会主动推送。</p>
+                <p v-if="!editing.channels?.length" class="mt-3 text-2xs leading-4 text-muted-foreground">未选择通知方式：提醒仍会出现在列表和日历中，但不会主动推送。</p>
                 <RouterLink to="/admin/channels" class="mt-3 inline-flex text-xs font-semibold text-brand-600 hover:underline dark:text-brand-300">管理通知方式 →</RouterLink>
                 <div v-if="isEditingChannelSelected('email') && emailBindings.length > 1" class="mt-4 rounded-2xl bg-muted/65 p-3">
                   <p class="mb-2 text-xs font-bold text-muted-foreground">这个提醒发送到</p>
@@ -244,7 +244,7 @@
                       {{ binding.target_masked }}
                     </button>
                   </div>
-                  <p class="mt-2 text-[10px] leading-4 text-muted-foreground">选择“全部接收邮箱”时不指定具体邮箱；所选邮箱被删除后会自动改发全部已启用的邮箱。</p>
+                  <p class="mt-2 text-2xs leading-4 text-muted-foreground">选择“全部接收邮箱”时不指定具体邮箱；所选邮箱被删除后会自动改发全部已启用的邮箱。</p>
                 </div>
               </div>
             </div>
@@ -954,7 +954,7 @@ function onShortcut(e: KeyboardEvent) {
 }
 .quick-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(#3b82f6, #6366f1); opacity: .75; }
 .quick-chip {
-  @apply inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] font-semibold text-muted-foreground transition hover:border-brand-500/30 hover:text-brand-600 disabled:opacity-40 sm:h-8 sm:rounded-xl sm:px-3 sm:text-xs;
+  @apply inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold text-muted-foreground transition hover:border-brand-500/30 hover:text-brand-600 disabled:opacity-40 sm:h-8 sm:rounded-xl sm:px-3 sm:text-xs;
   border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.1));
   background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.2)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.14)));
   box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
@@ -969,9 +969,9 @@ function onShortcut(e: KeyboardEvent) {
 }
 .quick-time-head { @apply mb-2 flex items-center justify-between gap-2; }
 .quick-time-title { @apply text-xs font-bold text-muted-foreground; }
-.quick-time-action { @apply text-[11px] font-semibold text-brand-600 transition hover:text-brand-500 dark:text-brand-300; }
+.quick-time-action { @apply text-xs font-semibold text-brand-600 transition hover:text-brand-500 dark:text-brand-300; }
 .quick-day-pill {
-  @apply rounded-full border px-2.5 py-1 text-[11px] font-semibold text-muted-foreground transition;
+  @apply rounded-full border px-2.5 py-1 text-xs font-semibold text-muted-foreground transition;
   border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.12));
   background-image: linear-gradient(160deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) - 0.22)), rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) - 0.16)));
 }
@@ -997,15 +997,15 @@ function onShortcut(e: KeyboardEvent) {
 .reminder-completed h3 { @apply line-through; }
 .complete-button { @apply flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 border-brand-500/35 text-white transition hover:scale-110 hover:border-brand-500 hover:bg-brand-500; }
 .reminder-completed .complete-button { @apply border-emerald-500 bg-emerald-500; }
-.priority-mark { @apply text-[11px] font-black tracking-[-.12em]; }
+.priority-mark { @apply text-xs font-bold tracking-[-.12em]; }
 .priority-1 { @apply text-blue-500; }.priority-2 { @apply text-amber-500; }.priority-3 { @apply text-rose-500; }
-.tiny-badge { @apply rounded-md bg-violet-500/10 px-1.5 py-0.5 text-[9px] font-extrabold text-violet-500; }
+.tiny-badge { @apply rounded-md bg-muted px-1.5 py-0.5 text-2xs font-bold text-muted-foreground; }
 .row-actions { @apply flex shrink-0 items-center gap-1 opacity-100 transition sm:opacity-0 sm:group-hover:opacity-100; }
 .row-action { @apply flex h-9 w-9 items-center justify-center rounded-xl text-muted-foreground transition hover:bg-muted hover:text-foreground; }
 .empty-art { @apply relative h-28 w-28; }
 .empty-ring { @apply absolute inset-2 rounded-full border border-brand-500/20 bg-brand-500/5; }
-.empty-check { @apply absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-500 text-white shadow-[0_16px_35px_-12px_rgba(59,130,246,.65)]; }
-.empty-dot { @apply absolute h-2.5 w-2.5 rounded-full; }.dot-one { @apply left-0 top-5 bg-amber-400; }.dot-two { @apply right-1 top-1 bg-violet-400; }.dot-three { @apply bottom-0 right-6 bg-emerald-400; }
+.empty-check { @apply absolute left-1/2 top-1/2 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-2xl bg-brand-500/10 text-brand-500; }
+.empty-dot { @apply absolute h-2.5 w-2.5 rounded-full bg-muted-foreground/25; }.dot-one { @apply left-0 top-5; }.dot-two { @apply right-1 top-1; }.dot-three { @apply bottom-0 right-6; }
 .editor-panel {
   @apply relative z-10 flex h-full w-full max-w-[510px] flex-col border-l;
   border-left-color: rgb(var(--glass-stroke) / 0.4);
@@ -1029,7 +1029,7 @@ function onShortcut(e: KeyboardEvent) {
   box-shadow: inset 0 1px 0 rgb(var(--glass-inner) / 0.5);
 }
 .channel-option.selected { @apply border-brand-500/30 bg-brand-500/10 text-brand-600 dark:text-brand-300; }
-.channel-option strong { @apply block text-xs; }.channel-option small { @apply mt-0.5 block text-[10px] opacity-70; }
+.channel-option strong { @apply block text-xs; }.channel-option small { @apply mt-0.5 block text-2xs opacity-70; }
 .channel-check { @apply flex h-5 w-5 items-center justify-center rounded-full border border-current; }
 .btn-primary { @apply inline-flex h-10 items-center justify-center rounded-2xl bg-gradient-to-r from-blue-500 to-indigo-500 px-5 text-sm font-bold text-white shadow-[0_12px_25px_-12px_rgba(59,130,246,.75)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-50 sm:h-11; }
 .btn-secondary {

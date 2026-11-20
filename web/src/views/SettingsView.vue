@@ -20,16 +20,16 @@
     <!-- 日历订阅：把提醒喂给系统日历 / Google Calendar，弥补没有移动客户端的短板 -->
     <div class="surface mt-4 rounded-2xl p-4 sm:mt-6 sm:p-6">
       <div class="flex items-start gap-3">
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/12 text-sky-500">
+        <span class="icon-chip">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <rect x="4" y="5" width="16" height="15" rx="3" stroke-width="1.8" />
             <path d="M8 3v4m8-4v4M4 10h16" stroke-width="1.8" stroke-linecap="round" />
             <path d="M9 14.5h6" stroke-width="1.8" stroke-linecap="round" />
           </svg>
-        </div>
+        </span>
         <div class="min-w-0 flex-1">
-          <h3 class="text-sm font-bold text-foreground">日历订阅（ICS）</h3>
-          <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+          <h3 class="type-h3 text-foreground">日历订阅（ICS）</h3>
+          <p class="mt-1 type-body-sm leading-relaxed">
             把这个地址加到系统日历、Google Calendar 或 Outlook，未完成的提醒会自动同步过去。
             订阅只读，日历里的改动不会回写。
           </p>
@@ -40,7 +40,7 @@
         <input
           :value="feedUrl"
           readonly
-          class="compact-input flex-1 font-mono text-[11px]"
+          class="compact-input flex-1 font-mono text-xs"
           :placeholder="feedLoading ? '正在生成订阅地址…' : '订阅地址不可用'"
           @focus="selectFeedInput"
         />
@@ -55,7 +55,7 @@
       <p v-if="feedMsg" class="mt-2 text-xs font-semibold" :class="feedMsgType === 'error' ? 'text-rose-500' : 'text-emerald-500'">
         {{ feedMsg }}
       </p>
-      <p class="mt-2 text-[11px] leading-5 text-muted-foreground">
+      <p class="mt-2 text-xs leading-5 text-muted-foreground">
         地址里带有访问令牌，拿到它就能读取你的提醒，请勿公开分享。重置后旧地址立即失效，需要在日历端重新添加。
       </p>
     </div>
@@ -63,14 +63,14 @@
     <!-- 钉钉日程：CalDAV 单向导入，钉钉里的日程会落到「钉钉日程」清单 -->
     <div class="surface mt-4 rounded-2xl p-4 sm:mt-6 sm:p-6">
       <div class="flex items-start gap-3">
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/12 text-indigo-500">
+        <span class="icon-chip">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
           </svg>
-        </div>
+        </span>
         <div class="min-w-0 flex-1">
-          <h3 class="text-sm font-bold text-foreground">钉钉日程（单向导入）</h3>
-          <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+          <h3 class="type-h3 text-foreground">钉钉日程（单向导入）</h3>
+          <p class="mt-1 type-body-sm leading-relaxed">
             在钉钉桌面端「日历设置 → CalDAV 同步」生成账号与密码，填在这里即可把日程导入到
             「钉钉日程」清单。只读：本地改动不会写回钉钉，每次同步以钉钉为准。
           </p>
@@ -100,12 +100,12 @@
       <p v-if="syncMsg" class="mt-2 text-xs font-semibold" :class="syncMsgType === 'error' ? 'text-rose-500' : 'text-emerald-500'">
         {{ syncMsg }}
       </p>
-      <p v-if="syncCfg" class="mt-2 text-[11px] leading-5 text-muted-foreground">
+      <p v-if="syncCfg" class="mt-2 text-xs leading-5 text-muted-foreground">
         清单「{{ syncCfg.list_name }}」· 上次同步 {{ syncCfg.last_sync_at ? new Date(syncCfg.last_sync_at).toLocaleString() : '尚未运行' }} ·
         上次导入 {{ syncCfg.last_imported }} 条 ·
         状态 {{ syncCfg.last_status === 'ok' ? '正常' : syncCfg.last_status === 'error' ? '失败' : '未知' }}<span v-if="syncCfg.last_error">：{{ syncCfg.last_error }}</span>
       </p>
-      <p class="mt-2 text-[11px] leading-5 text-muted-foreground">
+      <p class="mt-2 text-xs leading-5 text-muted-foreground">
         密码用本地密钥加密保存，不会回传前端。同步每 30 分钟运行一次；窗口默认前 7 天、后 180 天。
       </p>
     </div>
@@ -113,15 +113,15 @@
     <!-- Apple 提醒事项：本地单向推送到 iCloud，改动不会从 Apple 回写 -->
     <div class="surface mt-4 rounded-2xl p-4 sm:mt-6 sm:p-6">
       <div class="flex items-start gap-3">
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-500/12 text-slate-500">
+        <span class="icon-chip">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M12 20V5m0 0 5 5m-5-5-5 5" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             <path d="M5 20h14" stroke-width="1.8" stroke-linecap="round" />
           </svg>
-        </div>
+        </span>
         <div class="min-w-0 flex-1">
-          <h3 class="text-sm font-bold text-foreground">Apple 提醒事项（单向推送）</h3>
-          <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+          <h3 class="type-h3 text-foreground">Apple 提醒事项（单向推送）</h3>
+          <p class="mt-1 type-body-sm leading-relaxed">
             CloudKit 用 Apple ID 主密码和两步验证登录，CalDAV 用 App 专用密码连接 iCloud。
             本地新建、修改、完成、删除的提醒会同步到所选列表；只单向推送，在 Apple 端做的改动不会回写本地。
           </p>
@@ -133,7 +133,7 @@
           <option value="cloudkit">CloudKit（新版 iCloud 提醒事项，iPhone 原生可见）</option>
           <option value="caldav">CalDAV（旧版，仅兼容旧列表）</option>
         </select>
-        <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
+        <p class="mt-1 text-xs leading-5 text-muted-foreground">
           CloudKit 对接 iOS 13 之后的 iCloud 提醒事项，需填写 Apple ID 主密码（不是 App 专用密码）并完成两步验证；登录凭据仅加密保存在本地。
         </p>
       </div>
@@ -154,19 +154,19 @@
           {{ cloudkitBusy ? '正在登录…' : cloudkitNeed2FA ? '重新登录' : '登录 iCloud 并加载列表' }}
         </button>
         <div v-if="cloudkitNeed2FA" class="space-y-2 rounded-xl bg-slate-500/8 p-3">
-          <p class="text-[11px] leading-5 text-muted-foreground">{{ cloudkitHint }}</p>
+          <p class="text-xs leading-5 text-muted-foreground">{{ cloudkitHint }}</p>
           <div class="flex flex-wrap gap-1.5">
             <button
               v-if="!cloudkitOptions?.no_trusted_devices"
               type="button"
-              class="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition"
+              class="rounded-lg px-2.5 py-1 text-xs font-semibold transition"
               :class="cloudkitVerifyMode === 'device' ? 'bg-brand-500/15 text-brand-600 dark:text-brand-300' : 'text-muted-foreground hover:bg-slate-500/10'"
               @click="setCloudkitVerifyMode('device')"
             >受信任设备</button>
             <button
               v-if="cloudkitPhones.length"
               type="button"
-              class="rounded-lg px-2.5 py-1 text-[11px] font-semibold transition"
+              class="rounded-lg px-2.5 py-1 text-xs font-semibold transition"
               :class="cloudkitVerifyMode === 'phone' ? 'bg-brand-500/15 text-brand-600 dark:text-brand-300' : 'text-muted-foreground hover:bg-slate-500/10'"
               @click="setCloudkitVerifyMode('phone')"
             >短信验证码</button>
@@ -186,7 +186,7 @@
             </button>
           </div>
         </div>
-        <p class="text-[11px] leading-5 text-muted-foreground">
+        <p class="text-xs leading-5 text-muted-foreground">
           首次登录需要完成两步验证；登录成功后凭据会加密保存，之后无需重复验证。若账号已登录过，可直接加载列表并保存。
         </p>
       </div>
@@ -195,7 +195,7 @@
         <button type="button" class="btn-ghost" :disabled="appleBusy" @click="discoverAppleLists">
           {{ appleDiscovering ? '正在读取列表…' : '加载提醒列表' }}
         </button>
-        <button type="button" class="text-[11px] font-semibold text-muted-foreground hover:text-foreground" @click="appleShowServer = !appleShowServer">
+        <button type="button" class="text-xs font-semibold text-muted-foreground hover:text-foreground" @click="appleShowServer = !appleShowServer">
           {{ appleShowServer ? '收起服务器设置' : '服务器设置' }}
         </button>
       </div>
@@ -207,7 +207,7 @@
           placeholder="CalDAV 服务器，默认 caldav.icloud.com"
           autocomplete="off"
         />
-        <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
+        <p class="mt-1 text-xs leading-5 text-muted-foreground">
           国际区账号填 caldav.icloud.com；中国大陆账号（icloud.com.cn）填 caldav.icloud.com.cn，也可以直接填 www.icloud.com.cn 自动转换。
         </p>
       </template>
@@ -230,12 +230,12 @@
       <p v-if="appleMsg" class="mt-2 text-xs font-semibold" :class="appleMsgType === 'error' ? 'text-rose-500' : 'text-emerald-500'">
         {{ appleMsg }}
       </p>
-      <p v-if="appleCfg" class="mt-2 text-[11px] leading-5 text-muted-foreground">
+      <p v-if="appleCfg" class="mt-2 text-xs leading-5 text-muted-foreground">
         列表「{{ appleCfg.collection_name || '已选择' }}」· 待推送 {{ appleCfg.pending_count }} 条 · 已映射 {{ appleCfg.linked_count }} 条 ·
         上次同步 {{ appleCfg.last_sync_at ? new Date(appleCfg.last_sync_at).toLocaleString() : '尚未运行' }} ·
         状态 {{ appleCfg.last_status === 'ok' ? '正常' : appleCfg.last_status === 'error' ? '失败' : '未知' }}<span v-if="appleCfg.last_error">：{{ appleCfg.last_error }}</span>
       </p>
-      <p class="mt-2 text-[11px] leading-5 text-muted-foreground">
+      <p class="mt-2 text-xs leading-5 text-muted-foreground">
         CloudKit 使用 Apple ID 主密码和两步验证，CalDAV 使用 App 专用密码；凭据仅加密保存在本地，不会回传前端。同步每分钟检查一次队列，失败会自动退避重试。
       </p>
     </div>
@@ -243,15 +243,15 @@
     <!-- 天气提醒：管理员配好和风天气 API，用户选城市和时间，每天上午推送摘要 -->
     <div class="surface mt-4 rounded-2xl p-4 sm:mt-6 sm:p-6">
       <div class="flex items-start gap-3">
-        <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-500/12 text-sky-500">
+        <span class="icon-chip">
           <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.2 9.2 4.4 4.4 0 0 1 17 18H7Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
             <path d="M9 21h6" stroke-width="1.8" stroke-linecap="round" />
           </svg>
-        </div>
+        </span>
         <div class="min-w-0 flex-1">
-          <h3 class="text-sm font-bold text-foreground">天气提醒</h3>
-          <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+          <h3 class="type-h3 text-foreground">天气提醒</h3>
+          <p class="mt-1 type-body-sm leading-relaxed">
             每天早上推送当天天气，晚上推送次日天气；每条只保留对应时段的预报和预警。
             天气数据来自和风天气，需要管理员先配置 API。
           </p>
@@ -274,12 +274,12 @@
           <button type="button" class="btn-ghost" :disabled="weatherAdminBusy" @click="saveWeatherAdminConfig">
             {{ weatherAdminBusy ? '验证中…' : '保存 API 配置' }}
           </button>
-          <span v-if="weatherAdminConfigured" class="text-[11px] text-emerald-500">
+          <span v-if="weatherAdminConfigured" class="text-xs text-emerald-500">
             已配置<span v-if="weatherAdminHost"> · {{ weatherAdminHost }}</span>
           </span>
-          <span v-else class="text-[11px] text-amber-500">尚未配置，天气提醒不可用</span>
+          <span v-else class="text-xs text-amber-500">尚未配置，天气提醒不可用</span>
         </div>
-        <p class="mt-2 text-[11px] leading-5 text-muted-foreground">
+        <p class="mt-2 text-xs leading-5 text-muted-foreground">
           API Key 加密保存在服务端，只用于调用和风天气，不会回传到浏览器。
         </p>
       </div>
@@ -327,11 +327,11 @@
           <input v-model="weatherForm.evening_time" type="time" class="compact-input w-32" />
         </label>
         <label class="flex items-center gap-2 text-xs text-muted-foreground">
-          <input v-model="weatherForm.enabled" type="checkbox" class="h-4 w-4 accent-sky-500" />
+          <input v-model="weatherForm.enabled" type="checkbox" class="h-4 w-4 accent-brand-500" />
           启用每日推送
         </label>
       </div>
-      <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
+      <p class="mt-1 text-xs leading-5 text-muted-foreground">
         早间推送当天天气，晚间推送次日天气；两个时间不能相同，且晚间应晚于早间。
       </p>
 
@@ -347,13 +347,13 @@
             <input
               v-model="weatherForm.channels"
               type="checkbox"
-              class="h-3.5 w-3.5 accent-sky-500"
+              class="h-3.5 w-3.5 accent-brand-500"
               :value="ch.channel"
             />
             {{ ch.label }}
           </label>
         </div>
-        <p class="mt-1 text-[11px] leading-5 text-muted-foreground">
+        <p class="mt-1 text-xs leading-5 text-muted-foreground">
           站内通知默认不开启；所有渠道都需要先勾选，其他渠道还需在「通知渠道」里完成绑定。
         </p>
       </div>
@@ -363,7 +363,7 @@
         <button
           type="button"
           class="btn-ghost"
-          :class="weatherSlot === 'morning' ? 'ring-2 ring-sky-400/60' : ''"
+          :class="weatherSlot === 'morning' ? 'ring-2 ring-brand-500/50' : ''"
           @click="weatherSlot = 'morning'"
         >
           早间 · 今天
@@ -371,7 +371,7 @@
         <button
           type="button"
           class="btn-ghost"
-          :class="weatherSlot === 'evening' ? 'ring-2 ring-sky-400/60' : ''"
+          :class="weatherSlot === 'evening' ? 'ring-2 ring-brand-500/50' : ''"
           @click="weatherSlot = 'evening'"
         >
           晚间 · 次日
@@ -396,7 +396,7 @@
       <p v-if="weatherMsg" class="mt-2 text-xs font-semibold" :class="weatherMsgType === 'error' ? 'text-rose-500' : 'text-emerald-500'">
         {{ weatherMsg }}
       </p>
-      <p v-if="weatherCfg?.configured" class="mt-2 text-[11px] leading-5 text-muted-foreground">
+      <p v-if="weatherCfg?.configured" class="mt-2 text-xs leading-5 text-muted-foreground">
         {{ weatherCfg.location_name }} · 每天 {{ weatherCfg.morning_time }} / {{ weatherCfg.evening_time }} ·
         上次推送 {{ weatherCfg.last_push_at ? new Date(weatherCfg.last_push_at).toLocaleString() : '尚未运行' }}<span v-if="weatherCfg.last_slot">（{{ weatherCfg.last_slot === 'evening' ? '晚间' : '早间' }}）</span> ·
         状态 {{ weatherCfg.last_status === 'ok' ? '正常' : weatherCfg.last_status === 'partial' ? '部分渠道失败' : weatherCfg.last_status === 'error' ? '失败' : '未知' }}<span v-if="weatherCfg.last_error">：{{ weatherCfg.last_error }}</span>
@@ -410,12 +410,12 @@
     <div v-if="authStore.isAdmin && supportStore.enabled" class="surface rounded-2xl p-4 sm:p-6">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-start gap-3">
-          <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-400/15 text-amber-500">
+          <span class="icon-chip">
             <svg class="h-5 w-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
-          </div>
+          </span>
           <div>
-            <h3 class="text-sm font-bold text-foreground">支持作者</h3>
-            <p class="mt-1 text-sm leading-relaxed text-muted-foreground">
+            <h3 class="type-h3 text-foreground">支持作者</h3>
+            <p class="mt-1 type-body-sm leading-relaxed">
               这个应用免费、无广告，数据完全保存在你自己的设备上。
               如果它帮到了你，欢迎请作者喝杯咖啡——金额随意，1 元也是心意；
               <strong class="text-foreground">不赞赏不影响任何功能</strong>。
