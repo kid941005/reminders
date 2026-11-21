@@ -952,7 +952,7 @@ function onShortcut(e: KeyboardEvent) {
 .quick-card {
   @apply relative overflow-hidden rounded-[26px] p-3 transition-all sm:p-5;
 }
-.quick-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: linear-gradient(#3b82f6, #6366f1); opacity: .75; }
+.quick-card::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 2px; background: linear-gradient(#3b82f6, #6366f1); opacity: .45; }
 .quick-chip {
   @apply inline-flex h-7 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold text-muted-foreground transition hover:border-brand-500/30 hover:text-brand-600 disabled:opacity-40 sm:h-8 sm:rounded-xl sm:px-3 sm:text-xs;
   border-color: rgb(var(--glass-stroke) / calc(var(--glass-stroke-alpha) - 0.1));

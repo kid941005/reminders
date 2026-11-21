@@ -159,10 +159,10 @@ textarea {
     @apply relative isolate border;
     background-image:
       /* 跟随指针的紧凑镜面高光：液态玻璃的「光随手动」主体 */
-      radial-gradient(24% 18% at var(--lg-px, 16%) var(--lg-py, -6%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.95)) 0%, transparent 72%),
+      radial-gradient(40% 28% at var(--lg-px, 18%) var(--lg-py, -8%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.72)) 0%, transparent 72%),
       /* 常驻左上受光 + 右下回光 */
-      radial-gradient(125% 90% at var(--lg-px, 16%) var(--lg-py, -16%), rgb(var(--glass-specular) / var(--glass-specular-alpha)) 0%, transparent 55%),
-      radial-gradient(80% 60% at 88% 112%, rgb(var(--glass-specular) / var(--glass-specular-alpha-2)) 0%, transparent 62%),
+      radial-gradient(95% 68% at var(--lg-px, 16%) var(--lg-py, -18%), rgb(var(--glass-specular) / var(--glass-specular-alpha)) 0%, transparent 58%),
+      radial-gradient(62% 46% at 90% 112%, rgb(var(--glass-specular) / var(--glass-specular-alpha-2)) 0%, transparent 64%),
       linear-gradient(152deg, rgb(var(--glass-tint) / var(--glass-alpha-top)) 0%, rgb(var(--glass-tint) / var(--glass-alpha-bottom)) 100%);
     border-color: rgb(var(--glass-hairline) / var(--glass-hairline-alpha));
     box-shadow:
@@ -170,9 +170,8 @@ textarea {
       var(--glass-shadow-1),
       var(--glass-shadow-2),
       inset 0 1px 0 rgb(var(--glass-inner) / var(--glass-inner-alpha)),
-      inset 0 -1px 0 rgb(var(--glass-inner) / 0.28),
-      inset 0 0 44px rgb(var(--glass-inner) / 0.10),
-      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.10),
+      inset 0 -1px 0 rgb(var(--glass-inner) / 0.18),
+      inset 0 0 0 1px rgb(var(--glass-stroke) / 0.06),
       /* 边缘色散：左青右品红的极细高光，模拟液态玻璃切边分光 */
       inset 1px 0 0 rgb(90 200 255 / var(--glass-chroma-alpha)),
       inset -1px 0 0 rgb(255 120 220 / calc(var(--glass-chroma-alpha) * 0.65));
@@ -193,22 +192,21 @@ textarea {
     z-index: -1;
     border-radius: inherit;
     pointer-events: none;
-    /* 三段式流动光带：冷色折射 → 白色镜面 → 暖色折射 → 极淡灰影，
-       普通混合而非 screen，浅色主题下也能看到色散与明暗流动。 */
+    /* 极细的柔光带：只借用一条冷白镜面缓慢扫过，靠明暗和移动表现材质，
+       不再使用高饱和彩带，保证浅色主题干净、深色主题不发脏。 */
     background: linear-gradient(
-      115deg,
-      transparent 24%,
-      rgb(110 190 255 / calc(var(--glass-chroma-alpha) * 0.9)) 37%,
-      rgb(var(--glass-specular) / var(--glass-sheen-alpha)) 46%,
-      rgb(255 150 225 / calc(var(--glass-chroma-alpha) * 0.75)) 55%,
-      rgb(90 110 150 / calc(var(--glass-chroma-alpha) * 0.22)) 63%,
-      transparent 74%
+      112deg,
+      transparent 30%,
+      rgb(160 205 255 / calc(var(--glass-sheen-alpha) * 0.45)) 40%,
+      rgb(var(--glass-specular) / var(--glass-sheen-alpha)) 49%,
+      rgb(15 23 42 / 0.022) 56%,
+      transparent 69%
     );
-    background-size: 230% 230%;
+    background-size: 240% 240%;
     background-position: 115% -10%;
     animation: lg-sheen var(--glass-flow-speed) ease-in-out infinite alternate;
     mix-blend-mode: normal;
-    opacity: .9;
+    opacity: .75;
   }
   @keyframes lg-sheen {
     from { background-position: 115% -10%; }
@@ -234,18 +232,18 @@ textarea {
     padding: 1px;
     background: linear-gradient(
       145deg,
-      rgb(255 255 255 / 0.85) 0%,
-      rgb(255 255 255 / 0.20) 22%,
+      rgb(255 255 255 / 0.62) 0%,
+      rgb(255 255 255 / 0.14) 22%,
       rgb(255 255 255 / 0) 46%,
-      rgb(255 255 255 / 0.10) 68%,
-      rgb(255 255 255 / 0.55) 100%
+      rgb(255 255 255 / 0.07) 68%,
+      rgb(255 255 255 / 0.38) 100%
     );
     -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
     -webkit-mask-composite: xor;
     mask-composite: exclude;
     pointer-events: none;
-    opacity: 0.9;
+    opacity: 0.62;
   }
   /* 边缘透镜：只在少量大面板（卡片/顶栏）上对 1px 边框做位移色散，
      列表行数量多，按住滤镜会拖慢滚动，仅保留静态渐变描边。 */
@@ -259,13 +257,13 @@ textarea {
   .dark .glass-bar::after {
     background: linear-gradient(
       145deg,
-      rgb(255 255 255 / 0.55) 0%,
-      rgb(255 255 255 / 0.12) 24%,
+      rgb(255 255 255 / 0.42) 0%,
+      rgb(255 255 255 / 0.10) 24%,
       rgb(255 255 255 / 0) 50%,
-      rgb(255 255 255 / 0.06) 72%,
-      rgb(255 255 255 / 0.30) 100%
+      rgb(255 255 255 / 0.05) 72%,
+      rgb(255 255 255 / 0.22) 100%
     );
-    opacity: 0.8;
+    opacity: 0.55;
   }
 
   /* 玻璃行/磁贴：列表项复用，hover 时抬升并加一层品牌色高光 */
@@ -301,7 +299,7 @@ textarea {
     background-image:
       radial-gradient(26% 40% at var(--lg-px, 50%) var(--lg-py, -20%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.7)) 0%, transparent 72%),
       radial-gradient(140% 70% at var(--lg-px, 50%) var(--lg-py, -30%), rgb(var(--glass-specular) / calc(var(--glass-specular-alpha) * 0.5)) 0%, transparent 60%),
-      linear-gradient(180deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) + 0.12)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) + 0.08)) 100%);
+      linear-gradient(180deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) + 0.08)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) + 0.05)) 100%);
     backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness)) url(#glass-lens);

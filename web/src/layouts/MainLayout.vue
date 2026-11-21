@@ -716,13 +716,15 @@ onBeforeUnmount(() => {
 /* 环境层只负责叠加可被玻璃折射的色团，底色交给 body 的三层光斑，
    避免透明面板后面是一块纯色板。 */
 .ambient { position: fixed; inset: 0; z-index: -20; overflow: hidden; pointer-events: none; background: transparent; }
-/* 环境光团是玻璃的「光源」：没有它们，半透明面板后面只是一块纯色，
-   backdrop-filter 再强也看不出折射。这里放三团较强的高饱和光斑，
-   面板扫过时能明显看到颜色在玻璃下流动。 */
-.ambient-orb { position: absolute; border-radius: 999px; filter: blur(96px); opacity: .42; will-change: transform; animation: ambient-drift 30s ease-in-out infinite alternate; }
-.ambient-orb-one { width: 42rem; height: 42rem; left: -8rem; top: -16rem; background: radial-gradient(circle at 35% 35%, #3b82f6, transparent 68%); }
-.ambient-orb-two { width: 36rem; height: 36rem; right: -10rem; top: 4%; background: radial-gradient(circle at 60% 40%, #a855f7, transparent 68%); opacity: .34; animation-delay: -12s; }
-.ambient-orb-three { width: 34rem; height: 34rem; left: 26%; bottom: -16rem; background: radial-gradient(circle at 50% 45%, #22d3ee, transparent 68%); opacity: .30; animation-delay: -21s; }
+/* 环境光团是玻璃的「光源」，但必须克制：只保留低饱和的蓝/雾紫/冰青，
+   且整体透明度压低，让玻璃看起来清透而不是被彩光染色。 */
+.ambient-orb { position: absolute; border-radius: 999px; filter: blur(120px); opacity: .24; will-change: transform; animation: ambient-drift 34s ease-in-out infinite alternate; }
+.ambient-orb-one { width: 44rem; height: 44rem; left: -14rem; top: -20rem; background: radial-gradient(circle at 35% 35%, #7aa7ff, transparent 70%); }
+.ambient-orb-two { width: 38rem; height: 38rem; right: -14rem; top: 2%; background: radial-gradient(circle at 60% 40%, #c4b5fd, transparent 70%); opacity: .16; animation-delay: -14s; }
+.ambient-orb-three { width: 36rem; height: 36rem; left: 28%; bottom: -18rem; background: radial-gradient(circle at 50% 45%, #a5f3fc, transparent 70%); opacity: .11; animation-delay: -24s; }
+.dark .ambient-orb { opacity: .14; }
+.dark .ambient-orb-two { opacity: .10; }
+.dark .ambient-orb-three { opacity: .07; }
 @media (prefers-reduced-motion: reduce) {
   .ambient-orb { animation: none; }
 }
@@ -745,7 +747,7 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.45),
     inset 0 -1px 0 rgb(0 0 0 / 0.12),
-    0 10px 30px -12px rgb(var(--color-brand-500) / 0.55);
+    0 10px 30px -14px rgb(var(--color-brand-600) / 0.38);
 }
 .version-badge { @apply rounded-full border border-brand-500/25 bg-brand-500/10 px-2 py-0.5 text-xs font-bold leading-none text-brand-600 dark:text-brand-300; }
 /* 主操作按钮：渐变 + 顶部内高光 + hover 掠过的一道高光，是最典型的液态玻璃按钮。 */
@@ -754,7 +756,7 @@ onBeforeUnmount(() => {
   box-shadow:
     inset 0 1px 0 rgb(255 255 255 / 0.4),
     inset 0 -1px 0 rgb(0 0 0 / 0.14),
-    0 14px 30px -16px rgb(var(--color-brand-500) / 0.55);
+    0 14px 32px -18px rgb(var(--color-brand-600) / 0.38);
 }
 .new-reminder-button::after {
   content: '';

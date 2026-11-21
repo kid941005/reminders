@@ -66,7 +66,7 @@ export default {
       },
       backgroundImage: {
         'brand-gradient':
-          'linear-gradient(135deg, rgb(var(--color-brand-500)) 0%, rgb(var(--color-brand-400)) 50%, rgb(var(--color-brand-300)) 100%)',
+          'linear-gradient(135deg, rgb(var(--color-brand-600)) 0%, rgb(var(--color-brand-500)) 58%, rgb(var(--color-brand-400)) 100%)',
       },
       keyframes: {
         'fade-in': {

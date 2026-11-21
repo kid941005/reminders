@@ -32,13 +32,13 @@
   --color-brand-900: 30 58 138;
 
   /* Surfaces and content */
-  --color-background:          225 233 246;
+  --color-background:          236 242 250;
   --color-foreground:          24 28 36;
   --color-surface:             255 255 255;
   --color-surface-foreground:  17 24 39;
   --color-muted:               243 244 246;
   --color-muted-foreground:   107 114 128;
-  --color-border:              229 231 235;
+  --color-border:              220 227 237;
   --color-input:               229 231 235;
   --color-ring:                var(--color-brand-500);
   --color-accent:              168 85 247;
@@ -49,9 +49,9 @@
 }
 
 .dark {
-  --color-background:          8 12 22;
+  --color-background:          7 10 18;
   --color-foreground:           243 244 246;
-  --color-surface:              17 24 39;
+  --color-surface:              20 26 38;
   --color-surface-foreground:  243 244 246;
   --color-muted:                31 41 55;
   --color-muted-foreground:    156 163 175;
@@ -81,73 +81,73 @@
  * ------------------------------------------------------------------ */
 :root {
   --glass-tint:              255 255 255;
-  --glass-alpha-top:         0.34;
-  --glass-alpha-bottom:      0.17;
+  --glass-alpha-top:         0.36;
+  --glass-alpha-bottom:      0.22;
   --glass-stroke:            255 255 255;
-  --glass-stroke-alpha:      0.80;
+  --glass-stroke-alpha:      0.58;
   --glass-inner:             255 255 255;
-  --glass-inner-alpha:       0.85;
+  --glass-inner-alpha:       0.55;
   --glass-specular:          255 255 255;
-  --glass-specular-alpha:    0.62;
-  --glass-specular-alpha-2:  0.22;
+  --glass-specular-alpha:    0.45;
+  --glass-specular-alpha-2:  0.14;
   /* 液态玻璃：随指针移动的镜面高光强度、流动光泽、边缘色散与按压形变 */
-  --glass-sheen-alpha:       0.16;
-  --glass-chroma-alpha:      0.20;
-  --glass-press-scale:       0.982;
-  --glass-flow-speed:        16s;
-  --glass-brightness:        1.08;
+  --glass-sheen-alpha:       0.10;
+  --glass-chroma-alpha:      0.06;
+  --glass-press-scale:       0.988;
+  --glass-flow-speed:        20s;
+  --glass-brightness:        1.02;
   /* 玻璃边缘的"切割线"：浅色主题下白描边落在白底上看不见，
      用极淡的深色发丝线勾出面板边界（深色主题改用白色）。 */
   --glass-hairline:          15 23 42;
   --glass-hairline-alpha:    0.12;
-  --glass-blur-md:           18px;
-  --glass-blur-lg:           28px;
-  --glass-saturate:          190%;
+  --glass-blur-md:           20px;
+  --glass-blur-lg:           30px;
+  --glass-saturate:          135%;
   --glass-sheet-tint:        255 255 255;
-  --glass-sheet-alpha:       0.92;
-  --glass-shadow-1:          0 1px 2px rgb(15 23 42 / 0.06);
-  --glass-shadow-2:          0 18px 40px -24px rgb(15 23 42 / 0.26);
-  --glass-shadow-3:          0 44px 100px -56px rgb(15 23 42 / 0.34);
-  --glass-glow:              0 26px 70px -42px rgb(49 130 246 / 0.38);
+  --glass-sheet-alpha:       0.95;
+  --glass-shadow-1:          0 1px 2px rgb(15 23 42 / 0.05);
+  --glass-shadow-2:          0 18px 40px -24px rgb(15 23 42 / 0.16);
+  --glass-shadow-3:          0 44px 100px -56px rgb(15 23 42 / 0.23);
+  --glass-glow:              0 26px 70px -42px rgb(49 130 246 / 0.16);
   --glass-radius-lg:         26px;
   --glass-radius-md:         18px;
   --glass-radius-sm:         12px;
   /* 页面环境光斑（比 v2 增强，玻璃才有可折射的光） */
-  --mesh-1:                  37 99 235 / 0.58;
-  --mesh-2:                  139 92 246 / 0.44;
-  --mesh-3:                  6 182 212 / 0.32;
+  --mesh-1:                  37 99 235 / 0.32;
+  --mesh-2:                  139 92 246 / 0.20;
+  --mesh-3:                  6 182 212 / 0.12;
   /* 页面顶部的主光源（白色斜射光） */
-  --glass-light:             255 255 255 / 0.38;
+  --glass-light:             255 255 255 / 0.30;
 }
 
 .dark {
   --glass-tint:              20 28 46;
-  --glass-alpha-top:         0.30;
-  --glass-alpha-bottom:      0.16;
+  --glass-alpha-top:         0.38;
+  --glass-alpha-bottom:      0.22;
   --glass-stroke:            255 255 255;
-  --glass-stroke-alpha:      0.18;
+  --glass-stroke-alpha:      0.16;
   --glass-inner:             255 255 255;
-  --glass-inner-alpha:       0.14;
+  --glass-inner-alpha:       0.12;
   --glass-specular:          255 255 255;
   --glass-specular-alpha:    0.16;
-  --glass-specular-alpha-2:  0.08;
-  --glass-sheen-alpha:       0.10;
-  --glass-chroma-alpha:      0.16;
-  --glass-press-scale:       0.985;
-  --glass-flow-speed:        18s;
-  --glass-brightness:        1.05;
+  --glass-specular-alpha-2:  0.06;
+  --glass-sheen-alpha:       0.05;
+  --glass-chroma-alpha:      0.05;
+  --glass-press-scale:       0.989;
+  --glass-flow-speed:        24s;
+  --glass-brightness:        1.00;
   --glass-hairline:          255 255 255;
-  --glass-hairline-alpha:    0.14;
+  --glass-hairline-alpha:    0.12;
   --glass-sheet-tint:        18 24 40;
-  --glass-sheet-alpha:       0.94;
-  --glass-shadow-1:          0 1px 1px rgb(0 0 0 / 0.35);
-  --glass-shadow-2:          0 18px 44px -26px rgb(0 0 0 / 0.65);
-  --glass-shadow-3:          0 44px 96px -52px rgb(0 0 0 / 0.72);
-  --glass-glow:              0 26px 80px -46px rgb(56 120 255 / 0.42);
-  --mesh-1:                  59 130 246 / 0.34;
-  --mesh-2:                  168 85 247 / 0.28;
-  --mesh-3:                  34 211 238 / 0.16;
-  --glass-light:             120 160 255 / 0.12;
+  --glass-sheet-alpha:       0.96;
+  --glass-shadow-1:          0 1px 1px rgb(0 0 0 / 0.30);
+  --glass-shadow-2:          0 18px 44px -26px rgb(0 0 0 / 0.55);
+  --glass-shadow-3:          0 44px 96px -52px rgb(0 0 0 / 0.65);
+  --glass-glow:              0 26px 80px -46px rgb(56 120 255 / 0.18);
+  --mesh-1:                  59 130 246 / 0.16;
+  --mesh-2:                  168 85 247 / 0.10;
+  --mesh-3:                  34 211 238 / 0.05;
+  --glass-light:             120 160 255 / 0.10;
 }
 
 /* ------------------------------------------------------------------
