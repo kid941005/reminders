@@ -8,6 +8,16 @@ on:
         required: true
         default: false
         type: boolean
+      packages:
+        description: "要清理的包，逗号分隔"
+        required: false
+        default: "reminders,reminders-mcp"
+        type: string
+      limit:
+        description: "最多处理的版本数，0 表示全部（用于小范围试跑）"
+        required: false
+        default: "0"
+        type: string
 
 permissions:
   contents: read
@@ -33,5 +43,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLY: ${{ inputs.apply }}
-          PACKAGES: reminders,reminders-mcp
+          PACKAGES: ${{ inputs.packages }}
+          LIMIT: ${{ inputs.limit }}
         run: python scripts/cleanup_image_tags.py

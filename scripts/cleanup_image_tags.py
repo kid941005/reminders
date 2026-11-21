@@ -18,6 +18,7 @@ REPO = os.environ["GITHUB_REPOSITORY"]
 TOKEN = os.environ["GH_TOKEN"]
 APPLY = os.environ.get("APPLY", "false").lower() == "true"
 PACKAGES = [p.strip() for p in os.environ.get("PACKAGES", "reminders,reminders-mcp").split(",") if p.strip()]
+LIMIT = int(os.environ.get("LIMIT", "0") or "0")
 SEMVER = re.compile(r"^\d+\.\d+\.\d+$")
 API = "https://api.github.com"
 HEADERS = {
@@ -70,8 +71,11 @@ def clean(pkg):
     print(f"=== {pkg} ===", flush=True)
     base = versions_base(pkg)
     versions = list_versions(pkg, base)
-    print(f"versions={len(versions)}", flush=True)
+    print(f"versions={len(versions)} limit={LIMIT}", flush=True)
+    processed = 0
     for v in versions:
+        if LIMIT and processed >= LIMIT:
+            break
         vid = v["id"]
         tags = (v.get("metadata") or {}).get("container", {}).get("tags") or []
         keep = keep_tags(tags)
@@ -79,6 +83,7 @@ def clean(pkg):
         if not drop:
             continue
         print(f"version {vid}: keep={keep} drop={drop}", flush=True)
+        processed += 1
         if not APPLY:
             continue
         if not keep:
