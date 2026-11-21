@@ -718,20 +718,16 @@ onBeforeUnmount(() => {
 .ambient { position: fixed; inset: 0; z-index: -20; overflow: hidden; pointer-events: none; background: transparent; }
 /* 环境光团是玻璃的「光源」，但必须克制：只保留低饱和的蓝/雾紫/冰青，
    且整体透明度压低，让玻璃看起来清透而不是被彩光染色。 */
-.ambient-orb { position: absolute; border-radius: 999px; filter: blur(120px); opacity: .24; will-change: transform; animation: ambient-drift 34s ease-in-out infinite alternate; }
+.ambient-orb { position: absolute; border-radius: 999px; filter: blur(120px); opacity: .24; }
 .ambient-orb-one { width: 44rem; height: 44rem; left: -14rem; top: -20rem; background: radial-gradient(circle at 35% 35%, #7aa7ff, transparent 70%); }
-.ambient-orb-two { width: 38rem; height: 38rem; right: -14rem; top: 2%; background: radial-gradient(circle at 60% 40%, #c4b5fd, transparent 70%); opacity: .16; animation-delay: -14s; }
-.ambient-orb-three { width: 36rem; height: 36rem; left: 28%; bottom: -18rem; background: radial-gradient(circle at 50% 45%, #a5f3fc, transparent 70%); opacity: .11; animation-delay: -24s; }
+.ambient-orb-two { width: 38rem; height: 38rem; right: -14rem; top: 2%; background: radial-gradient(circle at 60% 40%, #c4b5fd, transparent 70%); opacity: .16; }
+.ambient-orb-three { width: 36rem; height: 36rem; left: 28%; bottom: -18rem; background: radial-gradient(circle at 50% 45%, #a5f3fc, transparent 70%); opacity: .11; }
 .dark .ambient-orb { opacity: .14; }
 .dark .ambient-orb-two { opacity: .10; }
 .dark .ambient-orb-three { opacity: .07; }
-@media (prefers-reduced-motion: reduce) {
-  .ambient-orb { animation: none; }
-}
-@keyframes ambient-drift {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to   { transform: translate3d(3rem, 2rem, 0) scale(1.08); }
-}
+/* 环境层保持静态：光团位于所有玻璃面板后方，任何持续位移动画都会让
+   backdrop-filter 每帧重新采样，是长时间掉帧的根源。指针/滚动只改变
+   面板前景高光，不再移动背景光团。 */
 /* 侧栏：玻璃导航栏（比卡片更透、更强模糊），右缘一条 1px 亮线模拟玻璃切边。 */
 .sidebar {
   @apply fixed inset-y-0 left-0 z-50 w-[292px] -translate-x-full border-r transition-transform duration-300 lg:translate-x-0;

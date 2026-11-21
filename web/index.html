@@ -110,6 +110,17 @@
          的镜面高光实时跟随；按下时加 .lg-press 触发轻微形变（弹性回弹由 CSS transition 完成）。
          触摸设备与「减少动态效果」用户直接跳过，保持静态高光。 */
       (function () {
+        var root = document.documentElement;
+        var idleTimer = 0;
+        function markInteracting() {
+          root.classList.add('lg-interacting');
+          if (idleTimer) clearTimeout(idleTimer);
+          idleTimer = setTimeout(function () { root.classList.remove('lg-interacting'); }, 240);
+        }
+        /* 滚动/滚轮/触摸期间一律退回常规模糊：SDF 透镜逐帧重采样代价过高。 */
+        window.addEventListener('scroll', markInteracting, { passive: true, capture: true });
+        window.addEventListener('wheel', markInteracting, { passive: true });
+        window.addEventListener('touchmove', markInteracting, { passive: true });
         if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
         if (matchMedia('(hover: none), (pointer: coarse)').matches) return;
         var SEL = '.surface,.glass-row,.glass-bar,.surface-modal';
@@ -125,12 +136,15 @@
         window.addEventListener('pointermove', function (e) {
           var el = e.target && e.target.closest ? e.target.closest(SEL) : null;
           if (!el) { current = null; return; }
+          /* 指针在玻璃上移动时关闭 SDF，只用常规模糊 + 跟随高光，避免每帧重采样。 */
+          markInteracting();
           current = el; last = e;
           if (!frame) frame = requestAnimationFrame(paint);
         }, { passive: true });
         window.addEventListener('pointerdown', function (e) {
           var el = e.target && e.target.closest ? e.target.closest('.surface,.glass-row') : null;
           if (!el) return;
+          markInteracting();
           el.classList.add('lg-press');
           var done = function () {
             el.classList.remove('lg-press');

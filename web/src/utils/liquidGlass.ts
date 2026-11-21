@@ -290,17 +290,22 @@ export function initLiquidGlass(): void {
       applyLens(element)
     })
     const observer = new MutationObserver((mutations) => {
-      let shouldScan = false
+      let hasNewTarget = false
       mutations.forEach((mutation) => {
         mutation.addedNodes.forEach((node) => {
           if (!(node instanceof Element)) return
-          if (node.matches(TARGET_SELECTOR)) observe(node)
-          node.querySelectorAll(TARGET_SELECTOR).forEach(observe)
-          shouldScan = true
+          if (node.matches(TARGET_SELECTOR)) {
+            observe(node)
+            hasNewTarget = true
+          }
+          node.querySelectorAll(TARGET_SELECTOR).forEach((el) => {
+            observe(el)
+            hasNewTarget = true
+          })
         })
-        if (mutation.type === 'childList') shouldScan = true
       })
-      if (shouldScan) scheduleScan()
+      // 只有真正新增了玻璃目标才重扫；Vue 的文本/属性更新不必触发全量 getBoundingClientRect。
+      if (hasNewTarget) scheduleScan()
     })
     observer.observe(document.body, { childList: true, subtree: true })
     window.addEventListener('resize', scheduleScan, { passive: true })

@@ -46,8 +46,10 @@ textarea {
     radial-gradient(52% 46% at 48% 112%, rgb(var(--mesh-3)) 0px, transparent 62%);
 }
 
-/* 环境光层：三团低饱和色光缓慢漂移，让玻璃后方始终有可被折射的光影。
-   放在 body 的负 z-index 子层，位于背景色之上、所有内容之下。 */
+/* 环境光层：三团低饱和色光提供可被折射的光影。
+   固定在 body 的负 z-index 子层，位于背景色之上、所有内容之下；
+   这里刻意不做持续动画——任何背景层运动都会迫使所有玻璃面板逐帧重新采样，
+   在中端 GPU 上直接把帧率拉到 20fps 左右。 */
 body::before {
   content: '';
   position: fixed;
@@ -59,8 +61,7 @@ body::before {
     radial-gradient(34% 30% at 86% 12%, rgb(192 132 252 / 0.16), transparent 70%),
     radial-gradient(42% 36% at 64% 92%, rgb(34 211 238 / 0.10), transparent 72%);
   filter: blur(44px) saturate(120%);
-  transform: translate3d(0, 0, 0) scale(1.02);
-  animation: lg-aurora 30s ease-in-out infinite alternate;
+  transform: scale(1.02);
 }
 .dark body::before {
   background:
@@ -69,18 +70,10 @@ body::before {
     radial-gradient(42% 36% at 64% 92%, rgb(34 211 238 / 0.06), transparent 72%);
   filter: blur(48px) saturate(115%);
 }
-@keyframes lg-aurora {
-  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
-  to   { transform: translate3d(2.5%, 2%, 0) scale(1.08); }
-}
 @media (hover: none) and (pointer: coarse) {
   body {
     background-attachment: scroll;
   }
-  body::before { animation: none; }
-}
-@media (prefers-reduced-motion: reduce) {
-  body::before { animation: none; }
 }
 
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
@@ -206,17 +199,17 @@ body::before {
       /* 边缘色散：左青右品红的极细高光，模拟液态玻璃切边分光 */
       inset 1px 0 0 rgb(90 200 255 / var(--glass-chroma-alpha)),
       inset -1px 0 0 rgb(255 120 220 / calc(var(--glass-chroma-alpha) * 0.65));
+    /* 基础态只用常规模糊；SDF 透镜只在「非交互」时由文件末尾的
+       html.lg-glass:not(.lg-interacting) 规则叠加，避免指针移动/滚动时
+       每个玻璃面板逐帧重新采样位移滤镜（这是掉帧的主因）。 */
     backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
-    /* 有 SDF 透镜的宿主（Chromium）：把运行时生成的 per-element 位移滤镜
-       放在模糊之前，先弯折清晰的背景再做极轻的雾化，中心仍然通透。
-       未生成/不支持 url() 时由 blur(0px) 占位，保留上面的常规模糊。 */
-    backdrop-filter: var(--lg-filter, blur(0px)) blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     transition: transform .22s cubic-bezier(.2, .9, .25, 1), scale .22s cubic-bezier(.2, .9, .25, 1), box-shadow .22s ease;
   }
 
-  /* 液态流动光泽：一条沿对角线缓慢扫过的柔光，让玻璃表面持续「流动」。
-     z-index:-1 位于面板底色之上、正文之下（.surface 已 isolation:isolate）。 */
+  /* 静态斜向柔光：用固定的镜面渐变表现玻璃厚度与受光方向。
+     z-index:-1 位于面板底色之上、正文之下（.surface 已 isolation:isolate）。
+     不再做 background-position 持续动画——它会让每个面板每帧重绘。 */
   .surface:not(.quick-card)::before {
     content: '';
     position: absolute;
@@ -235,14 +228,9 @@ body::before {
       transparent 69%
     );
     background-size: 240% 240%;
-    background-position: 115% -10%;
-    animation: lg-sheen var(--glass-flow-speed) ease-in-out infinite alternate;
+    background-position: 82% 8%;
     mix-blend-mode: normal;
-    opacity: .75;
-  }
-  @keyframes lg-sheen {
-    from { background-position: 115% -10%; }
-    to   { background-position: -15% 110%; }
+    opacity: .7;
   }
 
   /* 按压形变：轻微缩小，松手按 transition 回弹，模拟液态材质受力 */
@@ -329,7 +317,6 @@ body::before {
       linear-gradient(180deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) + 0.08)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) + 0.05)) 100%);
     backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
-    backdrop-filter: var(--lg-filter, blur(0px)) blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
   }
 
   /* 弹窗专用不透明表面：移动端禁用了 backdrop-blur（见上方媒体查询），
@@ -415,11 +402,23 @@ body::before {
     left: 130%;
   }
 }
+/* 空闲态启用运行时 SDF 透镜（真实边缘折射）。指针移动、滚动、按压期间
+   由 html.lg-interacting 切回上面的常规模糊：位移滤镜逐帧重采样代价过高，
+   在 Intel UHD / 2560px 下会把面板交互压到 30fps 左右。 */
+html.lg-glass:not(.lg-interacting):not(.lg-reduced-transparency) .surface {
+  backdrop-filter: var(--lg-filter, blur(0px)) blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  -webkit-backdrop-filter: var(--lg-filter, blur(0px)) blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+}
+html.lg-glass:not(.lg-interacting):not(.lg-reduced-transparency) .glass-bar {
+  backdrop-filter: var(--lg-filter, blur(0px)) blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  -webkit-backdrop-filter: var(--lg-filter, blur(0px)) blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+}
+
 /* ------------------------------------------------------------------
  * 兼容性回退
  * 1) 不支持 backdrop-filter 的浏览器：玻璃层退化为接近不透明的同色底，
  *    视觉层次减弱但文字对比度不下降。
- * 2) 系统开启「降低透明度」：同样退化为实底，尊重可访问性偏好。
+ * 2) 应用内关闭「液态玻璃效果」：同样退化为实底，兼顾可读性与低性能设备。
  * 3) 移动端 / 触摸设备：模糊层在 WebView 里代价高且键盘动画期会重绘，
  *    直接把令牌里的 blur 归零、alpha 提到 0.9+，等价于原生不透明导航栏。
  * ------------------------------------------------------------------ */
@@ -486,8 +485,8 @@ html.lg-reduced-transparency .glass-bar::after {
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
-  /* 触摸设备停止扫光动画，静态高光足够表达材质 */
-  .surface:not(.quick-card)::before { animation: none; opacity: .55; }
+  /* 触摸设备只保留静态高光，不做实时透镜与光泽动画 */
+  .surface:not(.quick-card)::before { opacity: .55; }
   .surface::after,
   .glass-row::after,
   .glass-bar::after {
@@ -500,7 +499,6 @@ html.lg-reduced-transparency .glass-bar::after {
   .btn-premium::after {
     transition: none;
   }
-  .surface:not(.quick-card)::before { animation: none; }
   .surface,
   .glass-row {
     transition: none;
