@@ -122,7 +122,6 @@ jobs:
           images: ghcr.io/${{ github.repository }}
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
       - name: 构建并推送 ghcr.io
@@ -155,7 +154,6 @@ jobs:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/reminders
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
       # 直接把 ghcr.io 上刚构建好的镜像清单复制到 Docker Hub：

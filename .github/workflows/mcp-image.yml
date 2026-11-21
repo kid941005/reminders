@@ -48,9 +48,7 @@ jobs:
           images: ghcr.io/${{ github.repository }}-mcp
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-
+            type=raw,value=latest
 
       - name: 构建并推送
         id: build-ghcr
@@ -78,9 +76,7 @@ jobs:
           images: ${{ secrets.DOCKERHUB_USERNAME }}/reminders-mcp
           tags: |
             type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=raw,value=latest,enable={{is_default_branch}}
-            type=sha,prefix=sha-
+            type=raw,value=latest
 
       - name: 同步镜像到 Docker Hub
         if: steps.creds.outputs.available == 'true'
