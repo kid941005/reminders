@@ -2,6 +2,17 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.24.1（2026-11-21）
+
+### 修复：系统关闭“透明效果”时液态玻璃被强制降级
+
+v0.24.0 上线后，部分 Windows 用户看到的是实色白卡而不是液态玻璃。根因不是滤镜失效，而是浏览器把系统「透明效果」关闭上报为 `prefers-reduced-transparency: reduce`，前端据此把玻璃整体降级为实色，导致 SDF 折射、背景模糊与光影全部不生效。
+
+- **把降级改为应用内开关**：新增用户级配置 `glass_effect`（默认 `true`），在「偏好设置 → 外观」显示「液态玻璃效果」开关；关闭时仅使用实色背景，恢复时即时生效，无需刷新页面。
+- **不再跟随系统媒体查询**：`web/src/style.css` 的实色回退由 `@media (prefers-reduced-transparency: reduce)` 改为 `html.lg-reduced-transparency`；`web/src/utils/liquidGlass.ts` 删除按系统偏好直接 `return` 的逻辑，改为读取 `SK.glassEffect` 并切换类名。
+- **本机选择优先**：`web/src/stores/auth.ts` 在加载用户配置时仅在本地没有记录时采用服务端 `glass_effect`；`web/src/views/SettingsView.vue` 保存开关后立即切换 CSS 状态。
+- **验证**：`npm run build`、`go build ./...`、`go vet ./...` 通过；在 `prefers-reduced-transparency: reduce` 的 2560×1229 浏览器中，侧栏/周视图卡片恢复透明、背景模糊与边缘折射（`#lg-filter-defs` 滤镜数 2、`backdrop-filter: url(#lg-lens-*) blur(...)`）；关闭开关后卡片回到 `rgb(255,255,255)` 实色，恢复开关后立即复原；设置页开关读写 API 与本地存储正常。本次仅改前端样式/交互与本处用户配置，不改接口与业务逻辑。
+
 ## v0.24.0（2026-11-21）
 
 ### 视觉改版 v6：按高分项目重做真实液态玻璃
