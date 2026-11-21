@@ -2,6 +2,21 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.24.0（2026-11-21）
+
+### 视觉改版 v6：按高分项目重做真实液态玻璃
+
+v0.23.0 的玻璃虽然干净，但本质仍是「高模糊 + 半透明白底」：旧的 `#glass-lens` 用 feTurbulence 对整个面板做噪声位移（scale 9），20px 模糊又把折射细节糊平，卡片看起来更像磨砂亚克力而不是液态玻璃。本次参考 GitHub 高分实现 shuding/liquid-glass（★1235）与 rdev/liquid-glass-react（★6757）的核心做法，改为真正的边缘 SDF 透镜折射。
+
+- **运行时 SDF 位移贴图**：新增 `web/src/utils/liquidGlass.ts`。用圆角矩形有符号距离场（roundedRectSDF）为每个 `.surface` / `.glass-bar` 生成一张与元素尺寸、圆角匹配的贴图：中心保持 0.5（清晰不变形），只有靠近边缘的一圈按 SDF 梯度向内弯折；位移强度随面板尺寸在 14–32px 之间缩放。
+- **三通道边缘色散**：同一张 SDF 贴图分别以 R/G/B 三个略有差异的 scale 位移，再用 screen 合成。中心三通道重合保持原色，边缘分离出极细的红/蓝偏色，模拟玻璃切边的色散，而不是整面彩虹。
+- **按元素注册 SVG filter**：`index.html` 删除旧的全局 `#glass-lens` / `#glass-rim` 噪声滤镜；改为运行时为每个尺寸缓存 `<filter>`，元素只通过 CSS 变量 `--lg-filter` 引用，窗口 resize 时由 ResizeObserver 重新生成，新路由/新面板由 MutationObserver 自动接管。
+- **降低雾化、提高清透度**：浅色 `--glass-alpha-top/bottom` .36/.22 → .22/.12，深色 .38/.22 → .26/.14；`--glass-blur-md/lg` 20/30px → 6/14px，saturate 135% → 150%；浅色 `background` 236 242 250，卡片真正能透出背后的光，而不再是一块白板。
+- **环境光层**：新增 `body::before` 三团低饱和蓝/紫/青柔光（44–48px 模糊、30s 缓慢漂移），并同步微调 `--mesh-*` 与顶部白色主光；玻璃背后始终有可被折射的光影，同时不把浅色染成紫蓝雾、不把深色染脏。
+- **保留并统一既有材质语言**：指针跟随的镜面高光、`.surface` 流动光带、按压 `scale`、边缘 1px 高光描边、`prefers-reduced-transparency / reduced-motion / 移动端` 三套回退全部保留；边缘色散改由 SDF filter 统一完成，删除 `::after` 上重复的 `#glass-rim` 采样，减少滚动开销。
+- **验证**：`npm run build`、`go build ./...`、`go vet ./...` 通过；浅/深色 12 条路由 + 移动端 390×844 截图正常，控制台 0 错误；高对比网格测试确认边缘产生真实的透镜弯折（无滤镜时网格为直线）；`prefers-reduced-transparency`、`prefers-reduced-motion`、移动端三套回退均无错误、文字可读。
+- 本次仅改动 `web/` 前端与 `index.html`，未改动接口、业务逻辑与文案。
+
 ## v0.23.0（2026-11-21）
 
 ### 视觉改版 v5：更细腻、更高级、更清透
