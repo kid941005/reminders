@@ -67,6 +67,18 @@ def docker(*args):
 def keep_tags(tags):
     return [t for t in tags if t == "latest" or SEMVER.match(t)]
 
+def ensure_latest(pkg, base):
+    tags = set()
+    for v in list_versions(pkg, base):
+        tags.update((v.get("metadata") or {}).get("container", {}).get("tags") or [])
+    exact = [t for t in tags if SEMVER.match(t)]
+    if not exact:
+        return
+    highest = max(exact, key=lambda t: tuple(int(x) for x in t.split(".")))
+    image = f"ghcr.io/{OWNER}/{pkg}"
+    print(f"ensure latest -> {highest}", flush=True)
+    docker("buildx", "imagetools", "create", "--tag", f"{image}:latest", f"{image}:{highest}")
+
 def clean(pkg):
     print(f"=== {pkg} ===", flush=True)
     base = versions_base(pkg)
@@ -114,6 +126,8 @@ def main():
     print(f"apply={APPLY} repo={REPO} packages={PACKAGES}", flush=True)
     for pkg in PACKAGES:
         clean(pkg)
+        if APPLY:
+            ensure_latest(pkg, versions_base(pkg))
     ok = True
     for pkg in PACKAGES:
         ok = verify(pkg, versions_base(pkg)) and ok
