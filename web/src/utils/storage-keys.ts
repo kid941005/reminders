@@ -11,6 +11,8 @@ export const SK = {
   // 两处必须使用同一个字符串，因此集中在这里维护。
   themeMode: `${P}theme_mode`,
   themeBrand: `${P}theme_brand`,
+  // 液态玻璃效果开关：默认开启；系统关闭“透明效果”时仍可由用户强制启用。
+  glassEffect: `${P}glass_effect`,
   // 安全提示的「稍后再说」时间戳：同样带前缀，避免与同域其它应用互相覆盖。
   securityPromptDismissed: `${P}security_prompt_dismissed_at`,
   // 本标签页的客户端标识（sessionStorage，一个标签页一个）：随请求与 SSE 连接

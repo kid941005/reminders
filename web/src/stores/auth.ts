@@ -8,6 +8,7 @@ import { useThemeStore } from './theme'
 import { withTimeout } from '../utils/async'
 import { setBootHint } from '../utils/boot'
 import { SK } from '../utils/storage-keys'
+import { setGlassEffectPreference } from '../utils/liquidGlass'
 
 // 启动阶段单次请求的上限：超过就按默认值继续渲染，绝不无限等。取 4 秒是为
 // 了容忍低端设备首帧较慢，又不至于让弱网下一直停在首屏骨架上——启动骨架
@@ -139,6 +140,11 @@ export const useAuthStore = defineStore('auth', () => {
           if (!hasLocalChoice && themeStore.mode !== themeItem.value) {
             themeStore.setModeFromServer(themeItem.value)
           }
+        }
+        const glassItem = metaRes.data.data.find((it: any) => it.key === 'glass_effect')
+        if (glassItem && localStorage.getItem(SK.glassEffect) === null) {
+          // 同样以本机选择优先；没有本机记录时才采用服务端偏好（默认 true）。
+          setGlassEffectPreference(glassItem.value !== 'false')
         }
       }
     } catch {}

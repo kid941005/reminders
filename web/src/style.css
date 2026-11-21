@@ -445,28 +445,27 @@ body::before {
   .surface:not(.quick-card)::before { display: none; }
 }
 
-@media (prefers-reduced-transparency: reduce) {
-  .surface,
-  .glass-row,
-  .btn-ghost,
-  .empty-state,
-  .input-field,
-  .compact-input,
-  .surface-modal,
-  .glass-bar {
-    background-image: none;
-    background-color: rgb(var(--color-surface));
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-  /* 降低透明度下不保留流动光泽与边缘透镜，避免半透明材质干扰阅读 */
-  .surface:not(.quick-card)::before { display: none; }
-  .surface::after,
-  .glass-row::after,
-  .glass-bar::after {
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
+/* 液态玻璃开关关闭时使用实色背景；由应用设置驱动，不再跟随系统媒体查询。 */
+html.lg-reduced-transparency .surface,
+html.lg-reduced-transparency .glass-row,
+html.lg-reduced-transparency .btn-ghost,
+html.lg-reduced-transparency .empty-state,
+html.lg-reduced-transparency .input-field,
+html.lg-reduced-transparency .compact-input,
+html.lg-reduced-transparency .surface-modal,
+html.lg-reduced-transparency .glass-bar {
+  background-image: none;
+  background-color: rgb(var(--color-surface));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+/* 关闭液态玻璃时不保留流动光泽与边缘透镜，避免半透明材质干扰阅读 */
+html.lg-reduced-transparency .surface:not(.quick-card)::before { display: none; }
+html.lg-reduced-transparency .surface::after,
+html.lg-reduced-transparency .glass-row::after,
+html.lg-reduced-transparency .glass-bar::after {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {

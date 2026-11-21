@@ -489,6 +489,7 @@ import type { ConfigMeta } from '../api/config'
 import { useThemeStore } from '../stores/theme'
 import { useAuthStore } from '../stores/auth'
 import { useSupportStore } from '../stores/support'
+import { setGlassEffectPreference } from '../utils/liquidGlass'
 
 const authStore = useAuthStore()
 const supportStore = useSupportStore()
@@ -1354,6 +1355,9 @@ async function handleSave(key: string, value: string) {
         if (themeStore.mode !== value) {
           themeStore.setMode(value as 'light' | 'dark' | 'system')
         }
+      }
+      if (key === 'glass_effect') {
+        setGlassEffectPreference(value === 'true')
       }
     } else {
       errorMsg.value = res.data?.message || '保存失败'

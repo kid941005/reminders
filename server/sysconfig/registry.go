@@ -140,6 +140,12 @@ func init() {
 		Description: "界面配色方案",
 	})
 	RegisterConfig(ConfigDef{
+		Key: "glass_effect", Scope: ScopeUser, Type: TypeBool,
+		Default: "true",
+		Group:   "appearance", Label: "液态玻璃效果",
+		Description: "启用背景模糊、边缘折射与流动光影；关闭后使用实色背景",
+	})
+	RegisterConfig(ConfigDef{
 		Key: "log_retention_days", Scope: ScopeSystem, Type: TypeInt,
 		Default: "30",
 		Group:   "system", Label: "日志与操作记录保留天数",

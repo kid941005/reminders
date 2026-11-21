@@ -705,6 +705,7 @@ func TestUserConfigMeta(t *testing.T) {
 	}
 	items := decode(t, w)["data"].([]interface{})
 	var theme map[string]interface{}
+	var glass map[string]interface{}
 	for _, it := range items {
 		m := it.(map[string]interface{})
 		if m["key"] == "jwt_secret" {
@@ -712,6 +713,9 @@ func TestUserConfigMeta(t *testing.T) {
 		}
 		if m["key"] == "theme_mode" {
 			theme = m
+		}
+		if m["key"] == "glass_effect" {
+			glass = m
 		}
 	}
 	if theme == nil {
@@ -726,6 +730,12 @@ func TestUserConfigMeta(t *testing.T) {
 	opts, ok := theme["options"].([]interface{})
 	if !ok || len(opts) != 3 {
 		t.Fatalf("theme_mode options wrong: %v", theme)
+	}
+	if glass == nil {
+		t.Fatalf("user meta missing glass_effect: %s", w.Body.String())
+	}
+	if glass["scope"] != "user" || glass["type"] != "bool" || glass["value"] != "true" || glass["default"] != "true" {
+		t.Fatalf("glass_effect meta wrong: %v", glass)
 	}
 }
 

@@ -32,9 +32,9 @@ func findDef(defs []ConfigDef, key string) (ConfigDef, bool) {
 	return ConfigDef{}, false
 }
 
-// TestRegistryContainsBuiltins locks the six built-in config definitions:
+// TestRegistryContainsBuiltins locks the seven built-in config definitions:
 // five system-scope (site_title, site_description, allow_register,
-// require_login, jwt_secret) and one user-scope (theme_mode).
+// require_login, jwt_secret) and two user-scope (theme_mode, glass_effect).
 func TestRegistryContainsBuiltins(t *testing.T) {
 	// Given: the built-in registrations from init()
 	// When: listing each scope
@@ -49,6 +49,9 @@ func TestRegistryContainsBuiltins(t *testing.T) {
 	}
 	if _, ok := findDef(user, "theme_mode"); !ok {
 		t.Fatalf("user registry missing built-in %q", "theme_mode")
+	}
+	if _, ok := findDef(user, "glass_effect"); !ok {
+		t.Fatalf("user registry missing built-in %q", "glass_effect")
 	}
 
 	// Then: spot-check metadata of the most safety-relevant defs
@@ -66,6 +69,10 @@ func TestRegistryContainsBuiltins(t *testing.T) {
 	}
 	if len(theme.Options) != 3 {
 		t.Fatalf("theme_mode options = %v, want 3 entries", theme.Options)
+	}
+	glass, _ := findDef(user, "glass_effect")
+	if glass.Type != TypeBool || glass.Default != "true" || glass.Group != "appearance" {
+		t.Fatalf("glass_effect def wrong: %+v", glass)
 	}
 }
 

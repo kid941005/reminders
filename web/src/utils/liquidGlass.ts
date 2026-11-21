@@ -10,14 +10,17 @@
  *
  * 这个模块在运行时按元素尺寸生成贴图并注册 <filter>，元素只通过
  * CSS 变量 --lg-filter 引用，不把任何尺寸写死在样式里。桌面端启用；
- * 触摸设备、降低透明度偏好不受影响（CSS 里已经有普通模糊回退）。
+ * 触摸设备使用普通模糊回退，是否关闭液态玻璃由应用内开关决定。
  */
+
+import { SK } from './storage-keys'
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 const TARGET_SELECTOR = '.surface, .glass-bar'
 const MAP_MAX = 512
 const MAP_MIN = 64
 const FILTER_MARGIN = 48
+const REDUCED_TRANSPARENCY_CLASS = 'lg-reduced-transparency'
 
 type CacheEntry = { id: string }
 
@@ -26,6 +29,32 @@ const observed = new WeakSet<Element>()
 let defs: SVGSVGElement | null = null
 let counter = 0
 let scheduled = false
+
+/** 读取用户是否启用液态玻璃；默认开启，旧版本没有该键时也保持开启。 */
+export function getGlassEffectPreference(): boolean {
+  if (typeof localStorage === 'undefined') return true
+  try {
+    return localStorage.getItem(SK.glassEffect) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+/** 只切换 CSS 回退类，不重建滤镜；关闭时仍保留已生成的贴图，便于即时恢复。 */
+export function applyGlassEffectPreference(enabled: boolean): void {
+  if (typeof document === 'undefined') return
+  document.documentElement.classList.toggle(REDUCED_TRANSPARENCY_CLASS, !enabled)
+}
+
+/** 持久化用户选择并立即应用。 */
+export function setGlassEffectPreference(enabled: boolean): void {
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(SK.glassEffect, enabled ? 'true' : 'false')
+    } catch {}
+  }
+  applyGlassEffectPreference(enabled)
+}
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -236,7 +265,8 @@ function observe(element: Element): void {
 
 export function initLiquidGlass(): void {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
-  if (window.matchMedia('(prefers-reduced-transparency: reduce)').matches) return
+  // 系统“降低透明度”只作为默认提示，不强制降级：用户可在设置里关闭液态玻璃。
+  applyGlassEffectPreference(getGlassEffectPreference())
   if (window.matchMedia('(hover: none), (pointer: coarse)').matches) return
   const supportsUrlFilter =
     CSS.supports('backdrop-filter', 'url(#lg-probe)') ||
