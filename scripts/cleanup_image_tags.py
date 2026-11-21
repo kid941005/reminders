@@ -32,10 +32,24 @@ def api(method, path, **kwargs):
         raise RuntimeError(f"{method} {path} -> {r.status_code}: {r.text[:400]}")
     return r
 
-def list_versions(pkg):
+def versions_base(pkg):
+    candidates = [
+        f"/repos/{REPO}/packages/container/{pkg}/versions",
+        f"/users/{OWNER}/packages/container/{pkg}/versions",
+        f"/user/packages/container/{pkg}/versions",
+    ]
+    for path in candidates:
+        r = requests.get(API + path + "?per_page=1", headers=HEADERS, timeout=60)
+        if r.status_code == 200:
+            print(f"versions endpoint: {path}", flush=True)
+            return path
+        print(f"endpoint unavailable: {path} -> {r.status_code}", flush=True)
+    raise RuntimeError(f"no versions endpoint available for {pkg}")
+
+def list_versions(pkg, base):
     out, page = [], 1
     while True:
-        r = api("GET", f"/repos/{REPO}/packages/container/{pkg}/versions?per_page=100&page={page}")
+        r = api("GET", f"{base}?per_page=100&page={page}")
         batch = r.json()
         if not batch:
             break
@@ -54,7 +68,8 @@ def keep_tags(tags):
 
 def clean(pkg):
     print(f"=== {pkg} ===", flush=True)
-    versions = list_versions(pkg)
+    base = versions_base(pkg)
+    versions = list_versions(pkg, base)
     print(f"versions={len(versions)}", flush=True)
     for v in versions:
         vid = v["id"]
@@ -67,7 +82,7 @@ def clean(pkg):
         if not APPLY:
             continue
         if not keep:
-            api("DELETE", f"/repos/{REPO}/packages/container/{pkg}/versions/{vid}")
+            api("DELETE", f"{base}/{vid}")
             print("  deleted (no keep tags)", flush=True)
             continue
         source = next((t for t in keep if t != "latest"), keep[0])
@@ -75,13 +90,13 @@ def clean(pkg):
         docker("pull", f"{image}:{source}")
         for t in keep:
             docker("tag", f"{image}:{source}", f"{image}:{t}")
-        api("DELETE", f"/repos/{REPO}/packages/container/{pkg}/versions/{vid}")
+        api("DELETE", f"{base}/{vid}")
         for t in keep:
             docker("push", f"{image}:{t}")
         time.sleep(1)
 
-def verify(pkg):
-    versions = list_versions(pkg)
+def verify(pkg, base):
+    versions = list_versions(pkg, base)
     tags = []
     for v in versions:
         tags += (v.get("metadata") or {}).get("container", {}).get("tags") or []
@@ -96,7 +111,7 @@ def main():
         clean(pkg)
     ok = True
     for pkg in PACKAGES:
-        ok = verify(pkg) and ok
+        ok = verify(pkg, versions_base(pkg)) and ok
     if not ok:
         print("WARNING: non-conforming tags remain", file=sys.stderr)
         return 1
