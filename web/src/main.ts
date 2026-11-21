@@ -4,6 +4,7 @@ import router from './router'
 import App from './App.vue'
 import './style.css'
 import { dismissBootSplash } from './utils/boot'
+import { initLiquidGlass } from './utils/liquidGlass'
 
 const app = createApp(App)
 app.use(createPinia())
@@ -12,4 +13,8 @@ app.mount('#app')
 
 // 首个路由（含全局守卫里的启动引导请求）落定后才收起首屏骨架：在那之前
 // router-view 还是空的，过早移除等于把白屏还回去。
-void router.isReady().then(dismissBootSplash)
+void router.isReady().then(() => {
+  dismissBootSplash()
+  // 等首个路由渲染完成后再生成 SDF 折射贴图，避免对隐藏/零尺寸面板做无效计算。
+  initLiquidGlass()
+})

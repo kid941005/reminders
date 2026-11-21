@@ -46,10 +46,41 @@ textarea {
     radial-gradient(52% 46% at 48% 112%, rgb(var(--mesh-3)) 0px, transparent 62%);
 }
 
+/* 环境光层：三团低饱和色光缓慢漂移，让玻璃后方始终有可被折射的光影。
+   放在 body 的负 z-index 子层，位于背景色之上、所有内容之下。 */
+body::before {
+  content: '';
+  position: fixed;
+  inset: -12%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 32% at 12% 18%, rgb(96 165 250 / 0.22), transparent 70%),
+    radial-gradient(34% 30% at 86% 12%, rgb(192 132 252 / 0.16), transparent 70%),
+    radial-gradient(42% 36% at 64% 92%, rgb(34 211 238 / 0.10), transparent 72%);
+  filter: blur(44px) saturate(120%);
+  transform: translate3d(0, 0, 0) scale(1.02);
+  animation: lg-aurora 30s ease-in-out infinite alternate;
+}
+.dark body::before {
+  background:
+    radial-gradient(38% 32% at 12% 18%, rgb(59 130 246 / 0.15), transparent 70%),
+    radial-gradient(34% 30% at 86% 12%, rgb(168 85 247 / 0.10), transparent 70%),
+    radial-gradient(42% 36% at 64% 92%, rgb(34 211 238 / 0.06), transparent 72%);
+  filter: blur(48px) saturate(115%);
+}
+@keyframes lg-aurora {
+  from { transform: translate3d(-1.5%, -1%, 0) scale(1.02); }
+  to   { transform: translate3d(2.5%, 2%, 0) scale(1.08); }
+}
 @media (hover: none) and (pointer: coarse) {
   body {
     background-attachment: scroll;
   }
+  body::before { animation: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
 }
 
 @media (max-width: 767px), (hover: none) and (pointer: coarse) {
@@ -177,9 +208,10 @@ textarea {
       inset -1px 0 0 rgb(255 120 220 / calc(var(--glass-chroma-alpha) * 0.65));
     backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     -webkit-backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
-    /* 有 SVG 滤镜的宿主（Chromium）：再叠一层位移，制造真实折射；
-       不支持 url() 的宿主会丢弃这一行，保留上面的常规模糊。 */
-    backdrop-filter: blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness)) url(#glass-lens);
+    /* 有 SDF 透镜的宿主（Chromium）：把运行时生成的 per-element 位移滤镜
+       放在模糊之前，先弯折清晰的背景再做极轻的雾化，中心仍然通透。
+       未生成/不支持 url() 时由 blur(0px) 占位，保留上面的常规模糊。 */
+    backdrop-filter: var(--lg-filter, blur(0px)) blur(var(--glass-blur-md)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     transition: transform .22s cubic-bezier(.2, .9, .25, 1), scale .22s cubic-bezier(.2, .9, .25, 1), box-shadow .22s ease;
   }
 
@@ -245,13 +277,8 @@ textarea {
     pointer-events: none;
     opacity: 0.62;
   }
-  /* 边缘透镜：只在少量大面板（卡片/顶栏）上对 1px 边框做位移色散，
-     列表行数量多，按住滤镜会拖慢滚动，仅保留静态渐变描边。 */
-  .surface::after,
-  .glass-bar::after {
-    backdrop-filter: blur(2px) saturate(150%) url(#glass-rim);
-    -webkit-backdrop-filter: blur(2px) saturate(150%) url(#glass-rim);
-  }
+  /* 边缘色散已由 SDF 滤镜的三通道位移完成，这里只保留静态高光描边，
+     不再叠加第二层噪声滤镜，避免重复采样与滚动卡顿。 */
   .dark .surface::after,
   .dark .glass-row::after,
   .dark .glass-bar::after {
@@ -302,7 +329,7 @@ textarea {
       linear-gradient(180deg, rgb(var(--glass-tint) / calc(var(--glass-alpha-top) + 0.08)) 0%, rgb(var(--glass-tint) / calc(var(--glass-alpha-bottom) + 0.05)) 100%);
     backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
     -webkit-backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
-    backdrop-filter: blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness)) url(#glass-lens);
+    backdrop-filter: var(--lg-filter, blur(0px)) blur(var(--glass-blur-lg)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
   }
 
   /* 弹窗专用不透明表面：移动端禁用了 backdrop-blur（见上方媒体查询），

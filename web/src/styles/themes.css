@@ -75,34 +75,34 @@
  *   inner       顶部内高光（inset 0 1px，模拟受光棱）
  *   shadow      贴地 1px + 近场柔影 + 品牌色环境光晕
  *   glow        面板底部的品牌色光晕，让玻璃"浮"在光里
- *   blur/sat/brightness 20-34px 模糊 + 高饱和 + 轻微提亮 = 折射后的光
- *   lens        SVG 位移滤镜（index.html #glass-lens），让背景在玻璃下轻微扭曲
+ *   blur/sat/brightness 6-14px 轻雾化 + 高饱和 + 轻微提亮 = 折射后的光
+ *   lens        运行时 SDF 位移滤镜（src/utils/liquidGlass.ts），边缘折射 + 色散
  *   mesh        页面环境光斑，比 v2 增强，玻璃才有东西可以折射
  * ------------------------------------------------------------------ */
 :root {
   --glass-tint:              255 255 255;
-  --glass-alpha-top:         0.36;
-  --glass-alpha-bottom:      0.22;
+  --glass-alpha-top:         0.22;
+  --glass-alpha-bottom:      0.12;
   --glass-stroke:            255 255 255;
-  --glass-stroke-alpha:      0.58;
+  --glass-stroke-alpha:      0.65;
   --glass-inner:             255 255 255;
-  --glass-inner-alpha:       0.55;
+  --glass-inner-alpha:       0.60;
   --glass-specular:          255 255 255;
-  --glass-specular-alpha:    0.45;
-  --glass-specular-alpha-2:  0.14;
+  --glass-specular-alpha:    0.32;
+  --glass-specular-alpha-2:  0.10;
   /* 液态玻璃：随指针移动的镜面高光强度、流动光泽、边缘色散与按压形变 */
-  --glass-sheen-alpha:       0.10;
-  --glass-chroma-alpha:      0.06;
-  --glass-press-scale:       0.988;
-  --glass-flow-speed:        20s;
-  --glass-brightness:        1.02;
+  --glass-sheen-alpha:       0.12;
+  --glass-chroma-alpha:      0.08;
+  --glass-press-scale:       0.986;
+  --glass-flow-speed:        22s;
+  --glass-brightness:        1.03;
   /* 玻璃边缘的"切割线"：浅色主题下白描边落在白底上看不见，
      用极淡的深色发丝线勾出面板边界（深色主题改用白色）。 */
   --glass-hairline:          15 23 42;
-  --glass-hairline-alpha:    0.12;
-  --glass-blur-md:           20px;
-  --glass-blur-lg:           30px;
-  --glass-saturate:          135%;
+  --glass-hairline-alpha:    0.10;
+  --glass-blur-md:           6px;
+  --glass-blur-lg:           14px;
+  --glass-saturate:          150%;
   --glass-sheet-tint:        255 255 255;
   --glass-sheet-alpha:       0.95;
   --glass-shadow-1:          0 1px 2px rgb(15 23 42 / 0.05);
@@ -113,31 +113,31 @@
   --glass-radius-md:         18px;
   --glass-radius-sm:         12px;
   /* 页面环境光斑（比 v2 增强，玻璃才有可折射的光） */
-  --mesh-1:                  37 99 235 / 0.32;
-  --mesh-2:                  139 92 246 / 0.20;
-  --mesh-3:                  6 182 212 / 0.12;
+  --mesh-1:                  37 99 235 / 0.28;
+  --mesh-2:                  139 92 246 / 0.18;
+  --mesh-3:                  6 182 212 / 0.11;
   /* 页面顶部的主光源（白色斜射光） */
-  --glass-light:             255 255 255 / 0.30;
+  --glass-light:             255 255 255 / 0.38;
 }
 
 .dark {
   --glass-tint:              20 28 46;
-  --glass-alpha-top:         0.38;
-  --glass-alpha-bottom:      0.22;
+  --glass-alpha-top:         0.26;
+  --glass-alpha-bottom:      0.14;
   --glass-stroke:            255 255 255;
-  --glass-stroke-alpha:      0.16;
+  --glass-stroke-alpha:      0.20;
   --glass-inner:             255 255 255;
-  --glass-inner-alpha:       0.12;
+  --glass-inner-alpha:       0.16;
   --glass-specular:          255 255 255;
-  --glass-specular-alpha:    0.16;
-  --glass-specular-alpha-2:  0.06;
-  --glass-sheen-alpha:       0.05;
-  --glass-chroma-alpha:      0.05;
-  --glass-press-scale:       0.989;
-  --glass-flow-speed:        24s;
-  --glass-brightness:        1.00;
+  --glass-specular-alpha:    0.14;
+  --glass-specular-alpha-2:  0.05;
+  --glass-sheen-alpha:       0.06;
+  --glass-chroma-alpha:      0.07;
+  --glass-press-scale:       0.987;
+  --glass-flow-speed:        26s;
+  --glass-brightness:        1.04;
   --glass-hairline:          255 255 255;
-  --glass-hairline-alpha:    0.12;
+  --glass-hairline-alpha:    0.14;
   --glass-sheet-tint:        18 24 40;
   --glass-sheet-alpha:       0.96;
   --glass-shadow-1:          0 1px 1px rgb(0 0 0 / 0.30);
@@ -146,8 +146,8 @@
   --glass-glow:              0 26px 80px -46px rgb(56 120 255 / 0.18);
   --mesh-1:                  59 130 246 / 0.16;
   --mesh-2:                  168 85 247 / 0.10;
-  --mesh-3:                  34 211 238 / 0.05;
-  --glass-light:             120 160 255 / 0.10;
+  --mesh-3:                  34 211 238 / 0.06;
+  --glass-light:             140 180 255 / 0.14;
 }
 
 /* ------------------------------------------------------------------

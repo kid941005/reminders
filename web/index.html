@@ -103,29 +103,6 @@
       <p class="boot-title">提醒事项</p>
       <p class="boot-hint" id="boot-hint">正在加载…</p>
     </div>
-    <!-- 液态玻璃折射滤镜
-         glass-lens：低频噪声位移，让面板后的光斑/文字产生透镜式扭曲；
-         glass-rim ：更强位移 + RGB 三通道分离，模拟玻璃切边的色散（边缘彩虹边）。
-         不支持 backdrop-filter: url() 的浏览器会整条声明回退为普通模糊。 -->
-    <svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute;pointer-events:none">
-      <filter id="glass-lens" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
-        <feTurbulence type="fractalNoise" baseFrequency="0.004 0.007" numOctaves="2" seed="11" result="noise" />
-        <feGaussianBlur in="noise" stdDeviation="1.2" result="soft" />
-        <feDisplacementMap in="SourceGraphic" in2="soft" scale="9" xChannelSelector="R" yChannelSelector="G" />
-      </filter>
-      <filter id="glass-rim" x="-12%" y="-12%" width="124%" height="124%" color-interpolation-filters="sRGB">
-        <feTurbulence type="fractalNoise" baseFrequency="0.018 0.026" numOctaves="1" seed="7" result="noise" />
-        <feGaussianBlur in="noise" stdDeviation="0.8" result="soft" />
-        <feColorMatrix in="SourceGraphic" type="matrix" values="1 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" result="red" />
-        <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 1 0 0 0  0 0 0 0 0  0 0 0 1 0" result="green" />
-        <feColorMatrix in="SourceGraphic" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 1 0 0  0 0 0 1 0" result="blue" />
-        <feDisplacementMap in="red"   in2="soft" scale="2"  xChannelSelector="R" yChannelSelector="G" result="rd" />
-        <feDisplacementMap in="green" in2="soft" scale="4" xChannelSelector="R" yChannelSelector="G" result="gd" />
-        <feDisplacementMap in="blue"  in2="soft" scale="7" xChannelSelector="R" yChannelSelector="G" result="bd" />
-        <feBlend in="rd" in2="gd" mode="screen" result="rg" />
-        <feBlend in="rg" in2="bd" mode="screen" result="disp" />
-      </filter>
-    </svg>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
     <script>
