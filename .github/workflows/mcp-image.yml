@@ -20,6 +20,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: 检查 Docker Hub 凭据
+        id: creds
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "未配置 Docker Hub 凭据（DOCKERHUB_USERNAME / DOCKERHUB_TOKEN），本次只推送到 ghcr.io。" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - uses: docker/setup-buildx-action@v3
 
       - name: 登录 GitHub Container Registry
@@ -40,6 +53,7 @@ jobs:
             type=sha,prefix=sha-
 
       - name: 构建并推送
+        id: build-ghcr
         uses: docker/build-push-action@v6
         with:
           context: ./reminder-mcp
@@ -49,3 +63,34 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: 登录 Docker Hub
+        if: steps.creds.outputs.available == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - uses: docker/metadata-action@v5
+        if: steps.creds.outputs.available == 'true'
+        id: meta-dockerhub
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/reminders-mcp
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+
+      - name: 同步镜像到 Docker Hub
+        if: steps.creds.outputs.available == 'true'
+        env:
+          DOCKERHUB_TAGS: ${{ steps.meta-dockerhub.outputs.tags }}
+          SOURCE_IMAGE: ghcr.io/${{ github.repository }}-mcp@${{ steps.build-ghcr.outputs.digest }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args+=(--tag "$tag")
+          done <<< "$DOCKERHUB_TAGS"
+          docker buildx imagetools create "${args[@]}" "$SOURCE_IMAGE"

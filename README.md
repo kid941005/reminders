@@ -59,6 +59,8 @@ docker compose up -d
 > - 镜像托管在 GitHub Container Registry（ghcr.io），目前只构建 `linux/amd64`。
 > - **首次发布后包默认是私有的**：需要到仓库 → Packages → `reminders` → Package settings 把可见性改为
 >   Public，匿名用户才能直接拉取；私有状态下需先 `docker login ghcr.io`。
+> - 如配置了仓库 Secrets `DOCKERHUB_USERNAME` 与 `DOCKERHUB_TOKEN`，打 tag 时同一镜像会同步推送到
+>   Docker Hub 的 `<你的命名空间>/reminders`（`0.x.y`、`0.x`、`latest`），无需重新构建。
 > - 数据卷挂载到容器内 `/app/data`（数据库、上传文件、日志），删除容器不会丢数据。
 
 ## 功能一览
@@ -340,7 +342,7 @@ make package PACKAGE_TARGET=docker
 ```
 
 - **打 tag 推送后，CI 自动构建并推送 `linux/amd64` 镜像、创建 Release**（发布说明取自 CHANGELOG），
-  无需本地执行打包命令。
+  无需本地执行打包命令；配置 Docker Hub 凭据后会同时把镜像清单同步到 Docker Hub。
 - 发版前必须同步 `VERSION`（带 `v`）与 `app.json`（不带 `v`），并在 `CHANGELOG.md` 顶部新增版本小节；
   数据库迁移版本只升不降，缺少版本号会导致预埋迁移不执行。
 

@@ -95,12 +95,13 @@ jobs:
         id: creds
         env:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
         run: |
-          if [ -n "$DOCKERHUB_USERNAME" ]; then
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
             echo "available=true" >> "$GITHUB_OUTPUT"
           else
             echo "available=false" >> "$GITHUB_OUTPUT"
-            echo "未配置 Docker Hub 凭据，本次只推送到 ghcr.io。" >> "$GITHUB_STEP_SUMMARY"
+            echo "未配置 Docker Hub 凭据（DOCKERHUB_USERNAME / DOCKERHUB_TOKEN），本次只推送到 ghcr.io。" >> "$GITHUB_STEP_SUMMARY"
           fi
 
       # 只构建 amd64，不再需要 QEMU 跨架构模拟。
@@ -125,6 +126,7 @@ jobs:
             type=raw,value=latest
 
       - name: 构建并推送 ghcr.io
+        id: build-ghcr
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -156,21 +158,20 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=raw,value=latest
 
-      # 复用上一步的构建缓存，第二次推送只多花传输时间。
-      - name: 构建并推送 Docker Hub
+      # 直接把 ghcr.io 上刚构建好的镜像清单复制到 Docker Hub：
+      # 不重新构建，两个仓库拿到的是同一个 digest，省时且避免双份构建漂移。
+      - name: 同步镜像到 Docker Hub
         if: steps.creds.outputs.available == 'true'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          push: true
-          tags: ${{ steps.meta-dockerhub.outputs.tags }}
-          labels: ${{ steps.meta-dockerhub.outputs.labels }}
-          cache-from: type=gha
-          build-args: |
-            VERSION=${{ github.ref_name }}
-            BUILD_TIME=${{ steps.buildtime.outputs.value }}
-            GIT_COMMIT=${{ github.sha }}
+        env:
+          DOCKERHUB_TAGS: ${{ steps.meta-dockerhub.outputs.tags }}
+          SOURCE_IMAGE: ghcr.io/${{ github.repository }}@${{ steps.build-ghcr.outputs.digest }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [ -n "$tag" ] && args+=(--tag "$tag")
+          done <<< "$DOCKERHUB_TAGS"
+          docker buildx imagetools create "${args[@]}" "$SOURCE_IMAGE"
 
   release:
     name: 创建 Release
