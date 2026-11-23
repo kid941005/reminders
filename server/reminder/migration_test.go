@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 
 	"smallgo/server/database"
+	"smallgo/server/sysconfig"
 )
 
 // SQLite 给**已存在的表**新增 NOT NULL 列时，必须同时给出默认值，否则
@@ -192,6 +193,78 @@ func TestDisableInAppForImportedRemindersUpgrade(t *testing.T) {
 	}
 	if importedJob.Status != "cancelled" {
 		t.Fatalf("导入日程的站内投递任务未取消: %s", importedJob.Status)
+	}
+}
+
+// 升级前创建的导入日程没有渠道；升级时为「零渠道」的活跃导入条目补上用户
+// 当前的默认提醒渠道，用户已有渠道的条目和手工提醒保持不变。迁移可重跑。
+func TestBackfillImportedReminderDefaultChannelsUpgrade(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	const userID = 62
+	if err := sysconfig.UpdateConfig(appDB, "reminder_default_channels", "inapp", userID); err != nil {
+		t.Fatal(err)
+	}
+	due := time.Now().Add(2 * time.Hour).UTC()
+	manual := Reminder{UserID: userID, ListID: 1, Title: "手动提醒", DueAt: &due, RepeatRule: "none", Calendar: "solar", Version: 1}
+	imported := Reminder{UserID: userID, ListID: 1, Title: "导入日程", DueAt: &due, RepeatRule: "none", Calendar: "solar", Version: 1,
+		ExternalSource: ExternalSourceDingTalk, ExternalUID: "backfill-1"}
+	configured := Reminder{UserID: userID, ListID: 1, Title: "已配置渠道", DueAt: &due, RepeatRule: "none", Calendar: "solar", Version: 1,
+		ExternalSource: ExternalSourceDingTalk, ExternalUID: "backfill-2"}
+	for _, item := range []*Reminder{&manual, &imported, &configured} {
+		if err := appDB.Create(item).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := appDB.Create(&ReminderChannel{ReminderID: configured.ID, UserID: userID, Channel: ChannelEmail}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	var upgrade *database.Upgrade
+	for i := range database.Upgrades {
+		if database.Upgrades[i].Name == "backfill_imported_reminder_default_channels" {
+			upgrade = &database.Upgrades[i]
+			break
+		}
+	}
+	if upgrade == nil {
+		t.Fatal("未注册 backfill_imported_reminder_default_channels 迁移")
+	}
+	for round := 0; round < 2; round++ { // 第二轮验证幂等
+		if err := upgrade.Upgrade(appDB); err != nil {
+			t.Fatalf("run upgrade (round %d): %v", round, err)
+		}
+	}
+
+	var manualInApp, importedInApp, configuredInApp, configuredEmail int64
+	count := func(reminderID uint, channel string) int64 {
+		var n int64
+		if err := appDB.Model(&ReminderChannel{}).Where("reminder_id = ? AND channel = ?", reminderID, channel).Count(&n).Error; err != nil {
+			t.Fatal(err)
+		}
+		return n
+	}
+	manualInApp = count(manual.ID, ChannelInApp)
+	importedInApp = count(imported.ID, ChannelInApp)
+	configuredInApp = count(configured.ID, ChannelInApp)
+	configuredEmail = count(configured.ID, ChannelEmail)
+	if manualInApp != 0 {
+		t.Fatalf("手工提醒不应被改动: %d", manualInApp)
+	}
+	if importedInApp != 1 {
+		t.Fatalf("导入日程应补上默认站内渠道: %d", importedInApp)
+	}
+	if configuredInApp != 0 || configuredEmail != 1 {
+		t.Fatalf("已有渠道的导入日程不应被覆盖: inapp=%d email=%d", configuredInApp, configuredEmail)
+	}
+
+	var jobCount int64
+	if err := appDB.Model(&DeliveryJob{}).Where("reminder_id = ? AND channel = ?", imported.ID, ChannelInApp).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if jobCount != 1 {
+		t.Fatalf("补渠道后应生成投递任务，got %d", jobCount)
 	}
 }
 

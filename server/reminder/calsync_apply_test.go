@@ -4,10 +4,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"smallgo/server/sysconfig"
 )
 
-// 导入的日程不应该默认产生站内提醒：用户通常已经在日程来源里收到通知，
-// 没有主动勾选渠道时只进列表，不创建渠道与投递任务。
+// 未配置默认提醒渠道时，导入的日程保持静默：只进列表，不创建渠道与投递任务。
 func TestApplySyncEventsImportsWithoutChannels(t *testing.T) {
 	cleanup := testDB(t)
 	defer cleanup()
@@ -36,7 +37,83 @@ func TestApplySyncEventsImportsWithoutChannels(t *testing.T) {
 		t.Fatal(err)
 	}
 	if channelCount != 0 || jobCount != 0 {
-		t.Fatalf("导入日程不应默认创建渠道或投递任务: channels=%d jobs=%d", channelCount, jobCount)
+		t.Fatalf("未配置默认渠道时不应创建渠道或投递任务: channels=%d jobs=%d", channelCount, jobCount)
+	}
+}
+
+// 配置了默认提醒渠道时，导入的日程要像手工新建一样带上这些渠道；没有绑定
+// 的渠道必须被过滤掉，否则会生成注定失败的投递任务。
+func TestApplySyncEventsUsesDefaultNotificationChannels(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	const userID = 510
+	if err := sysconfig.UpdateConfig(appDB, "reminder_default_channels", "inapp,email", userID); err != nil {
+		t.Fatal(err)
+	}
+	cfg := CalendarSync{UserID: userID, ListID: 1, RemindBeforeMinutes: 15}
+	due := time.Now().AddDate(0, 0, 2).Truncate(time.Minute)
+	events := []ICalEvent{{UID: "default-channel-1", Summary: "默认渠道日程", Start: due, RepeatRule: "none"}}
+
+	imported, _, err := applySyncEvents(appDB, cfg, events, time.Now().AddDate(0, 0, -7), time.Now().AddDate(0, 0, 180), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if imported != 1 {
+		t.Fatalf("imported=%d", imported)
+	}
+
+	var item Reminder
+	if err := appDB.Where("external_uid = ?", "default-channel-1").First(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	var channels []ReminderChannel
+	if err := appDB.Where("reminder_id = ? AND enabled = ?", item.ID, true).Find(&channels).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(channels) != 1 || channels[0].Channel != ChannelInApp {
+		t.Fatalf("应只保留站内渠道（email 未绑定）: %#v", channels)
+	}
+	var jobCount int64
+	if err := appDB.Model(&DeliveryJob{}).Where("reminder_id = ?", item.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if jobCount != 1 {
+		t.Fatalf("默认渠道应生成投递任务，got %d", jobCount)
+	}
+}
+
+// 已经过去的日程即使配置了默认渠道也不补通知：首次启用默认渠道时不能把
+// 同步窗口里的历史会议一次性全部推送出去。
+func TestApplySyncEventsSkipsDefaultChannelsForPastEvents(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	const userID = 511
+	if err := sysconfig.UpdateConfig(appDB, "reminder_default_channels", "inapp", userID); err != nil {
+		t.Fatal(err)
+	}
+	cfg := CalendarSync{UserID: userID, ListID: 1, RemindBeforeMinutes: 15}
+	past := time.Now().Add(-2 * time.Hour).UTC().Truncate(time.Minute)
+	events := []ICalEvent{{UID: "past-default-1", Summary: "历史会议", Start: past, RepeatRule: "none"}}
+
+	if _, _, err := applySyncEvents(appDB, cfg, events, time.Now().AddDate(0, 0, -7), time.Now().AddDate(0, 0, 180), true); err != nil {
+		t.Fatal(err)
+	}
+
+	var item Reminder
+	if err := appDB.Where("external_uid = ?", "past-default-1").First(&item).Error; err != nil {
+		t.Fatal(err)
+	}
+	var channelCount, jobCount int64
+	if err := appDB.Model(&ReminderChannel{}).Where("reminder_id = ?", item.ID).Count(&channelCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := appDB.Model(&DeliveryJob{}).Where("reminder_id = ?", item.ID).Count(&jobCount).Error; err != nil {
+		t.Fatal(err)
+	}
+	if channelCount != 0 || jobCount != 0 {
+		t.Fatalf("过去的日程不应补发通知: channels=%d jobs=%d", channelCount, jobCount)
 	}
 }
 

@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
 	"smallgo/server/logger"
 	"smallgo/server/reminder/core"
+	"smallgo/server/sysconfig"
 
 	"gorm.io/gorm"
 )
@@ -368,9 +370,14 @@ func applySyncEvents(tx *gorm.DB, cfg CalendarSync, events []ICalEvent, from, to
 			if err := tx.Create(&created).Error; err != nil {
 				return imported, 0, err
 			}
-			// 导入日程默认不推送：用户通常已经在日程来源里收到过提醒，
-			// 站内消息需要用户在该条提醒里主动开启。
+			// 导入日程默认沿用用户设置里的「默认提醒渠道」。没有配置默认渠道
+			// 时保持不推送：日程来源通常已经提醒过，站内消息也应该显式开启。
+			// 已经过去的日程不再补发通知，避免首次启用默认渠道时把窗口内的历史
+			// 会议一次性全部推送出去。
 			channels := []string{}
+			if due.After(now) {
+				channels = defaultNotificationChannels(tx, cfg.UserID)
+			}
 			if err := replaceChannels(tx, created, SaveReminderInput{Channels: channels}); err != nil {
 				return imported, 0, err
 			}
@@ -513,6 +520,73 @@ func composeSyncNotes(event ICalEvent) string {
 // Imported rows start with none: the source calendar already notifies the user,
 // so in-app delivery is opt-in per reminder. A read failure also returns no
 // channels rather than silently resurrecting the old in-app default.
+// defaultNotificationChannels resolves the user's configured default
+// notification channels (sysconfig "reminder_default_channels") and keeps only
+// channels that can actually deliver: in-app always works, every other channel
+// must have an active binding. This mirrors the frontend rule used when a new
+// reminder is created so imported events behave like manually created ones.
+func defaultNotificationChannels(db *gorm.DB, userID uint) []string {
+	raw, err := sysconfig.GetConfig(db, "reminder_default_channels", userID)
+	if err != nil || strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	usable := make(map[string]bool, len(supportedChannels))
+	for _, status := range channelStatuses(db, userID) {
+		if status.Channel == ChannelInApp || (status.Bound && status.Status == "active") {
+			usable[status.Channel] = true
+		}
+	}
+	seen := make(map[string]bool, len(supportedChannels))
+	channels := make([]string, 0, len(supportedChannels))
+	for _, item := range strings.Split(raw, ",") {
+		ch := strings.ToLower(strings.TrimSpace(item))
+		if !supportedChannels[ch] || !usable[ch] || seen[ch] {
+			continue
+		}
+		seen[ch] = true
+		channels = append(channels, ch)
+	}
+	sort.Strings(channels)
+	return channels
+}
+
+// backfillImportedReminderDefaultChannels is a one-off upgrade helper: existing
+// imported events were created before defaults were applied, so give every
+// active imported reminder without any channel the user's current default
+// channels. Reminders the user already configured (even with a different
+// channel set) are left untouched.
+func backfillImportedReminderDefaultChannels(db *gorm.DB) error {
+	var userIDs []uint
+	if err := db.Model(&Reminder{}).
+		Where("external_source IS NOT NULL AND external_source <> '' AND deleted_at IS NULL").
+		Distinct().Pluck("user_id", &userIDs).Error; err != nil {
+		return err
+	}
+	for _, userID := range userIDs {
+		channels := defaultNotificationChannels(db, userID)
+		if len(channels) == 0 {
+			continue
+		}
+		var items []Reminder
+		// 只补未来的日程：给过去的事件建任务会在升级后立刻产生一批历史提醒。
+		if err := db.Where("user_id = ? AND external_source IS NOT NULL AND external_source <> '' AND deleted_at IS NULL AND completed_at IS NULL", userID).
+			Where("due_at IS NOT NULL AND due_at > ?", time.Now().UTC()).
+			Where("NOT EXISTS (SELECT 1 FROM reminder_channels WHERE reminder_id = reminders.id AND enabled = ?)", true).
+			Find(&items).Error; err != nil {
+			return err
+		}
+		for _, item := range items {
+			if err := replaceChannels(db, item, SaveReminderInput{Channels: channels}); err != nil {
+				return err
+			}
+			if err := rebuildJobs(db, item, channels); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func enabledChannelsOf(tx *gorm.DB, item Reminder) []string {
 	var rows []ReminderChannel
 	if err := tx.Where("reminder_id = ? AND user_id = ? AND enabled = ?", item.ID, item.UserID, true).Find(&rows).Error; err != nil {

@@ -93,6 +93,14 @@ func init() {
 		},
 	})
 
+	database.Upgrades = append(database.Upgrades, database.Upgrade{
+		Version: "0.26.1", Name: "backfill_imported_reminder_default_channels",
+		// 导入日程过去固定不带通知渠道，导致升级后已有条目永远不会推送。
+		// 这里按每个用户当前的「默认提醒渠道」补一次；用户已经配置过渠道的
+		// 条目保持原样，避免覆盖手工选择。
+		Upgrade: backfillImportedReminderDefaultChannels,
+	})
+
 	database.RegisterModels(
 		&List{}, &Reminder{}, &ReminderChannel{}, &Completion{},
 		&ChannelBinding{}, &ProviderConfig{}, &QQBindCode{}, &DeliveryJob{}, &DeliveryAttempt{}, &Notification{},
@@ -103,7 +111,7 @@ func init() {
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
 		Key: "reminder_default_channels", Scope: sysconfig.ScopeUser, Type: sysconfig.TypeString,
 		Default: "", Group: "notification", Label: "默认提醒渠道",
-		Description: "新建提醒时默认勾选的通知方式；留空表示不默认开启任何渠道，站内消息也需要手动选择",
+		Description: "新建提醒以及从钉钉日程导入的提醒默认使用的通知方式；留空表示不默认开启任何渠道，站内消息也需要手动选择",
 	})
 	sysconfig.RegisterConfig(sysconfig.ConfigDef{
 		Key: "ics_include_holidays", Scope: sysconfig.ScopeUser, Type: sysconfig.TypeBool,
