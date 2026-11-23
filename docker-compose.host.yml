@@ -18,7 +18,7 @@ services:
 
   # 可选：小智语音 MCP 适配器，默认不启动。
   # 镜像由 GitHub Actions 构建并推送到 ghcr.io。
-  # 用法：cp reminder-mcp/.env.example reminder-mcp/.env && docker compose --profile mcp pull
+  # 用法：cp reminder-mcp/.env.example .env && docker compose --profile mcp pull
   #       docker compose --profile mcp up -d
   reminder-mcp:
     profiles: ["mcp"]
@@ -26,7 +26,7 @@ services:
     container_name: reminder-mcp
     network_mode: host
     env_file:
-      - ./reminder-mcp/.env
+      - .env
     environment:
       - TZ=Asia/Shanghai
     depends_on:

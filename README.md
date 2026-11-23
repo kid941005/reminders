@@ -83,7 +83,7 @@ docker compose up -d
 PORT=9000 docker compose -f docker-compose.host.yml up -d
 ```
 
-host 模式不再做端口映射，容器直接监听宿主机上的 `PORT`（默认 `8906`），数据仍保存在 `./data`。同时启用 `reminder-mcp` 时它也在 host 网络里，请把 `reminder-mcp/.env` 的 `REMINDER_API_URL` 改成 `http://127.0.0.1:<PORT>`。
+host 模式不再做端口映射，容器直接监听宿主机上的 `PORT`（默认 `8906`），数据仍保存在 `./data`。同时启用 `reminder-mcp` 时它也在 host 网络里，请把 `.env` 的 `REMINDER_API_URL` 改成 `http://127.0.0.1:<PORT>`。
 
 启动后访问 `http://<主机IP>:<PORT>`（默认 8906），**第一个注册的账号自动成为管理员**。请立即修改管理员密码，再按需关闭注册或创建其他账号。
 
@@ -272,8 +272,8 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 Reminder 后端 v0.18.0 及以上均可用；适配器镜像由 GitHub Actions 构建并推送到 `ghcr.io/kid941005/reminders-mcp:latest`。
 
 ```bash
-cp reminder-mcp/.env.example reminder-mcp/.env
-# 编辑 reminder-mcp/.env：填写 Reminder API Key 与小智 MCP 接入点
+cp reminder-mcp/.env.example .env
+# 编辑 .env：填写 Reminder API Key 与小智 MCP 接入点
 docker compose --profile mcp pull
 docker compose --profile mcp up -d
 ```
