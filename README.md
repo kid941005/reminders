@@ -77,12 +77,12 @@ docker compose up -d
 ### 镜像与版本
 
 - 镜像发布在 GitHub Container Registry：`ghcr.io/kid941005/reminders`，目前只构建 `linux/amd64`。
-- 可用标签：`latest`、`0.24.2`。生产环境建议固定到具体补丁版本（如 `0.24.2`），升级前先看 CHANGELOG。
+- 可用标签：`latest`、`0.25.0`。生产环境建议固定到具体补丁版本（如 `0.25.0`），升级前先看 CHANGELOG。
 - **首次发布后 GHCR 包默认是私有的**：需要到仓库 → **Packages** → `reminders` → **Package settings** 把可见性改为 **Public**，匿名用户才能直接拉取；私有状态下需先 `docker login ghcr.io`。
 - 若仓库配置了 Secrets `DOCKERHUB_USERNAME` 与 `DOCKERHUB_TOKEN`，打 tag 时会同步推送到 Docker Hub 的 `<命名空间>/reminders`（`0.x.y`、`latest`）。
 - 数据卷必须挂载到容器内 `/app/data`（数据库、上传文件、日志都在这里），删除容器不会丢数据。
 
-> **Release 说明**：GitHub Release 只提供源码与发布说明，**不附带各平台二进制压缩包**；所有发行产物以 `ghcr.io` 镜像为准。
+> **Release 说明**：GitHub Release 只提供源码与发布说明；部署与升级请使用 `ghcr.io` 镜像。
 
 ## 功能
 
@@ -384,7 +384,7 @@ make package PACKAGE_TARGET=docker
 
 - **推送 tag 后，CI 自动构建并推送 `linux/amd64` 镜像、创建 Release**（发布说明取自 CHANGELOG），无需本地打包；配置 Docker Hub 凭据后会同步镜像清单。
 - 发版前必须同步 `VERSION`（带 `v`）与 `app.json`（不带 `v`），并在 `CHANGELOG.md` 顶部新增版本小节；数据库迁移版本只升不降，缺少版本号会导致预埋迁移不执行。
-- Release 不附带平台二进制，README 与 CI 均以容器镜像为唯一发行产物。
+- Release 只提供源码与发布说明；发行与升级统一使用 `ghcr.io` 镜像。
 
 ## 项目结构
 
@@ -438,9 +438,6 @@ GHCR 包首次发布默认私有，请按「快速开始」的说明把包可见
 
 **会提供 arm64 镜像吗？**
 目前不提供。CI 仅构建 `linux/amd64` 镜像；如需其它架构，可自行交叉编译或基于仓库 Dockerfile 构建。
-
-**Release 里为什么没有二进制包？**
-本分支以容器镜像为唯一发行产物，Release 只提供源码和发布说明；请使用 `ghcr.io/kid941005/reminders`。
 
 **从上游或飞牛版本迁移？**
 本分支不再提供飞牛应用包，也无法在飞牛应用中心安装。原部署的 SQLite 数据文件（`<data-dir>/db/reminder.db`）格式未变，复制到 Docker 数据卷即可继续使用；飞牛账号绑定关系已随功能移除，迁移后需用原应用账号密码登录。
