@@ -33,6 +33,6 @@ USER appuser
 EXPOSE 8906
 VOLUME ["/app/data"]
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD wget -qO- http://localhost:8906/api/version || exit 1
+  CMD wget -qO- "http://127.0.0.1:${PORT:-8906}/api/version" || exit 1
 ENTRYPOINT ["./reminder"]
 CMD ["-data-dir", "/app/data", "-web-dir", "./static/dist", "-device-type", "docker"]

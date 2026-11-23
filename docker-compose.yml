@@ -3,14 +3,16 @@ services:
     # Tracks the newest published image.
     image: ghcr.io/kid941005/reminders:latest
     container_name: kid941005-reminders
+    # 宿主机端口与容器监听端口使用同一个 PORT，默认 8906。
     ports:
-      - "8906:8906"
+      - "${PORT:-8906}:${PORT:-8906}"
     volumes:
       # 数据库、上传文件、日志和配置均持久化到此目录。
       - ./data:/app/data
     environment:
       - ENV=release
       - DATA_DIR=/app/data
+      - PORT=${PORT:-8906}
       # 匿名统计默认关闭；如需接入，额外设置 STATS_ENDPOINT 并加 -disable-stats=false
     command: ["-data-dir", "/app/data", "-web-dir", "./static/dist", "-device-type", "docker"]
     restart: unless-stopped
