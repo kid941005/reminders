@@ -77,7 +77,7 @@ docker compose up -d
 ### 镜像与版本
 
 - 镜像发布在 GitHub Container Registry：`ghcr.io/kid941005/reminders`，目前只构建 `linux/amd64`。
-- 可用标签：`latest`、`0.26.0`。生产环境建议固定到具体补丁版本（如 `0.26.0`），升级前先看 CHANGELOG。
+- 可用标签：`latest`、`0.26.1`。生产环境建议固定到具体补丁版本（如 `0.26.1`），升级前先看 CHANGELOG。
 - **首次发布后 GHCR 包默认是私有的**：需要到仓库 → **Packages** → `reminders` → **Package settings** 把可见性改为 **Public**，匿名用户才能直接拉取；私有状态下需先 `docker login ghcr.io`。
 - 若仓库配置了 Secrets `DOCKERHUB_USERNAME` 与 `DOCKERHUB_TOKEN`，打 tag 时会同步推送到 Docker Hub 的 `<命名空间>/reminders`（`0.x.y`、`latest`）。
 - 数据卷必须挂载到容器内 `/app/data`（数据库、上传文件、日志都在这里），删除容器不会丢数据。
