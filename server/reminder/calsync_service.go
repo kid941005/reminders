@@ -516,10 +516,6 @@ func composeSyncNotes(event ICalEvent) string {
 	return notes
 }
 
-// enabledChannelsOf reads the channels currently linked to a reminder.
-// Imported rows start with none: the source calendar already notifies the user,
-// so in-app delivery is opt-in per reminder. A read failure also returns no
-// channels rather than silently resurrecting the old in-app default.
 // defaultNotificationChannels resolves the user's configured default
 // notification channels (sysconfig "reminder_default_channels") and keeps only
 // channels that can actually deliver: in-app always works, every other channel
@@ -587,6 +583,9 @@ func backfillImportedReminderDefaultChannels(db *gorm.DB) error {
 	return nil
 }
 
+// enabledChannelsOf reads the channels currently linked to a reminder.
+// Rows imported before defaults were applied may start with none; a read
+// failure also returns no channels rather than resurrecting an old default.
 func enabledChannelsOf(tx *gorm.DB, item Reminder) []string {
 	var rows []ReminderChannel
 	if err := tx.Where("reminder_id = ? AND user_id = ? AND enabled = ?", item.ID, item.UserID, true).Find(&rows).Error; err != nil {
