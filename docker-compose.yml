@@ -1,7 +1,7 @@
 services:
   kid941005-reminders:
-    # 固定到当前发布版本；升级时同步修改这里。
-    image: ghcr.io/kid941005/reminders:0.26.2
+    # Tracks the newest published image.
+    image: ghcr.io/kid941005/reminders:latest
     container_name: kid941005-reminders
     # 宿主机端口与容器监听端口使用同一个 PORT，默认 8906。
     ports:
@@ -23,7 +23,7 @@ services:
   #       docker compose --profile mcp up -d
   reminder-mcp:
     profiles: ["mcp"]
-    image: ghcr.io/kid941005/reminders-mcp:0.26.2
+    image: ghcr.io/kid941005/reminders-mcp:latest
     container_name: reminder-mcp
     env_file:
       - ./reminder-mcp/.env

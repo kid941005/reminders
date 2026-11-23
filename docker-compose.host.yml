@@ -1,7 +1,7 @@
 services:
   kid941005-reminders:
-    # 固定到当前发布版本；升级时同步修改这里。
-    image: ghcr.io/kid941005/reminders:0.26.2
+    # Tracks the newest published image.
+    image: ghcr.io/kid941005/reminders:latest
     container_name: kid941005-reminders
     # host 网络不做端口映射：容器直接监听宿主机上的 PORT。
     network_mode: host
@@ -22,7 +22,7 @@ services:
   #       docker compose --profile mcp up -d
   reminder-mcp:
     profiles: ["mcp"]
-    image: ghcr.io/kid941005/reminders-mcp:0.26.2
+    image: ghcr.io/kid941005/reminders-mcp:latest
     container_name: reminder-mcp
     network_mode: host
     env_file:
