@@ -69,18 +69,21 @@ docker run -d --name reminders \
 
 把 `PORT` 改成其他值时要同步修改 `-p` 映射，例如 `-e PORT=9000 -p 9000:9000`。
 
-或使用仓库自带的 Compose：
+或使用仓库自带的 Compose。先复制根目录 `.env` 模板，再按需填写通知渠道凭据与 `PORT`：
 
 ```bash
+cp .env.example .env
+# 编辑 .env
 docker compose up -d
 ```
 
-默认使用桥接网络，宿主端口与容器监听端口都由 `PORT` 决定，默认 `8906`。改端口时执行 `PORT=9000 docker compose up -d`，宿主机和容器会一起使用 9000。
+默认使用桥接网络，宿主端口与容器监听端口都由 `.env` 中的 `PORT` 决定，默认 `8906`。改端口时在 `.env` 中设置 `PORT=9000` 后再启动。
 
 如果希望容器直接使用宿主机网络（NAS、同机反向代理、局域网 IPv6 等场景），使用仓库附带的 host 网络配置：
 
 ```bash
-PORT=9000 docker compose -f docker-compose.host.yml up -d
+# 先在 .env 中设置 PORT=9000
+docker compose -f docker-compose.host.yml up -d
 ```
 
 host 模式不再做端口映射，容器直接监听宿主机上的 `PORT`（默认 `8906`），数据仍保存在 `./data`。同时启用 `reminder-mcp` 时它也在 host 网络里，请把 `.env` 的 `REMINDER_API_URL` 改成 `http://127.0.0.1:<PORT>`。
@@ -272,8 +275,9 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 Reminder 后端 v0.18.0 及以上均可用；适配器镜像由 GitHub Actions 构建并推送到 `ghcr.io/kid941005/reminders-mcp:latest`。
 
 ```bash
-cp reminder-mcp/.env.example .env
-# 编辑 .env：填写 Reminder API Key 与小智 MCP 接入点
+# 若尚未创建根目录 .env，先复制模板
+cp .env.example .env
+# 将 reminder-mcp/.env.example 中的 MCP 变量补充到 .env，并填写 Reminder API Key 与小智 MCP 接入点
 docker compose --profile mcp pull
 docker compose --profile mcp up -d
 ```
@@ -364,7 +368,7 @@ make dev
 
 浏览器访问 `http://localhost:8906`。开发模式只启动 Go 后端一个服务，API 与前端共用 8906 端口；首次运行会自动安装前端依赖。可用 `PORT=9000 make dev` 临时改端口。
 
-需要邮件、短信、飞书或 QQ 时，先复制 `.env.example` 为 `.env` 并填入服务端凭证，再运行 `make dev`。`.env` 只在本地启动时读取，且不会覆盖已经设置的系统环境变量。
+需要邮件、短信、飞书或 QQ 时，先复制 `.env.example` 为 `.env` 并填入服务端凭证，再运行 `make dev`。`.env` 会被本地 `make dev` 与 `docker compose` 读取，且不会覆盖已经设置的系统环境变量。
 
 仅构建或启动已构建产物：
 

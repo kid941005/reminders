@@ -40,17 +40,15 @@ ESP32 小智 --语音--> 小智服务端 / LLM --MCP(WebSocket)--> mcp_pipe.py
 
 1. 准备配置：
 
-```bash
-cp reminder-mcp/.env.example reminder-mcp/.env
-```
+根目录 `.env` 同时供主服务与 MCP 使用。若尚未创建，先执行 `cp .env.example .env`；再把 `reminder-mcp/.env.example` 中的变量补充进去，不要覆盖已有配置。
 
-编辑 `reminder-mcp/.env`：
+编辑根目录 `.env`：
+
+> 如果使用仓库根目录的 `docker-compose.host.yml`（host 网络），请把 `REMINDER_API_URL` 改成 `http://127.0.0.1:<PORT>`（默认 `8906`）。
 
 ```ini
 # 同一 compose 网络内用服务名；本机直接运行 server.py 时改成 127.0.0.1
 REMINDER_API_URL=http://kid941005-reminders:8906
-
-> 如果使用仓库根目录的 `docker-compose.host.yml`（host 网络），请把 `REMINDER_API_URL` 改成 `http://127.0.0.1:<PORT>`（默认 `8906`）。
 
 # Reminder「个人设置」页生成的 API Key
 REMINDER_API_KEY=你的APIKey
