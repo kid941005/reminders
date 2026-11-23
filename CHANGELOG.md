@@ -2,6 +2,22 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.25.0（2026-11-23）
+
+### 架构与性能：核心抽象、投递幂等、可观测性与前端韧性
+
+本次按七个方向做结构性优化，接口保持向后兼容。
+
+- **核心抽象与渠道注册表**：新增 `server/reminder/core`（`OutboundMessage`、`SendResult`、`Notifier`、`CalendarEvent`、`CalendarProvider`、`WeatherProvider`）与 `channels/registry`、`calendar/registry`、`weather/registry`。7 个通知渠道、CalDAV 日历和风天气改为工厂注册，未注册渠道返回明确错误。
+- **CalDAV 走接口**：`calsync_service.go` 的发现与拉取改由 `calendarRegistry.Resolve("caldav")` 返回的 `core.CalendarProvider` 完成，新增 `coreEventsToICal` 适配，删除日历同步对具体客户端的直接依赖。
+- **投递幂等**：`dispatcher.go` 增加批次大小/并发/最大重试与退避（30s/2m/10m），用 CAS + 唯一索引保证同一投递只成功一次，并输出结构化投递批次计数。
+- **数据库与健康检查**：连接池默认 4/4、busy timeout 10s、慢查询阈值 500ms；`:memory:` 强制单连接；DSN 内嵌 WAL/NORMAL/foreign_keys；新增 2s 超时 HealthCheck；`/api/health` 返回 status、version、uptime、数据库与调度器指标。
+- **可观测性**：中间件生成/透传 32 位 `X-Request-ID`，结构化访问日志；`logger.Structured` 输出单行 JSON；调度器记录任务状态、panic 与耗时；新增 `observability/metrics` 计数器。
+- **分页**：清单、通知、管理端投递记录支持分页；旧的无分页调用保持数组返回，避免破坏现有前端。
+- **前端韧性**：新增 `useVirtualList` 与通知列表虚拟滚动；SSE 重连改为指数退避（1s 起、上限 15s、±20% 抖动），页面隐藏/离线时挂起，恢复可见/联网后自动对账。
+- **压测脚本**：新增 `scripts/loadtest`（k6 脚本与说明）。
+- **验证**：`gofmt`、`go build ./...`、`go vet ./...`、`npm run build` 通过；新增单测覆盖渠道注册、投递幂等、通知分页、请求 ID、健康检查均通过；既有 reminder 3 个与 stats 3 个失败均为本机回环网络/第三方发送环境限制，CI 不受影响。
+
 ## v0.24.2（2026-11-21）
 
 ### 性能：修复液态玻璃在滚动、移动指针时掉帧
