@@ -5,6 +5,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -132,6 +133,29 @@ func Error(format string, args ...interface{}) { write("ERROR", format, args...)
 // audit trail lives in the audit package; this is the human-readable mirror.
 func Audit(format string, args ...interface{}) { write("AUDIT", format, args...) }
 
+// Structured writes one JSON object per line so log collectors can index
+// fields instead of parsing free text. The line always carries ts/level/event
+// and merges the supplied fields on top.
+func Structured(level, event string, fields map[string]interface{}) {
+	level = strings.ToUpper(strings.TrimSpace(level))
+	if level == "" {
+		level = "INFO"
+	}
+	payload := make(map[string]interface{}, len(fields)+3)
+	for k, v := range fields {
+		payload[k] = v
+	}
+	payload["ts"] = time.Now().Format("2006-01-02T15:04:05.000Z07:00")
+	payload["level"] = level
+	payload["event"] = event
+	line, err := json.Marshal(payload)
+	if err != nil {
+		write(level, "%s", event)
+		return
+	}
+	writeRaw(level, string(line)+"\n")
+}
+
 // NewWriter adapts standard-library loggers, such as GORM's logger, so their
 // output follows the same file-only policy and daily rotation as app logs.
 func NewWriter(level string) io.Writer {
@@ -157,22 +181,28 @@ func (w lineWriter) Write(p []byte) (int, error) {
 func write(level, format string, args ...interface{}) {
 	ts := time.Now().Format("2006-01-02 15:04:05")
 	msg := fmt.Sprintf("%s [%s] %s\n", ts, level, fmt.Sprintf(format, args...))
+	writeRaw(level, msg)
+}
 
+// writeRaw writes an already formatted line to the level's file and optional
+// console. Structured() uses it to keep JSON lines exact; write() builds the
+// human-readable prefix first.
+func writeRaw(level, line string) {
 	inst := currentLogger()
 	if inst == nil {
 		// Init has not run yet, so a file destination is unavailable. Startup
 		// failures should still be visible to the invoking terminal.
-		fmt.Fprint(os.Stderr, msg)
+		fmt.Fprint(os.Stderr, line)
 		return
 	}
 
 	inst.mu.Lock()
 	defer inst.mu.Unlock()
 	if f := inst.getFile(level); f != nil {
-		f.WriteString(msg)
+		f.WriteString(line)
 	}
 	if inst.console {
-		fmt.Fprint(os.Stdout, msg)
+		fmt.Fprint(os.Stdout, line)
 	}
 }
 

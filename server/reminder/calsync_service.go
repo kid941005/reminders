@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"smallgo/server/logger"
+	"smallgo/server/reminder/core"
 
 	"gorm.io/gorm"
 )
@@ -65,10 +66,13 @@ func SaveCalendarSync(db *gorm.DB, userID uint, in CalendarSyncInput) (CalendarS
 	}
 
 	// 先连一次再落库：凭据错误在保存时暴露，比等到半小时后的定时任务更早。
-	client := newCalDAVClient(in.Username, password)
+	provider := calendarRegistry.Resolve("caldav", in.Username, password)
+	if provider == nil {
+		return CalendarSync{}, errors.New("CalDAV 客户端未注册")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	collections, err := client.Discover(ctx, in.Server)
+	collections, err := provider.Discover(ctx, in.Server)
 	if err != nil {
 		return CalendarSync{}, err
 	}
@@ -201,7 +205,10 @@ func syncCalendar(db *gorm.DB, cfg CalendarSync) (int, error) {
 		return 0, errors.New("尚未记录日历地址，请重新保存 CalDAV 配置")
 	}
 
-	client := newCalDAVClient(cfg.Username, password)
+	provider := calendarRegistry.Resolve("caldav", cfg.Username, password)
+	if provider == nil {
+		return 0, errors.New("CalDAV 客户端未注册")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
@@ -211,12 +218,12 @@ func syncCalendar(db *gorm.DB, cfg CalendarSync) (int, error) {
 	var events []ICalEvent
 	var fetchErrs []string
 	for _, collection := range collections {
-		fetched, err := client.FetchEvents(ctx, collection, from, to)
+		fetched, err := provider.FetchEvents(ctx, collection, from, to)
 		if err != nil {
 			fetchErrs = append(fetchErrs, fmt.Sprintf("%s: %v", collection, err))
 			continue
 		}
-		events = append(events, fetched...)
+		events = append(events, coreEventsToICal(fetched)...)
 	}
 	if len(fetchErrs) == len(collections) {
 		return 0, fmt.Errorf("读取日历失败: %s", strings.Join(fetchErrs, "; "))
@@ -240,6 +247,20 @@ func syncCalendar(db *gorm.DB, cfg CalendarSync) (int, error) {
 	logger.Info("reminder: 钉钉日程同步 user=%d 集合=%d 拉取=%d 导入=%d 清理=%d",
 		cfg.UserID, len(collections), len(events), imported, pruned)
 	return imported, nil
+}
+
+// coreEventsToICal converts the provider-neutral event type to the local
+// calendar.Event alias so persistence helpers stay provider-agnostic.
+func coreEventsToICal(events []core.CalendarEvent) []ICalEvent {
+	out := make([]ICalEvent, 0, len(events))
+	for _, e := range events {
+		out = append(out, ICalEvent{
+			UID: e.UID, Summary: e.Summary, Description: e.Description, Location: e.Location,
+			Start: e.Start, End: e.End, AllDay: e.AllDay, Status: e.Status,
+			RecurrenceID: e.RecurrenceID, RepeatRule: e.RepeatRule,
+		})
+	}
+	return out
 }
 
 // applySyncEvents 把一轮拉取的 VEVENT 落到本地提醒表，返回导入条数与清理条数。

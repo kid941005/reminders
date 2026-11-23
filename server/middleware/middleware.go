@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
@@ -8,6 +10,7 @@ import (
 	"smallgo/server/auth"
 	"smallgo/server/database"
 	"smallgo/server/logger"
+	"smallgo/server/observability"
 	"smallgo/server/response"
 
 	"github.com/gin-gonic/gin"
@@ -111,6 +114,42 @@ func RequireAdmin() gin.HandlerFunc {
 	}
 }
 
+const requestIDKey = "request_id"
+
+// RequestID propagates or generates a correlation id for every request. It is
+// echoed in the X-Request-ID response header and stored in the gin context so
+// handlers and structured logs can reference the same id.
+func RequestID() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id := strings.TrimSpace(c.GetHeader("X-Request-ID"))
+		if id == "" || len(id) > 128 {
+			id = newRequestID()
+		}
+		c.Set(requestIDKey, id)
+		c.Header("X-Request-ID", id)
+		c.Next()
+	}
+}
+
+func newRequestID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "req-" + time.Now().UTC().Format("20060102150405.000000000")
+	}
+	return hex.EncodeToString(b[:])
+}
+
+// GetRequestID returns the correlation id set by RequestID, or "" when the
+// middleware is not installed (e.g. in unit tests that call handlers directly).
+func GetRequestID(c *gin.Context) string {
+	if v, ok := c.Get(requestIDKey); ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
 func Logger() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		start := time.Now()
@@ -123,6 +162,22 @@ func Logger() gin.HandlerFunc {
 		status := c.Writer.Status()
 		ip := c.ClientIP()
 
-		logger.Info("%3d | %13v | %15s | %-7s %s", status, latency, ip, method, path)
+		observability.HTTPRequests.Inc()
+		if status >= 400 {
+			observability.HTTPErrors.Inc()
+		}
+		fields := map[string]interface{}{
+			"request_id": GetRequestID(c),
+			"method":     method,
+			"path":       path,
+			"status":     status,
+			"latency_ms": latency.Milliseconds(),
+			"ip":         ip,
+			"bytes":      c.Writer.Size(),
+		}
+		if v, ok := c.Get("userID"); ok {
+			fields["user_id"] = v
+		}
+		logger.Structured("INFO", "http_request", fields)
 	}
 }

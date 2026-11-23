@@ -15,6 +15,8 @@
 package scheduler
 
 import (
+	"fmt"
+	"sync"
 	"time"
 
 	"smallgo/server/logger"
@@ -34,8 +36,58 @@ type Job struct {
 
 var registered []Job
 
+// JobStatus is the observed runtime state of one job, exposed by /api/health
+// and the admin diagnostics so a silently failing job becomes visible.
+type JobStatus struct {
+	Name         string    `json:"name"`
+	Interval     string    `json:"interval,omitempty"`
+	Daily        string    `json:"daily,omitempty"`
+	Runs         int64     `json:"runs"`
+	LastRun      time.Time `json:"last_run"`
+	LastDuration string    `json:"last_duration"`
+	LastError    string    `json:"last_error,omitempty"`
+}
+
+var (
+	statusMu sync.RWMutex
+	statuses = map[string]*JobStatus{}
+)
+
+// Snapshot returns one entry per job that has run at least once (plus jobs
+// registered with RunAtStart as soon as they start).
+func Snapshot() []JobStatus {
+	statusMu.RLock()
+	defer statusMu.RUnlock()
+	out := make([]JobStatus, 0, len(statuses))
+	for _, s := range statuses {
+		out = append(out, *s)
+	}
+	return out
+}
+
+func recordJob(name string, d time.Duration, errMsg string) {
+	statusMu.Lock()
+	defer statusMu.Unlock()
+	s := statuses[name]
+	if s == nil {
+		s = &JobStatus{Name: name}
+		statuses[name] = s
+	}
+	s.Runs++
+	s.LastRun = time.Now().UTC()
+	s.LastDuration = d.String()
+	s.LastError = errMsg
+}
+
 // Register adds a job. Call from init() before the server starts.
-func Register(j Job) { registered = append(registered, j) }
+func Register(j Job) {
+	registered = append(registered, j)
+	statusMu.Lock()
+	if _, ok := statuses[j.Name]; !ok {
+		statuses[j.Name] = &JobStatus{Name: j.Name, Interval: j.Interval.String(), Daily: j.Daily}
+	}
+	statusMu.Unlock()
+}
 
 // All returns the registered jobs (useful for tests/introspection).
 func All() []Job { return registered }
@@ -59,10 +111,14 @@ func (s *Scheduler) Stop() { close(s.stop) }
 
 func (s *Scheduler) run(j Job) {
 	safeRun := func() {
+		start := time.Now()
+		var errMsg string
 		defer func() {
 			if r := recover(); r != nil {
+				errMsg = "panic: " + fmt.Sprint(r)
 				logger.Error("scheduler: job %q panicked: %v", j.Name, r)
 			}
+			recordJob(j.Name, time.Since(start), errMsg)
 		}()
 		j.Run()
 	}

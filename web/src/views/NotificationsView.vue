@@ -16,29 +16,39 @@
       <button class="rounded-xl border border-border bg-surface px-4 py-2 text-xs font-bold text-foreground transition hover:bg-muted" @click="load()">重试</button>
     </div>
 
-    <div v-else-if="notifications.length" class="surface overflow-hidden rounded-[26px]">
+    <div
+      v-else-if="notifications.length"
+      ref="scrollEl"
+      class="surface rounded-[26px]"
+      :class="isVirtual ? 'overflow-y-auto overflow-x-hidden' : 'overflow-hidden'"
+      :style="isVirtual ? { height: viewportHeight + 'px' } : undefined"
+      @scroll="handleScroll"
+    >
+      <div :style="isVirtual ? { position: 'relative', height: totalHeight + 'px' } : undefined">
       <button
-        v-for="item in notifications"
-        :key="item.id"
+        v-for="row in renderedItems"
+        :key="row.item.id"
         class="notification-row group"
-        :class="{ unread: !item.read_at }"
-        @click="read(item)"
+        :class="[{ unread: !row.item.read_at }, isVirtual ? 'overflow-hidden' : '']"
+                :style="isVirtual ? { position: 'absolute', top: '0', left: '0', right: '0', transform: 'translateY(' + row.index * itemHeight + 'px)', height: itemHeight + 'px' } : undefined"
+        @click="read(row.item)"
       >
         <span class="icon-chip">
-          <svg v-if="item.type === 'channel_failed'" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M12 9v4m0 4h.01M10.3 3.8 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z" stroke-width="1.8" stroke-linecap="round"/></svg>
-          <svg v-else-if="item.type === 'weather'" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.2 9.2 4.4 4.4 0 0 1 17 18H7Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <svg v-if="row.item.type === 'channel_failed'" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M12 9v4m0 4h.01M10.3 3.8 2.5 17.2A2 2 0 0 0 4.2 20h15.6a2 2 0 0 0 1.7-2.8L13.7 3.8a2 2 0 0 0-3.4 0Z" stroke-width="1.8" stroke-linecap="round"/></svg>
+          <svg v-else-if="row.item.type === 'weather'" viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M7 18a4 4 0 0 1-.5-7.97A5.5 5.5 0 0 1 17.2 9.2 4.4 4.4 0 0 1 17 18H7Z" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <svg v-else viewBox="0 0 24 24" class="h-5 w-5" fill="none" stroke="currentColor"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
         <span class="min-w-0 flex-1 text-left">
           <span class="flex items-center gap-2">
-            <strong class="truncate text-sm">{{ item.title }}</strong>
-            <span v-if="!item.read_at" class="h-2 w-2 shrink-0 rounded-full bg-brand-500"></span>
+            <strong class="truncate text-sm">{{ row.item.title }}</strong>
+            <span v-if="!row.item.read_at" class="h-2 w-2 shrink-0 rounded-full bg-brand-500"></span>
           </span>
-          <span class="mt-0.5 block whitespace-pre-line text-xs leading-5 text-muted-foreground sm:mt-1">{{ item.body }}</span>
-          <span class="mt-1 block text-xs font-medium text-muted-foreground/70 sm:mt-2">{{ formatTime(item.created_at) }}</span>
+          <span class="mt-0.5 block whitespace-pre-line text-xs leading-5 text-muted-foreground sm:mt-1">{{ row.item.body }}</span>
+          <span class="mt-1 block text-xs font-medium text-muted-foreground/70 sm:mt-2">{{ formatTime(row.item.created_at) }}</span>
         </span>
         <svg class="h-4 w-4 text-muted-foreground/40 opacity-0 transition group-hover:opacity-100" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m9 5 7 7-7 7" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
+      </div>
     </div>
 
     <div v-else class="flex min-h-[300px] flex-col items-center justify-center rounded-[28px] border border-dashed border-border bg-surface/35 text-center sm:min-h-[420px]">
@@ -56,6 +66,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../api/reminder'
 import type { ReminderRealtimeEvent, RealtimeNotification } from '../services/reminderRealtime'
 import PageHeader from '../components/PageHeader.vue'
+import { useVirtualList } from '../composables/useVirtualList'
 
 type NotificationItem = RealtimeNotification
 
@@ -63,6 +74,16 @@ const notifications = ref<NotificationItem[]>([])
 const loading = ref(true)
 const errorMsg = ref('')
 const unread = computed(() => notifications.value.filter(x => !x.read_at).length)
+
+const {
+  scrollEl,
+  isVirtual,
+  totalHeight,
+  renderedItems,
+  viewportHeight,
+  itemHeight,
+  handleScroll,
+} = useVirtualList(notifications, { itemHeight: 112, viewportHeight: 560, threshold: 30 })
 
 async function load() {
   loading.value = true

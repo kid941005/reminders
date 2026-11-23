@@ -105,13 +105,42 @@ func setupAdminRoutes(api *gin.RouterGroup, db *gorm.DB) {
 	api.GET("/reminder/admin/weather", handleAdminGetWeather(db))
 	api.PUT("/reminder/admin/weather", handleAdminSaveWeather(db))
 	api.GET("/reminder/admin/deliveries", func(c *gin.Context) {
+		page, pageSize, paged := pageParams(c)
+		var total int64
+		if paged {
+			if err := db.Model(&DeliveryJob{}).Count(&total).Error; err != nil {
+				response.ErrorInternal(c, "统计投递记录失败")
+				return
+			}
+		}
 		var jobs []DeliveryJob
-		if err := db.Order("id DESC").Limit(200).Find(&jobs).Error; err != nil {
+		q := db.Order("id DESC")
+		if paged {
+			q = q.Offset(utils.Offset(page, pageSize)).Limit(pageSize)
+		} else {
+			q = q.Limit(200)
+		}
+		if err := q.Find(&jobs).Error; err != nil {
 			response.ErrorInternal(c, "读取投递记录失败")
+			return
+		}
+		if paged {
+			response.SuccessPage(c, jobs, total, page, pageSize)
 			return
 		}
 		response.Success(c, jobs)
 	})
+}
+
+// pageParams reports whether the caller asked for pagination. Legacy callers
+// send no page param and receive the previous plain array; new callers get
+// {items,total,page,pageSize} from response.SuccessPage.
+func pageParams(c *gin.Context) (page, pageSize int, ok bool) {
+	if c.Query("page") == "" && c.Query("page_size") == "" {
+		return 0, 0, false
+	}
+	page, pageSize = utils.NormalizePage(utils.Atoi(c.Query("page"), 1), utils.Atoi(c.Query("page_size"), utils.DefaultPageSize))
+	return page, pageSize, true
 }
 
 func currentUserID(c *gin.Context) uint {
@@ -155,8 +184,20 @@ func handleListLists(db *gorm.DB) gin.HandlerFunc {
 			response.ErrorInternal(c, "初始化默认清单失败")
 			return
 		}
+		page, pageSize, paged := pageParams(c)
+		var total int64
+		if paged {
+			if err := db.Model(&List{}).Where("user_id = ? AND deleted_at IS NULL", userID).Count(&total).Error; err != nil {
+				response.ErrorInternal(c, "统计清单失败")
+				return
+			}
+		}
 		var lists []List
-		if err := db.Where("user_id = ? AND deleted_at IS NULL", userID).Order("is_default DESC, position ASC, id ASC").Find(&lists).Error; err != nil {
+		q := db.Where("user_id = ? AND deleted_at IS NULL", userID).Order("is_default DESC, position ASC, id ASC")
+		if paged {
+			q = q.Offset(utils.Offset(page, pageSize)).Limit(pageSize)
+		}
+		if err := q.Find(&lists).Error; err != nil {
 			response.ErrorInternal(c, "读取清单失败")
 			return
 		}
@@ -179,6 +220,10 @@ func handleListLists(db *gorm.DB) gin.HandlerFunc {
 		result := make([]ListDTO, 0, len(lists))
 		for _, list := range lists {
 			result = append(result, ListDTO{List: list, OpenCount: openCounts[list.ID]})
+		}
+		if paged {
+			response.SuccessPage(c, result, total, page, pageSize)
+			return
 		}
 		response.Success(c, result)
 	}
@@ -660,9 +705,29 @@ func handleSummary(db *gorm.DB) gin.HandlerFunc {
 
 func handleNotifications(db *gorm.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		userID := currentUserID(c)
+		page, pageSize, paged := pageParams(c)
+		base := db.Model(&Notification{}).Where("user_id = ?", userID)
+		var total int64
+		if paged {
+			if err := base.Count(&total).Error; err != nil {
+				response.ErrorInternal(c, "统计通知失败")
+				return
+			}
+		}
 		var rows []Notification
-		if err := db.Where("user_id = ?", currentUserID(c)).Order("id DESC").Limit(100).Find(&rows).Error; err != nil {
+		q := db.Where("user_id = ?", userID).Order("id DESC")
+		if paged {
+			q = q.Offset(utils.Offset(page, pageSize)).Limit(pageSize)
+		} else {
+			q = q.Limit(100)
+		}
+		if err := q.Find(&rows).Error; err != nil {
 			response.ErrorInternal(c, "读取通知失败")
+			return
+		}
+		if paged {
+			response.SuccessPage(c, rows, total, page, pageSize)
 			return
 		}
 		response.Success(c, rows)

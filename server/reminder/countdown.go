@@ -8,6 +8,7 @@ import (
 
 	"smallgo/server/lunar"
 	"smallgo/server/response"
+	"smallgo/server/utils"
 
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -186,7 +187,21 @@ func handleListCountdowns(db *gorm.DB) gin.HandlerFunc {
 			response.ErrorInternal(c, "读取纪念日失败")
 			return
 		}
-		response.Success(c, items)
+		page, pageSize, paged := pageParams(c)
+		if !paged {
+			response.Success(c, items)
+			return
+		}
+		total := len(items)
+		start := utils.Offset(page, pageSize)
+		if start > total {
+			start = total
+		}
+		end := start + pageSize
+		if end > total {
+			end = total
+		}
+		response.SuccessPage(c, items[start:end], int64(total), page, pageSize)
 	}
 }
 

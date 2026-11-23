@@ -21,6 +21,7 @@ import (
 	"smallgo/server/holiday"
 	"smallgo/server/logger"
 	"smallgo/server/middleware"
+	"smallgo/server/observability"
 	"smallgo/server/response"
 	"smallgo/server/scheduler"
 	"smallgo/server/security"
@@ -268,6 +269,7 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 	}); err != nil {
 		logger.Warn("set trusted proxies: %v", err)
 	}
+	r.Use(middleware.RequestID())
 	r.Use(middleware.Logger())
 	r.Use(gin.Recovery())
 	r.Use(middleware.CORS(cfg.CORSOrigin))
@@ -309,11 +311,22 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 	})
 
 	// Liveness/readiness probe for Docker, NAS health checks, uptime monitors.
+	// The database ping decides ok/degraded; counters and job snapshots are
+	// informational so a single slow dependency does not flap the probe.
 	api.GET("/health", func(c *gin.Context) {
+		dbHealth := database.HealthCheck(db)
+		status := "ok"
+		if !dbHealth.OK {
+			status = "degraded"
+		}
 		response.Success(c, gin.H{
-			"status":  "ok",
-			"version": version.Version,
-			"time":    time.Now().Format(time.RFC3339),
+			"status":    status,
+			"version":   version.Version,
+			"time":      time.Now().Format(time.RFC3339),
+			"uptime_s":  observability.UptimeSeconds(),
+			"database":  dbHealth,
+			"metrics":   observability.Snapshot(),
+			"scheduler": scheduler.Snapshot(),
 		})
 	})
 

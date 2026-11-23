@@ -10,18 +10,75 @@ import (
 	"time"
 
 	"smallgo/server/logger"
+	"smallgo/server/observability"
+	"smallgo/server/reminder/core"
 
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
+const (
+	// deliveryBatchSize caps how many due jobs one scheduler tick claims. The
+	// old value was 100; 200 keeps a backlog draining quickly without holding
+	// the SQLite write lock for a long transaction.
+	deliveryBatchSize = 200
+	// deliveryWorkers bounds concurrent provider calls. Each reminder used to
+	// occupy the single serial loop; now at most this many goroutines exist in
+	// a tick, so a slow SMTP server cannot spawn one goroutine per reminder.
+	deliveryWorkers = 4
+	// deliveryMaxAttempts includes the first attempt: 1 initial + 3 retries.
+	deliveryMaxAttempts = 4
+)
+
 var dispatchMu sync.Mutex
+
+type dispatchStatus struct {
+	mu           sync.RWMutex
+	running      bool
+	lastRun      time.Time
+	lastDuration time.Duration
+	lastBatch    int
+	lastError    string
+}
+
+var dispatchState dispatchStatus
+
+// DispatchSnapshot is safe for the health endpoint and diagnostics.
+func DispatchSnapshot() map[string]interface{} {
+	dispatchState.mu.RLock()
+	defer dispatchState.mu.RUnlock()
+	return map[string]interface{}{
+		"running":       dispatchState.running,
+		"last_run":      dispatchState.lastRun,
+		"last_duration": dispatchState.lastDuration.String(),
+		"last_batch":    dispatchState.lastBatch,
+		"last_error":    dispatchState.lastError,
+	}
+}
+
+func setDispatchRunning(running bool) {
+	dispatchState.mu.Lock()
+	dispatchState.running = running
+	dispatchState.mu.Unlock()
+}
+
+func recordDispatchDone(batch int, started time.Time, errMsg string) {
+	dispatchState.mu.Lock()
+	dispatchState.lastRun = time.Now().UTC()
+	dispatchState.lastBatch = batch
+	dispatchState.lastDuration = time.Since(started)
+	dispatchState.lastError = errMsg
+	dispatchState.running = false
+	dispatchState.mu.Unlock()
+}
 
 func dispatchDueJobs(db *gorm.DB) {
 	if !dispatchMu.TryLock() {
 		return
 	}
 	defer dispatchMu.Unlock()
+	started := time.Now()
+	setDispatchRunning(true)
 
 	// Delivery jobs are persisted as UTC instants. SQLite compares timestamp
 	// values as text in this query, so mixing local and UTC offsets can make a
@@ -36,13 +93,39 @@ func dispatchDueJobs(db *gorm.DB) {
 	if err := db.Where(
 		"(status = ? AND run_at <= ?) OR (status = ? AND next_attempt_at <= ?)",
 		"pending", now, "retry", now,
-	).Order("run_at ASC, id ASC").Limit(100).Find(&jobs).Error; err != nil {
+	).Order("run_at ASC, id ASC").Limit(deliveryBatchSize).Find(&jobs).Error; err != nil {
 		logger.Error("reminder: scan delivery jobs: %v", err)
+		recordDispatchDone(0, started, err.Error())
 		return
 	}
-	for _, job := range jobs {
-		processJob(db, job)
+	if len(jobs) == 0 {
+		recordDispatchDone(0, started, "")
+		return
 	}
+
+	// Bounded worker pool: at most deliveryWorkers sends run concurrently.
+	// CAS in processJob still guarantees one winner per job even if a future
+	// deployment runs multiple instances.
+	sem := make(chan struct{}, deliveryWorkers)
+	var wg sync.WaitGroup
+	for _, job := range jobs {
+		job := job
+		wg.Add(1)
+		sem <- struct{}{}
+		go func() {
+			defer wg.Done()
+			defer func() { <-sem }()
+			processJob(db, job)
+		}()
+	}
+	wg.Wait()
+
+	logger.Structured("INFO", "delivery_batch", map[string]interface{}{
+		"batch":       len(jobs),
+		"workers":     deliveryWorkers,
+		"duration_ms": time.Since(started).Milliseconds(),
+	})
+	recordDispatchDone(len(jobs), started, "")
 }
 
 func processJob(db *gorm.DB, candidate DeliveryJob) {
@@ -83,7 +166,12 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 
 	started := time.Now().UTC()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	sendResult, err := sendChannel(ctx, db, job.Channel, job.UserID, item, job.IdempotencyKey, parseChannelTargets(link.Targets))
+	targets := parseChannelTargets(link.Targets)
+	sendRes, err := dispatcher.Dispatch(ctx, db, core.OutboundMessage{
+		UserID: job.UserID, ReminderID: job.ReminderID, Channel: job.Channel,
+		Title: item.Title, IdempotencyKey: job.IdempotencyKey, Targets: targets,
+		Payload: map[string]interface{}{"item": item, "targets": targets},
+	})
 	cancel()
 	finished := time.Now().UTC()
 	attemptNo := job.AttemptCount + 1
@@ -93,6 +181,7 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 		LatencyMS: finished.Sub(started).Milliseconds(),
 	}
 	if err == nil {
+		observability.DeliverySucceeded.Inc()
 		attempt.Result = "success"
 		attempt.ResponseSummary = "sent"
 		finalizeErr := db.Transaction(func(tx *gorm.DB) error {
@@ -101,7 +190,7 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 			}
 			if e := tx.Model(&DeliveryJob{}).Where("id = ?", job.ID).Updates(map[string]interface{}{
 				"status": "succeeded", "attempt_count": attemptNo,
-				"external_message_id": sendResult.ExternalID, "locked_at": nil, "worker_id": "",
+				"external_message_id": sendRes.ExternalID, "locked_at": nil, "worker_id": "",
 				"last_error_code": "", "last_error_message": "",
 			}).Error; e != nil {
 				return e
@@ -135,7 +224,8 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 	}
 	attempt.ProviderCode = classified.Code
 	attempt.ResponseSummary = truncateRunes(classified.Message, 150)
-	if classified.Permanent || attemptNo >= 3 {
+	if classified.Permanent || attemptNo >= deliveryMaxAttempts {
+		observability.DeliveryFailed.Inc()
 		attempt.Result = "permanent"
 		var failureNotification *Notification
 		txErr := db.Transaction(func(tx *gorm.DB) error {
@@ -167,10 +257,11 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 		return
 	}
 
+	observability.DeliveryRetried.Inc()
 	attempt.Result = "transient"
-	// attemptNo is 1 or 2 here: a third failure takes the permanent branch
-	// above, so only two retry delays are reachable.
-	delays := []time.Duration{time.Minute, 5 * time.Minute}
+	// attemptNo is 1..deliveryMaxAttempts-1 here: the last failure takes the
+	// permanent branch above, so len(delays) == deliveryMaxAttempts-1.
+	delays := []time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute}
 	next := time.Now().UTC().Add(delays[attemptNo-1])
 	_ = db.Transaction(func(tx *gorm.DB) error {
 		if e := tx.Create(&attempt).Error; e != nil {

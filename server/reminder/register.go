@@ -14,6 +14,8 @@ import (
 var appDB *gorm.DB
 
 func init() {
+	registerBuiltinIntegrations()
+
 	database.Upgrades = append(database.Upgrades, database.Upgrade{
 		Version: "0.1.2", Name: "rename_default_site_title",
 		Upgrade: func(db *gorm.DB) error {
