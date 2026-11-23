@@ -61,10 +61,13 @@
 ```bash
 docker run -d --name reminders \
   --restart unless-stopped \
+  -e PORT=8906 \
   -p 8906:8906 \
   -v reminders-data:/app/data \
   ghcr.io/kid941005/reminders:latest
 ```
+
+把 `PORT` 改成其他值时要同步修改 `-p` 映射，例如 `-e PORT=9000 -p 9000:9000`。
 
 或使用仓库自带的 Compose：
 
@@ -72,12 +75,22 @@ docker run -d --name reminders \
 docker compose up -d
 ```
 
-启动后访问 `http://<主机IP>:8906`，**第一个注册的账号自动成为管理员**。请立即修改管理员密码，再按需关闭注册或创建其他账号。
+默认使用桥接网络，宿主端口与容器监听端口都由 `PORT` 决定，默认 `8906`。改端口时执行 `PORT=9000 docker compose up -d`，宿主机和容器会一起使用 9000。
+
+如果希望容器直接使用宿主机网络（NAS、同机反向代理、局域网 IPv6 等场景），使用仓库附带的 host 网络配置：
+
+```bash
+PORT=9000 docker compose -f docker-compose.host.yml up -d
+```
+
+host 模式不再做端口映射，容器直接监听宿主机上的 `PORT`（默认 `8906`），数据仍保存在 `./data`。同时启用 `reminder-mcp` 时它也在 host 网络里，请把 `reminder-mcp/.env` 的 `REMINDER_API_URL` 改成 `http://127.0.0.1:<PORT>`。
+
+启动后访问 `http://<主机IP>:<PORT>`（默认 8906），**第一个注册的账号自动成为管理员**。请立即修改管理员密码，再按需关闭注册或创建其他账号。
 
 ### 镜像与版本
 
 - 镜像发布在 GitHub Container Registry：`ghcr.io/kid941005/reminders`，目前只构建 `linux/amd64`。
-- 可用标签：`latest`、`0.26.1`。生产环境建议固定到具体补丁版本（如 `0.26.1`），升级前先看 CHANGELOG。
+- 可用标签：`latest`、`0.26.2`。生产环境建议固定到具体补丁版本（如 `0.26.2`），升级前先看 CHANGELOG。
 - **首次发布后 GHCR 包默认是私有的**：需要到仓库 → **Packages** → `reminders` → **Package settings** 把可见性改为 **Public**，匿名用户才能直接拉取；私有状态下需先 `docker login ghcr.io`。
 - 若仓库配置了 Secrets `DOCKERHUB_USERNAME` 与 `DOCKERHUB_TOKEN`，打 tag 时会同步推送到 Docker Hub 的 `<命名空间>/reminders`（`0.x.y`、`latest`）。
 - 数据卷必须挂载到容器内 `/app/data`（数据库、上传文件、日志都在这里），删除容器不会丢数据。
@@ -323,7 +336,7 @@ docker compose up -d
 或用固定版本：
 
 ```bash
-docker pull ghcr.io/kid941005/reminders:0.24.2
+docker pull ghcr.io/kid941005/reminders:0.26.2
 # 修改 compose 中的 image 后
 docker compose up -d
 ```

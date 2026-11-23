@@ -2,6 +2,18 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.26.2（2026-11-23）
+
+### 构建：支持 host 网络与通过 PORT 环境变量自定义端口
+
+Docker 部署的监听端口和宿主机映射端口现在统一由 `PORT` 决定，并新增 host 网络配置，适合 NAS、同机反向代理和需要直接使用宿主机网络的场景。
+
+- **默认 Compose 参数化端口**：`docker-compose.yml` 的 `ports` 与容器内 `PORT` 都使用 `PORT`（默认 8906），`PORT=9000 docker compose up -d` 即可让宿主机和容器同时使用 9000。
+- **host 网络配置**：新增 `docker-compose.host.yml`，`network_mode: host`，不做端口映射，容器直接监听宿主机 `PORT`；`reminder-mcp` 可选服务在该文件中同样使用 host 网络。
+- **健康检查跟随端口**：`Dockerfile` 与 `Dockerfile.local` 的 HEALTHCHECK 改为使用 `${PORT:-8906}`，自定义端口后不会因检查旧端口而误报 unhealthy。
+- **文档**：README 补充两种端口设置方式、host 网络用法与 MCP 的 `REMINDER_API_URL` 注意事项。
+- **验证**：`PORT=9000 docker compose -f docker-compose.yml config` 与 `PORT=9000 docker compose -f docker-compose.host.yml config` 均通过；`go build`、`go vet` 与前端构建通过。
+
 ## v0.26.1（2026-11-23）
 
 ### 修复：钉钉日程导入的提醒默认使用默认通知渠道
