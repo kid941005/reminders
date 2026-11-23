@@ -3,31 +3,44 @@ services:
     # Tracks the newest published image.
     image: ghcr.io/kid941005/reminders:latest
     container_name: kid941005-reminders
-    # 启动前先复制 .env.example 为 .env，并按需填写。
-    # 运行参数与通知渠道凭据统一从根目录 .env 读取。
-    env_file:
-      - .env
+    # 运行参数默认值集中在这里；需要覆盖时写入根目录 .env 或当前 shell 环境。
+    # 通知渠道、Apple 提醒事项/CalDAV、站点设置等业务配置请在 Web UI 中设置。
+    environment:
+      - ENV=release
+      - DATA_DIR=/app/data
+      - DEVICE_TYPE=docker
+      - PORT=${PORT:-8906}
+      - RATE_LIMIT=${RATE_LIMIT:-20}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      - LOG_CONSOLE=${LOG_CONSOLE:-false}
+      - DISABLE_STATS=${DISABLE_STATS:-1}
+      - STATS_ENDPOINT=${STATS_ENDPOINT:-}
+      - REMINDER_DATA_KEY=${REMINDER_DATA_KEY:-}
     # 宿主机端口与容器监听端口使用同一个 PORT，默认 8906。
     ports:
       - "${PORT:-8906}:${PORT:-8906}"
     volumes:
       # 数据库、上传文件、日志和配置均持久化到此目录。
       - ./data:/app/data
-    command: ["-data-dir", "/app/data", "-web-dir", "./static/dist", "-device-type", "docker"]
+    command: ["-web-dir", "./static/dist"]
     restart: unless-stopped
 
   # 可选：小智语音 MCP 适配器，默认不启动。
   # 镜像由 GitHub Actions 构建并推送到 ghcr.io。
-  # 用法：先将 reminder-mcp/.env.example 的变量补充到根目录 .env
+  # 用法：在根目录 .env（参考 .env.example）填写 REMINDER_API_KEY 与 MCP_ENDPOINT 后：
   #       docker compose --profile mcp pull && docker compose --profile mcp up -d
   reminder-mcp:
     profiles: ["mcp"]
     image: ghcr.io/kid941005/reminders-mcp:latest
     container_name: reminder-mcp
-    env_file:
-      - .env
     environment:
       - TZ=Asia/Shanghai
+      - REMINDER_API_URL=${REMINDER_API_URL:-http://kid941005-reminders:8906}
+      - REMINDER_API_KEY=${REMINDER_API_KEY:-}
+      - REMINDER_DEFAULT_CHANNELS=${REMINDER_DEFAULT_CHANNELS:-inapp}
+      - REMINDER_TIMEZONE=${REMINDER_TIMEZONE:-Asia/Shanghai}
+      - REMINDER_TIMEOUT=${REMINDER_TIMEOUT:-8}
+      - MCP_ENDPOINT=${MCP_ENDPOINT:-}
     depends_on:
       - kid941005-reminders
     restart: unless-stopped

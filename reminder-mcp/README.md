@@ -40,7 +40,7 @@ ESP32 小智 --语音--> 小智服务端 / LLM --MCP(WebSocket)--> mcp_pipe.py
 
 1. 准备配置：
 
-根目录 `.env` 同时供主服务与 MCP 使用。若尚未创建，先执行 `cp .env.example .env`；再把 `reminder-mcp/.env.example` 中的变量补充进去，不要覆盖已有配置。
+根目录 `.env` 只用于可选覆盖 `docker-compose.yml` 的默认值，以及填写 MCP 所需变量；主服务与通知渠道请用 Web UI 配置。若尚未创建，可先执行 `cp .env.example .env`，再填写下面的 MCP 变量，不要覆盖已有配置。
 
 编辑根目录 `.env`：
 

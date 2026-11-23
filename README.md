@@ -69,24 +69,21 @@ docker run -d --name reminders \
 
 把 `PORT` 改成其他值时要同步修改 `-p` 映射，例如 `-e PORT=9000 -p 9000:9000`。
 
-或使用仓库自带的 Compose。先复制根目录 `.env` 模板，再按需填写通知渠道凭据与 `PORT`：
+或使用仓库自带的 Compose，默认不需要准备 `.env`：
 
 ```bash
-cp .env.example .env
-# 编辑 .env
 docker compose up -d
 ```
 
-默认使用桥接网络，宿主端口与容器监听端口都由 `.env` 中的 `PORT` 决定，默认 `8906`。改端口时在 `.env` 中设置 `PORT=9000` 后再启动。
+默认使用桥接网络，宿主端口与容器监听端口都由 `PORT` 决定，默认 `8906`。改端口时可执行 `PORT=9000 docker compose up -d`，或把 `.env.example` 复制为 `.env` 并取消 `PORT` 注释。邮件、短信、飞书、QQ 等通知渠道与 Apple/CalDAV 等业务配置请在 Web UI 中设置，不写入 `.env`。
 
 如果希望容器直接使用宿主机网络（NAS、同机反向代理、局域网 IPv6 等场景），使用仓库附带的 host 网络配置：
 
 ```bash
-# 先在 .env 中设置 PORT=9000
-docker compose -f docker-compose.host.yml up -d
+PORT=9000 docker compose -f docker-compose.host.yml up -d
 ```
 
-host 模式不再做端口映射，容器直接监听宿主机上的 `PORT`（默认 `8906`），数据仍保存在 `./data`。同时启用 `reminder-mcp` 时它也在 host 网络里，请把 `.env` 的 `REMINDER_API_URL` 改成 `http://127.0.0.1:<PORT>`。
+host 模式不再做端口映射，容器直接监听宿主机上的 `PORT`（默认 `8906`），数据仍保存在 `./data`。同时启用 `reminder-mcp` 时它也在 host 网络里，请在根目录 `.env` 中把 `REMINDER_API_URL` 设为 `http://127.0.0.1:<PORT>`。
 
 启动后访问 `http://<主机IP>:<PORT>`（默认 8906），**第一个注册的账号自动成为管理员**。请立即修改管理员密码，再按需关闭注册或创建其他账号。
 
@@ -275,9 +272,9 @@ curl -X POST -H "X-API-Key: $REMINDER_API_KEY" \
 Reminder 后端 v0.18.0 及以上均可用；适配器镜像由 GitHub Actions 构建并推送到 `ghcr.io/kid941005/reminders-mcp:latest`。
 
 ```bash
-# 若尚未创建根目录 .env，先复制模板
+# 可选：如尚未创建 .env，先复制模板，只填写 MCP 相关变量
 cp .env.example .env
-# 将 reminder-mcp/.env.example 中的 MCP 变量补充到 .env，并填写 Reminder API Key 与小智 MCP 接入点
+# 在 .env 中设置 REMINDER_API_KEY 与 MCP_ENDPOINT（其余变量参考 reminder-mcp/.env.example）
 docker compose --profile mcp pull
 docker compose --profile mcp up -d
 ```
@@ -318,6 +315,8 @@ docker compose --profile mcp up -d
 | `FEISHU_*`、`QQ_BOT_*` | 飞书与 QQ 机器人 |
 | `QWEATHER_API_HOST`、`QWEATHER_API_KEY` | 和风天气（也可在管理员设置页填写） |
 | `REMINDER_DATA_KEY` | 可选的数据加密密钥；设置后请妥善备份 |
+
+> 通过 Docker Compose 部署时，只有运行参数默认写入 `docker-compose.yml`；通知渠道、Apple 提醒事项/CalDAV、站点设置等请用 Web UI 配置。以二进制直接运行或 `make dev` 时，环境变量仍可用于渠道凭证等集成配置。
 
 ### 数据目录
 
@@ -368,7 +367,7 @@ make dev
 
 浏览器访问 `http://localhost:8906`。开发模式只启动 Go 后端一个服务，API 与前端共用 8906 端口；首次运行会自动安装前端依赖。可用 `PORT=9000 make dev` 临时改端口。
 
-需要邮件、短信、飞书或 QQ 时，先复制 `.env.example` 为 `.env` 并填入服务端凭证，再运行 `make dev`。`.env` 会被本地 `make dev` 与 `docker compose` 读取，且不会覆盖已经设置的系统环境变量。
+邮件、短信、飞书或 QQ 等通知渠道建议在 Web UI 的「通知方式」中配置。本地开发如需覆盖端口等运行参数，可复制 `.env.example` 为 `.env` 并取消对应注释；`.env` 会被本地 `make dev` 与 `docker compose` 读取，且不会覆盖已经设置的系统环境变量。
 
 仅构建或启动已构建产物：
 
