@@ -129,7 +129,7 @@
       </div>
 
       <div class="mt-4">
-        <select v-model="appleForm.backend" class="compact-input">
+        <select v-model="appleForm.backend" class="compact-input" @change="onAppleBackendChange">
           <option value="cloudkit">CloudKit（新版 iCloud 提醒事项，iPhone 原生可见）</option>
           <option value="caldav">CalDAV（旧版，仅兼容旧列表）</option>
         </select>
@@ -206,6 +206,7 @@
           class="compact-input mt-2"
           placeholder="CalDAV 服务器，默认 caldav.icloud.com"
           autocomplete="off"
+          @change="onAppleServerChange"
         />
         <p class="mt-1 text-xs leading-5 text-muted-foreground">
           国际区账号填 caldav.icloud.com；中国大陆账号（icloud.com.cn）填 caldav.icloud.com.cn，也可以直接填 www.icloud.com.cn 自动转换。
@@ -232,6 +233,7 @@
       </p>
       <p v-if="appleCfg" class="mt-2 text-xs leading-5 text-muted-foreground">
         列表「{{ appleCfg.collection_name || '已选择' }}」· 待推送 {{ appleCfg.pending_count }} 条 · 已映射 {{ appleCfg.linked_count }} 条 ·
+        上次推送 {{ appleCfg.last_pushed }} 条 ·
         上次同步 {{ appleCfg.last_sync_at ? new Date(appleCfg.last_sync_at).toLocaleString() : '尚未运行' }} ·
         状态 {{ appleCfg.last_status === 'ok' ? '正常' : appleCfg.last_status === 'error' ? '失败' : '未知' }}<span v-if="appleCfg.last_error">：{{ appleCfg.last_error }}</span>
       </p>
@@ -732,6 +734,36 @@ function notifyApple(message: string, type: 'success' | 'error' = 'success') {
   appleMsg.value = message
   appleMsgType.value = type
   window.setTimeout(() => { appleMsg.value = '' }, 5000)
+}
+
+// 切换同步方式或 CalDAV 服务器后，之前加载的列表可能属于另一个账号/服务器，
+// 继续保留会让用户把提醒推到错误的列表，因此要求重新加载后再选择。
+function resetAppleCollectionState() {
+  appleCollections.value = []
+  appleForm.collection_url = ''
+  appleForm.login_id = ''
+}
+
+function resetCloudKitChallenge() {
+  cloudkitNeed2FA.value = false
+  cloudkitCode.value = ''
+  cloudkitOptions.value = null
+  cloudkitOptionsError.value = ''
+  cloudkitPhoneSent.value = false
+  cloudkitSelectedPhoneID.value = 0
+  cloudkitPhoneID.value = 0
+  cloudkitVerifyMode.value = 'device'
+}
+
+function onAppleBackendChange() {
+  resetAppleCollectionState()
+  resetCloudKitChallenge()
+  notifyApple('已切换同步方式，请重新加载并选择提醒事项列表')
+}
+
+function onAppleServerChange() {
+  resetAppleCollectionState()
+  notifyApple('服务器已修改，请重新加载并选择提醒事项列表')
 }
 
 // 后端旧版本可能把空的 phones 序列化成 null；这里统一归一化，避免模板

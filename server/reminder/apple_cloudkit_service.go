@@ -179,41 +179,22 @@ func discoverAppleCloudKitLists(db *gorm.DB, existing *AppleReminderSync) ([]App
 }
 
 func processAppleCloudKitOutbox(db *gorm.DB, cfg AppleReminderSync) (int, int, error) {
+	now := time.Now().UTC()
+	due, err := hasDueAppleReminderRows(db, cfg.UserID, now)
+	if err != nil {
+		return 0, 0, err
+	}
+	if !due {
+		return 0, 0, nil
+	}
 	client, err := newAppleCloudKitClientFromConfig(db, &cfg)
 	if err != nil {
 		markAppleReminderConfig(db, &cfg, 0, 0, errors.New("CloudKit 登录已失效，请重新登录 iCloud"))
 		return 0, 0, errors.New("CloudKit 登录已失效，请重新登录 iCloud")
 	}
-	now := time.Now()
-	var rows []AppleReminderOutbox
-	if err := db.Where("user_id = ? AND status IN ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?)",
-		cfg.UserID, []string{appleReminderStatusPending, appleReminderStatusRetry}, now).
-		Order("id ASC").Limit(appleReminderBatchSize).Find(&rows).Error; err != nil {
-		return 0, 0, err
-	}
-	if len(rows) == 0 {
-		return 0, 0, nil
-	}
-	pushed, failed := 0, 0
-	var firstErr error
-	for _, row := range rows {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		pushErr := pushAppleCloudKitOutboxRow(ctx, db, client, cfg, row)
-		cancel()
-		if pushErr == nil {
-			pushed++
-			continue
-		}
-		failed++
-		if firstErr == nil {
-			firstErr = pushErr
-		}
-		authFailure := errors.Is(pushErr, errAppleAuth)
-		recordAppleReminderFailure(db, row, pushErr, authFailure)
-		if authFailure {
-			break
-		}
-	}
+	pushed, failed, firstErr := drainAppleReminderOutbox(db, cfg.UserID, now, func(ctx context.Context, row AppleReminderOutbox) error {
+		return pushAppleCloudKitOutboxRow(ctx, db, client, cfg, row)
+	})
 	markAppleReminderConfig(db, &cfg, pushed, failed, firstErr)
 	return pushed, failed, nil
 }

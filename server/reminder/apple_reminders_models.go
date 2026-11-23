@@ -10,12 +10,14 @@ const (
 	appleReminderStatusRetry   = "retry"
 	appleReminderStatusError   = "error"
 
-	appleReminderMaxAttempts     = 8
-	appleReminderBatchSize       = 200
-	appleReminderDefaultServer   = "caldav.icloud.com"
-	appleReminderDefaultServerCN = "caldav.icloud.com.cn"
-	appleReminderCalendarProdID  = "-//SmallGo Reminder//Apple Reminders//EN"
-	appleReminderUIDDomain       = "reminder.local"
+	appleReminderMaxAttempts      = 8
+	appleReminderBatchSize        = 200
+	appleReminderMaxBatchesPerRun = 10
+	appleReminderRowTimeout       = 20 * time.Second
+	appleReminderDefaultServer    = "caldav.icloud.com"
+	appleReminderDefaultServerCN  = "caldav.icloud.com.cn"
+	appleReminderCalendarProdID   = "-//SmallGo Reminder//Apple Reminders//EN"
+	appleReminderUIDDomain        = "reminder.local"
 
 	appleReminderBackendCalDAV   = "caldav"
 	appleReminderBackendCloudKit = "cloudkit"

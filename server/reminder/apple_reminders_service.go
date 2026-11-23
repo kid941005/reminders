@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -242,13 +243,19 @@ func RunAppleReminderSync(db *gorm.DB, userID uint) (AppleReminderSyncResult, er
 	if !cfg.Enabled {
 		return AppleReminderSyncResult{}, errors.New("Apple 提醒事项同步已关闭")
 	}
-	if err := resetAppleReminderFailures(db, userID); err != nil {
-		return AppleReminderSyncResult{}, err
-	}
 	lock := appleReminderUserLock(userID)
 	lock.Lock()
+	if err := resetAppleReminderFailures(db, userID); err != nil {
+		lock.Unlock()
+		return AppleReminderSyncResult{}, err
+	}
 	pushed, failed, processErr := processAppleReminderOutbox(db, &cfg)
 	lock.Unlock()
+	if processErr == nil && pushed == 0 && failed == 0 {
+		// An explicit sync with nothing queued should still refresh the
+		// "last synced" marker shown in settings.
+		markAppleReminderConfig(db, &cfg, 0, 0, nil)
+	}
 	pending, _ := countPendingAppleReminders(db, userID)
 	result := AppleReminderSyncResult{Pushed: pushed, Failed: failed, Pending: pending}
 	if processErr != nil {
@@ -298,9 +305,21 @@ func processDueAppleReminderQueue(db *gorm.DB, cfg *AppleReminderSync, now time.
 }
 
 // processAppleReminderOutbox drains the due queue for one configuration.
+// Credentials are decrypted lazily: an empty queue must not surface an error
+// (or overwrite last_status) merely because a stale stored secret cannot be
+// read. The queue is drained in batches so an initial backfill larger than one
+// page still completes in a single manual run.
 func processAppleReminderOutbox(db *gorm.DB, cfg *AppleReminderSync) (int, int, error) {
 	if appleReminderBackendOf(cfg) == appleReminderBackendCloudKit {
 		return processAppleCloudKitOutbox(db, *cfg)
+	}
+	now := time.Now().UTC()
+	due, err := hasDueAppleReminderRows(db, cfg.UserID, now)
+	if err != nil {
+		return 0, 0, err
+	}
+	if !due {
+		return 0, 0, nil
 	}
 	plainPassword, err := decryptTarget(db, cfg.Password)
 	if err != nil {
@@ -308,39 +327,76 @@ func processAppleReminderOutbox(db *gorm.DB, cfg *AppleReminderSync) (int, int, 
 		return 0, 0, errors.New("Apple 应用专用密码无法读取，请重新保存配置")
 	}
 	client := newAppleCalDAVClient(cfg.AppleID, plainPassword)
-	now := time.Now().UTC()
-	var rows []AppleReminderOutbox
-	if err := db.Where("user_id = ? AND status IN ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?)",
-		cfg.UserID, []string{appleReminderStatusPending, appleReminderStatusRetry}, now).
-		Order("id ASC").Limit(appleReminderBatchSize).Find(&rows).Error; err != nil {
-		return 0, 0, err
-	}
-	if len(rows) == 0 {
-		return 0, 0, nil
-	}
-
-	pushed, failed := 0, 0
-	var firstErr error
-	for _, row := range rows {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		pushErr := pushAppleReminderOutboxRow(ctx, db, client, *cfg, row)
-		cancel()
-		if pushErr == nil {
-			pushed++
-			continue
-		}
-		failed++
-		if firstErr == nil {
-			firstErr = pushErr
-		}
-		authFailure := errors.Is(pushErr, errAppleAuth)
-		recordAppleReminderFailure(db, row, pushErr, authFailure)
-		if authFailure {
-			break
-		}
-	}
+	pushed, failed, firstErr := drainAppleReminderOutbox(db, cfg.UserID, now, func(ctx context.Context, row AppleReminderOutbox) error {
+		return pushAppleReminderOutboxRow(ctx, db, client, *cfg, row)
+	})
 	markAppleReminderConfig(db, cfg, pushed, failed, firstErr)
 	return pushed, failed, nil
+}
+
+// hasDueAppleReminderRows reports whether the user has any outbox row that is
+// eligible now. Checking this before decrypting credentials keeps a healthy
+// idle sync from turning into a recurring "password unreadable" error.
+func hasDueAppleReminderRows(db *gorm.DB, userID uint, now time.Time) (bool, error) {
+	var count int64
+	err := db.Model(&AppleReminderOutbox{}).
+		Where("user_id = ? AND status IN ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?)",
+			userID, []string{appleReminderStatusPending, appleReminderStatusRetry}, now).
+		Count(&count).Error
+	return count > 0, err
+}
+
+// drainAppleReminderOutbox processes eligible rows page by page until the queue
+// is exhausted, the per-run batch budget is reached, or authentication fails.
+// Keyset pagination (id > lastID) guarantees a row whose delete CAS failed is
+// not pushed repeatedly in the same run.
+func drainAppleReminderOutbox(db *gorm.DB, userID uint, now time.Time, push func(context.Context, AppleReminderOutbox) error) (int, int, error) {
+	pushed, failed := 0, 0
+	var firstErr error
+	var lastID uint
+	for batch := 0; batch < appleReminderMaxBatchesPerRun; batch++ {
+		var rows []AppleReminderOutbox
+		if err := db.Where("user_id = ? AND status IN ? AND (next_attempt_at IS NULL OR next_attempt_at <= ?) AND id > ?",
+			userID, []string{appleReminderStatusPending, appleReminderStatusRetry}, now, lastID).
+			Order("id ASC").Limit(appleReminderBatchSize).Find(&rows).Error; err != nil {
+			return pushed, failed, err
+		}
+		if len(rows) == 0 {
+			break
+		}
+		for _, row := range rows {
+			lastID = row.ID
+			ctx, cancel := context.WithTimeout(context.Background(), appleReminderRowTimeout)
+			pushErr := safeAppleReminderPush(ctx, push, row)
+			cancel()
+			if pushErr == nil {
+				pushed++
+				continue
+			}
+			failed++
+			if firstErr == nil {
+				firstErr = pushErr
+			}
+			authFailure := errors.Is(pushErr, errAppleAuth)
+			recordAppleReminderFailure(db, row, pushErr, authFailure)
+			if authFailure {
+				return pushed, failed, firstErr
+			}
+		}
+	}
+	return pushed, failed, firstErr
+}
+
+// safeAppleReminderPush isolates one malformed reminder or unexpected panic so
+// the rest of the queue still makes progress.
+func safeAppleReminderPush(ctx context.Context, push func(context.Context, AppleReminderOutbox) error, row AppleReminderOutbox) (err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			logger.Error("reminder: Apple 提醒事项队列行 panic id=%d reminder=%d: %v\n%s", row.ID, row.ReminderID, recovered, debug.Stack())
+			err = fmt.Errorf("Apple 提醒事项同步内部错误: %v", recovered)
+		}
+	}()
+	return push(ctx, row)
 }
 
 func pushAppleReminderOutboxRow(ctx context.Context, db *gorm.DB, client *caldavClient, cfg AppleReminderSync, row AppleReminderOutbox) error {

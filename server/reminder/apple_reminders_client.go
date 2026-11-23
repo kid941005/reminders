@@ -172,7 +172,14 @@ func (c *caldavClient) PutReminderObject(ctx context.Context, target, body, ifMa
 	}
 	switch {
 	case resp.Status >= 200 && resp.Status < 300:
-		return resp.Header.Get("ETag"), resp.URL, nil
+		finalURL := resp.URL
+		// A 201 may advertise the authoritative object URL in Location; prefer
+		// it so later conditional updates target the object the server actually
+		// created instead of the submitted path.
+		if location := strings.TrimSpace(resp.Header.Get("Location")); location != "" {
+			finalURL = resolveHref(resp.URL, location)
+		}
+		return resp.Header.Get("ETag"), finalURL, nil
 	case resp.Status == http.StatusPreconditionFailed, resp.Status == http.StatusConflict:
 		return "", resp.URL, errAppleRemotePrecondition
 	case resp.Status == http.StatusNotFound:
@@ -182,20 +189,28 @@ func (c *caldavClient) PutReminderObject(ctx context.Context, target, body, ifMa
 	}
 }
 
-// GetReminderObjectETag refreshes an ETag after a lost conditional update.
-func (c *caldavClient) GetReminderObjectETag(ctx context.Context, target string) (string, error) {
+// GetReminderObject fetches a VTODO together with its ETag. The body is useful
+// for verification and for the future pull direction; conditional updates only
+// need GetReminderObjectETag.
+func (c *caldavClient) GetReminderObject(ctx context.Context, target string) ([]byte, string, error) {
 	resp, err := c.doRequest(ctx, "GET", target, "", "", nil)
 	if err != nil {
-		return "", err
+		return nil, "", err
 	}
 	switch {
 	case resp.Status >= 200 && resp.Status < 300:
-		return resp.Header.Get("ETag"), nil
+		return resp.Body, resp.Header.Get("ETag"), nil
 	case resp.Status == http.StatusNotFound:
-		return "", errAppleRemoteNotFound
+		return nil, "", errAppleRemoteNotFound
 	default:
-		return "", appleResponseError("GET", resp)
+		return nil, "", appleResponseError("GET", resp)
 	}
+}
+
+// GetReminderObjectETag refreshes an ETag after a lost conditional update.
+func (c *caldavClient) GetReminderObjectETag(ctx context.Context, target string) (string, error) {
+	_, etag, err := c.GetReminderObject(ctx, target)
+	return etag, err
 }
 
 // DeleteReminderObject removes a VTODO. A missing object counts as success.
