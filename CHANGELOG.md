@@ -2,6 +2,43 @@
 
 本文件记录“提醒事项”的新功能、问题修复和使用体验变化。
 
+## v0.27.0（2026-11-26）
+
+### 架构：按优先级修复十二项耦合断点，完善配置与接口契约
+
+本轮按「功能清单 → 依赖关系 → 耦合断点 → 方案」的梳理结果，按 P1→P3 依次完成 B1–B12，接口保持向后兼容。
+
+**P1（影响功能闭环）**
+
+- **B1 全天提醒时间生效**：`reminder_all_day_time` 此前只注册无消费者，全天提醒实际按 00:00 投递。现将全天提醒的 `run_at` 按 `Asia/Shanghai` 配置时间生成，支持按分钟提前；未配置时回退 09:00，`SnoozedUntil` 优先级最高。
+- **B2 默认通知渠道统一**：新建提醒未提供 `channels` 时使用用户级 `reminder_default_channels`（仅保留站内消息或已绑定的 active 渠道）；更新提醒只有在显式传入 `channels`（含空数组）时才替换，避免仅改标题就清空原渠道。
+
+**P2（架构与可维护性）**
+
+- **B3 stats 运行时开关**：`stats.Start` 改为只受 `DISABLE_STATS` 与 Endpoint 影响，`stats_enabled` 每次上报时读取，Web UI 开启后无需重启即生效。
+- **B4 天气 Provider 贯通**：新增 provider-neutral `core.WeatherProvider` 与 DTO，`weatherProviderFactory` 统一走 `weatherRegistry`，天气服务、查询与 handler 不再直接依赖具体客户端。
+- **B5 应用导航元数据 API**：新增 `apps.PublicApp.Visible()` 与 `GET /api/apps`，前端 MainLayout 动态加载扩展应用导航，不再硬编码。
+- **B6 OutboundMessage 强类型**：移除 `map[string]interface{}` Payload，改为 UserID/ReminderID/Channel/Title/Body/Targets 等强类型字段，插件与 dispatcher 直接消费。
+- **B7 runtime-config 只读接口**：新增管理员 `GET /api/runtime-config`，返回 env-only 配置、Web UI 系统/用户配置键与说明；`jwt_secret` 的值与键名均不暴露。
+- **B8 MCP 状态与通知回传**：reminder-mcp 新增 `get_status` 与 `list_notifications`，可查询服务健康/调度器状态和通知列表。
+- **B9 大文件职责拆分**：`channels.go`、`service.go`、`handlers.go` 分别拆出渠道发送、调度计算、通知 handler 文件，仅移动代码与调整 import，不改变行为。
+
+**P3（工程化与消除死代码）**
+
+- **B10 qrcode 示例归类**：`server/qrcode` 移至 `server/examples/qrcode`，生产入口不再引入实验性模块。
+- **B11 Apple 同步后端收敛**：确认 Apple CalDAV 已复用共享 `caldavClient` transport/SSRF/重定向，CalDAV 与 CloudKit 通过 `appleReminderBackendOf` 分派并复用同一 outbox drain；暂不引入无消费者的新抽象。
+- **B12 API 契约测试**：新增路由快照 `docs/api-routes.txt`、前端 DTO 字段覆盖检查与 runtime-config 形状测试，接口变更会在 CI 中被发现。
+
+### 构建：Compose 环境变量内置，根目录 `.env` 仅作可选覆盖
+
+- `docker-compose.yml` 与 `docker-compose.host.yml` 的主服务、reminder-mcp 运行参数统一写在 compose 中，根目录 `.env` 只用于可选覆盖；`.env.example` 只保留可覆盖项说明。
+- README 同步镜像标签为 `0.27.0`，并说明端口、host 网络与 MCP 变量配置方式。
+
+### 验证
+
+- `go build ./...`、`go vet ./...`、`gofmt` 通过；`npm run build` 通过；MCP 21 个 Python 单元测试通过。
+- `go test ./...` 仅 4 个既有环境相关失败（3 个回环 TCP 用例与 stats 第三方发送用例），无新增失败；B1–B12 对应专项用例全部通过。
+
 ## v0.26.2（2026-11-23）
 
 ### 构建：支持 host 网络与通过 PORT 环境变量自定义端口
