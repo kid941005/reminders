@@ -97,7 +97,7 @@ func handlePreviewWeather(db *gorm.DB) gin.HandlerFunc {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
-		client := weatherClientFactory(host, apiKey)
+		client := weatherProviderFactory(host, apiKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 		current, daily, alerts, err := weatherForecast(ctx, client, cfg)
@@ -129,7 +129,7 @@ func handleQueryWeather(db *gorm.DB) gin.HandlerFunc {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
-		client := weatherClientFactory(host, apiKey)
+		client := weatherProviderFactory(host, apiKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 		defer cancel()
 
@@ -198,7 +198,7 @@ func handleWeatherLocations(db *gorm.DB) gin.HandlerFunc {
 			response.ErrorBadRequest(c, err.Error())
 			return
 		}
-		client := weatherClientFactory(host, apiKey)
+		client := weatherProviderFactory(host, apiKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		locations, err := client.LookupCity(ctx, query)
@@ -252,7 +252,7 @@ func handleAdminSaveWeather(db *gorm.DB) gin.HandlerFunc {
 		}
 		// Validate before persisting: a typo in host or key otherwise only
 		// surfaces at the next morning's push.
-		client := weatherClientFactory(host, apiKey)
+		client := weatherProviderFactory(host, apiKey)
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		defer cancel()
 		if _, err := client.Current(ctx, 39.92, 116.41); err != nil {

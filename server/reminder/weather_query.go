@@ -5,6 +5,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"smallgo/server/reminder/core"
 )
 
 // WeatherQueryResult is the structured weather payload used by API clients and
@@ -81,7 +83,7 @@ type WeatherQueryAlert struct {
 // queryWeather fetches exactly the requested number of forecast days. The
 // current observation and alerts are best-effort: a secondary endpoint outage
 // must not make the whole weather answer unavailable.
-func queryWeather(ctx context.Context, client *qweatherClient, cfg WeatherConfig, days int) (qweatherCurrent, []qweatherDay, []qweatherAlert, error) {
+func queryWeather(ctx context.Context, client core.WeatherProvider, cfg WeatherConfig, days int) (qweatherCurrent, []qweatherDay, []qweatherAlert, error) {
 	if days < 1 || days > 7 {
 		days = 3
 	}
@@ -124,7 +126,7 @@ func buildWeatherQueryResult(cfg WeatherConfig, current qweatherCurrent, daily [
 }
 
 func weatherQueryCurrentDTO(current qweatherCurrent) WeatherQueryCurrent {
-	dto := WeatherQueryCurrent{Available: current.hasData()}
+	dto := WeatherQueryCurrent{Available: currentHasData(current)}
 	if !dto.Available {
 		return dto
 	}

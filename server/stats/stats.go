@@ -48,17 +48,20 @@ type Request struct {
 	Amount float64 `json:"amount,omitempty"`
 }
 
-const (
-	heartbeatInterval = 60 * time.Minute
-	donateEvent       = "donate_support"
-)
+const donateEvent = "donate_support"
+
+// heartbeatInterval is a var (not const) so tests can shorten it without
+// waiting a full hour to exercise the runtime switch.
+var heartbeatInterval = 60 * time.Minute
 
 var (
 	httpClient = &http.Client{Timeout: 5 * time.Second}
-	mu         sync.Mutex
-	base       Request
-	running    bool
-	stopCh     chan struct{}
+	// postJSON is injectable so tests never need a loopback TCP listener.
+	postJSON = httpClient.Post
+	mu       sync.Mutex
+	base     Request
+	running  bool
+	stopCh   chan struct{}
 )
 
 // Endpoint 返回统计上报地址。STATS_ENDPOINT 环境变量可覆盖（测试用）。
@@ -84,11 +87,18 @@ func Init(appName, ver, deviceType, dataDir string) {
 	}
 }
 
-// Start 启动心跳上报：启动时立即报第一次，之后每 60 分钟一次。
-// 重复调用是安全的（只生效第一次）。
+// Start 启动心跳上报（保持向后兼容：不视为被启动参数硬关闭）。
 func Start(db *gorm.DB, appName, ver, deviceType, dataDir string) {
-	// 未配置上报端点或管理员已关闭统计时直接不启动。
-	if Endpoint() == "" || !enabled(db) {
+	StartWithOptions(db, appName, ver, deviceType, dataDir, false)
+}
+
+// StartWithOptions starts the heartbeat loop unless the operator hard-disabled
+// stats (DISABLE_STATS / -disable-stats) or no endpoint is configured. The
+// admin runtime switch (stats_enabled) is intentionally NOT checked here:
+// otherwise enabling it from the Web UI after boot could never take effect.
+// report() re-checks the switch before every request.
+func StartWithOptions(db *gorm.DB, appName, ver, deviceType, dataDir string, hardDisabled bool) {
+	if hardDisabled || Endpoint() == "" {
 		return
 	}
 	Init(appName, ver, deviceType, dataDir)
@@ -140,7 +150,7 @@ func report(db *gorm.DB) {
 		return
 	}
 	body, _ := json.Marshal(req)
-	resp, err := httpClient.Post(Endpoint(), "application/json", bytes.NewReader(body))
+	resp, err := postJSON(Endpoint(), "application/json", bytes.NewReader(body))
 	if err != nil {
 		fmt.Printf("使用统计上报失败: %v\n", err)
 		return
@@ -262,7 +272,7 @@ func RegisterRoutes(auth *gin.RouterGroup, db *gorm.DB) {
 		req.Event = donateEvent
 		req.Amount = payload.Amount
 		body, _ := json.Marshal(req)
-		resp, err := httpClient.Post(Endpoint(), "application/json", bytes.NewReader(body))
+		resp, err := postJSON(Endpoint(), "application/json", bytes.NewReader(body))
 		if err != nil {
 			response.ErrorInternal(c, "支持计数发送失败，请稍后再试")
 			return

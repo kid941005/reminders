@@ -184,7 +184,7 @@ class VersionTest(unittest.TestCase):
 
 
 class ToolRegistrationTest(unittest.TestCase):
-    def test_official_mcp_server_exposes_six_tools(self) -> None:
+    def test_official_mcp_server_exposes_eight_tools(self) -> None:
         import asyncio
 
         from mcp.server import MCPServer
@@ -200,6 +200,8 @@ class ToolRegistrationTest(unittest.TestCase):
                 "complete_todo",
                 "snooze_todo",
                 "get_weather",
+                "get_status",
+                "list_notifications",
             },
         )
 

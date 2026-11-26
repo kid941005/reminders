@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"smallgo/server/reminder/core"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -95,9 +97,9 @@ func TestHandleQueryWeatherUsesSavedLocation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	oldFactory := weatherClientFactory
-	weatherClientFactory = func(host, apiKey string) *qweatherClient { return weatherTestClient(t) }
-	defer func() { weatherClientFactory = oldFactory }()
+	oldFactory := weatherProviderFactory
+	weatherProviderFactory = func(host, apiKey string) core.WeatherProvider { return weatherTestClient(t) }
+	defer func() { weatherProviderFactory = oldFactory }()
 
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)
@@ -132,9 +134,9 @@ func TestHandleQueryWeatherResolvesCity(t *testing.T) {
 	t.Setenv("QWEATHER_API_HOST", "https://weather.test")
 	t.Setenv("QWEATHER_API_KEY", "test-key")
 
-	oldFactory := weatherClientFactory
-	weatherClientFactory = func(host, apiKey string) *qweatherClient { return weatherTestClient(t) }
-	defer func() { weatherClientFactory = oldFactory }()
+	oldFactory := weatherProviderFactory
+	weatherProviderFactory = func(host, apiKey string) core.WeatherProvider { return weatherTestClient(t) }
+	defer func() { weatherProviderFactory = oldFactory }()
 
 	recorder := httptest.NewRecorder()
 	context, _ := gin.CreateTestContext(recorder)

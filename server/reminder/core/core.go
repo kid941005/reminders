@@ -13,19 +13,24 @@ import (
 	"time"
 )
 
-// OutboundMessage is a channel-neutral notification payload. Channel-specific
-// adapters read the fields they need and ignore the rest.
+// OutboundMessage is a channel-neutral, fully rendered notification. The
+// domain layer fills in every field an adapter may need, so adapters never have
+// to type-assert an opaque map or reach back into domain models. Targets is the
+// already-resolved list of binding IDs for multi-target channels such as email.
 type OutboundMessage struct {
-	UserID         uint
-	ReminderID     uint
-	Channel        string
-	Title          string
-	Body           string
-	IdempotencyKey string
-	Targets        []uint
-	// Payload carries provider-specific data (for example the hydrated
-	// Reminder row) without forcing the core package to import domain models.
-	Payload map[string]interface{}
+	UserID           uint
+	ReminderID       uint
+	Channel          string
+	Title            string
+	Body             string
+	Notes            string
+	Subject          string
+	Group            string
+	Kind             string
+	NotificationType string
+	DueAt            *time.Time
+	IdempotencyKey   string
+	Targets          []uint
 }
 
 // SendResult reports the provider-side identifier of a successful delivery.
@@ -64,10 +69,4 @@ type CalendarProvider interface {
 	FetchEvents(ctx context.Context, calendarURL string, from, to time.Time) ([]CalendarEvent, error)
 }
 
-// WeatherProvider is an external weather backend. Result is intentionally
-// opaque so different providers can return their own DTOs; the adapter maps it
-// to the domain's weather snapshot.
-type WeatherProvider interface {
-	Name() string
-	Forecast(ctx context.Context, city string) (interface{}, error)
-}
+// WeatherProvider and its DTOs live in weather.go.

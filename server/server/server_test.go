@@ -19,7 +19,7 @@ import (
 	"smallgo/server/auth"
 	"smallgo/server/config"
 	"smallgo/server/database"
-	_ "smallgo/server/qrcode"
+	_ "smallgo/server/examples/qrcode"
 	"smallgo/server/reminder"
 	"smallgo/server/sysconfig"
 

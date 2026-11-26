@@ -7,11 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
-	"smallgo/server/lunar"
 	"smallgo/server/utils"
 
 	"gorm.io/gorm"
@@ -181,6 +179,11 @@ func dedupeUint(values []uint) []uint {
 }
 
 func createReminder(db *gorm.DB, userID uint, in SaveReminderInput) (ReminderDTO, error) {
+	// nil means the client did not send "channels" at all, so apply the user's
+	// configured default channels. An explicit empty array keeps "no channels".
+	if in.Channels == nil {
+		in.Channels = defaultNotificationChannels(db, userID)
+	}
 	if err := validateReminderInput(&in); err != nil {
 		return ReminderDTO{}, err
 	}
@@ -229,6 +232,9 @@ func createReminder(db *gorm.DB, userID uint, in SaveReminderInput) (ReminderDTO
 }
 
 func updateReminder(db *gorm.DB, userID, reminderID uint, in SaveReminderInput) (ReminderDTO, error) {
+	// Omitted channels on an update mean "keep the current selection". Only an
+	// explicitly supplied array (including []) replaces the channel rows.
+	channelsProvided := in.Channels != nil
 	if err := validateReminderInput(&in); err != nil {
 		return ReminderDTO{}, err
 	}
@@ -269,13 +275,27 @@ func updateReminder(db *gorm.DB, userID, reminderID uint, in SaveReminderInput) 
 		if err := tx.Save(&existing).Error; err != nil {
 			return err
 		}
-		if err := replaceChannels(tx, existing, in); err != nil {
-			return err
+		if channelsProvided {
+			if err := replaceChannels(tx, existing, in); err != nil {
+				return err
+			}
+		}
+		channels := in.Channels
+		if !channelsProvided {
+			var rows []ReminderChannel
+			if err := tx.Where("reminder_id = ? AND user_id = ? AND enabled = ?", existing.ID, userID, true).
+				Order("channel ASC").Find(&rows).Error; err != nil {
+				return err
+			}
+			channels = make([]string, 0, len(rows))
+			for _, row := range rows {
+				channels = append(channels, row.Channel)
+			}
 		}
 		if err := enqueueAppleSync(tx, userID, existing.ID, appleReminderActionUpsert); err != nil {
 			return err
 		}
-		return rebuildJobs(tx, existing, in.Channels)
+		return rebuildJobs(tx, existing, channels)
 	})
 	if err != nil {
 		return ReminderDTO{}, err
@@ -351,19 +371,20 @@ func rebuildJobs(tx *gorm.DB, reminder Reminder, channels []string) error {
 	runAt := scheduledFor
 	switch {
 	case reminder.SnoozedUntil != nil:
-		// 用户主动「稍后提醒」的优先级高于提前量。
+		// 用户主动「稍后提醒」的优先级高于其他规则。
 		runAt = reminder.SnoozedUntil.UTC()
-	case reminder.RemindBeforeMinutes > 0:
-		advance := time.Duration(reminder.RemindBeforeMinutes) * time.Minute
-		// 全天提醒没有具体时刻（due 落在当天 00:00），小于一天的前置量只会把通知
-		// 推到前一天深夜（例如 23:45），因此视为「准时」；整天级的前置（提前 1 天）
-		// 仍然有意义，照常生效。要精确到分钟的全天提醒应改用定时提醒。
-		if reminder.AllDay && advance < 24*time.Hour {
-			break
+	case reminder.AllDay:
+		// 全天提醒的 due 是当天当地零点；真正投递时间由用户的「全天提醒时间」
+		// 配置决定（默认 09:00）。小于一天的前置量仍视为「准时」，整天级前置
+		// （例如提前 1 天）从配置时间上继续前移。
+		runAt = allDayRunAt(scheduledFor, allDayTimeConfig(tx, reminder.UserID))
+		if reminder.RemindBeforeMinutes >= 24*60 {
+			runAt = runAt.Add(-time.Duration(reminder.RemindBeforeMinutes) * time.Minute)
 		}
+	case reminder.RemindBeforeMinutes > 0:
 		// ScheduledFor 仍是到期时刻，只把实际投递时刻提前：这样陈旧任务判断
 		// 与过期重复链条的基准都不受影响。提前量落到过去则立即投递。
-		runAt = scheduledFor.Add(-advance)
+		runAt = scheduledFor.Add(-time.Duration(reminder.RemindBeforeMinutes) * time.Minute)
 	}
 	for _, ch := range channels {
 		raw := fmt.Sprintf("%d|%s|%s|%d", reminder.ID, reminder.DueAt.UTC().Format(time.RFC3339Nano), ch, reminder.Version)
@@ -388,6 +409,9 @@ func rebuildJobs(tx *gorm.DB, reminder Reminder, channels []string) error {
 	return nil
 }
 
+// allDayTimeConfig returns the user's configured local delivery time for
+// all-day reminders, falling back to the registered default when it is absent
+// or malformed. The value is a local wall-clock "HH:MM" in Asia/Shanghai.
 func getReminder(db *gorm.DB, userID, reminderID uint) (ReminderDTO, error) {
 	var item Reminder
 	if err := db.Where("id = ? AND user_id = ? AND deleted_at IS NULL", reminderID, userID).First(&item).Error; err != nil {
@@ -709,85 +733,3 @@ func snoozeReminder(db *gorm.DB, userID, reminderID uint, until time.Time) (Remi
 // recurrence never fails hard here: if the anchor is missing or unreadable
 // the reminder simply keeps its current due date, which leaves the delivery
 // jobs untouched.
-func nextOccurrenceWithCalendar(t time.Time, rule, calendar, anchor string) (time.Time, error) {
-	if calendar == "lunar" {
-		parsed, ok := parseLunarAnchor(anchor)
-		if !ok {
-			return t, nil
-		}
-		loc := shanghai()
-		switch rule {
-		case "monthly":
-			return lunar.NextMonthlyOccurrence(parsed.Day, t, loc)
-		case "yearly":
-			return lunar.NextOccurrence(parsed, t, loc)
-		}
-	}
-	return nextOccurrence(t, rule), nil
-}
-
-// parseLunarAnchor decodes the stored "M:D" lunar anchor. A missing colon,
-// out-of-range month, or non-positive day means the anchor was never stored
-// or is corrupt; the caller falls back to keeping the current due date.
-func parseLunarAnchor(anchor string) (lunar.Date, bool) {
-	monthStr, dayStr, found := strings.Cut(anchor, ":")
-	if !found {
-		return lunar.Date{}, false
-	}
-	month, errMonth := strconv.Atoi(monthStr)
-	day, errDay := strconv.Atoi(dayStr)
-	if errMonth != nil || errDay != nil {
-		return lunar.Date{}, false
-	}
-	absMonth := month
-	if absMonth < 0 {
-		absMonth = -absMonth
-	}
-	if absMonth < 1 || absMonth > 12 || day < 1 || day > 30 {
-		return lunar.Date{}, false
-	}
-	return lunar.Date{Year: 0, Month: month, Day: day}, true
-}
-
-// normalizeLunarAnchor validates a client-provided lunar anchor or derives
-// one from the reminder's due date when the client did not supply one.
-func normalizeLunarAnchor(anchor string, due time.Time) (string, error) {
-	anchor = strings.TrimSpace(anchor)
-	if anchor == "" {
-		loc := shanghai()
-		converted := lunar.FromTime(due.In(loc))
-		return fmt.Sprintf("%d:%d", converted.Month, converted.Day), nil
-	}
-	parsed, ok := parseLunarAnchor(anchor)
-	if !ok {
-		return "", errors.New("农历锚点格式无效")
-	}
-	return fmt.Sprintf("%d:%d", parsed.Month, parsed.Day), nil
-}
-
-func nextOccurrence(t time.Time, rule string) time.Time {
-	switch rule {
-	case "daily":
-		return t.AddDate(0, 0, 1)
-	case "weekly":
-		return t.AddDate(0, 0, 7)
-	case "monthly":
-		day := t.Day()
-		firstNext := time.Date(t.Year(), t.Month()+1, 1, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
-		lastDay := time.Date(firstNext.Year(), firstNext.Month()+1, 0, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location()).Day()
-		if day > lastDay {
-			day = lastDay
-		}
-		return time.Date(firstNext.Year(), firstNext.Month(), day, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
-	case "yearly":
-		year := t.Year() + 1
-		day := t.Day()
-		lastDay := time.Date(year, t.Month()+1, 0, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location()).Day()
-		if day > lastDay {
-			day = lastDay
-		}
-		return time.Date(year, t.Month(), day, t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
-	default:
-		return t
-	}
-}

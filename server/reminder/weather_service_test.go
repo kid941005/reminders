@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"smallgo/server/reminder/core"
 	"time"
 )
 
@@ -342,9 +344,9 @@ func TestPushWeatherWritesInAppNotification(t *testing.T) {
 
 	t.Setenv("QWEATHER_API_HOST", "https://weather.test")
 	t.Setenv("QWEATHER_API_KEY", "test-key")
-	originalFactory := weatherClientFactory
-	weatherClientFactory = func(string, string) *qweatherClient { return weatherTestClient(t) }
-	t.Cleanup(func() { weatherClientFactory = originalFactory })
+	originalFactory := weatherProviderFactory
+	weatherProviderFactory = func(string, string) core.WeatherProvider { return weatherTestClient(t) }
+	t.Cleanup(func() { weatherProviderFactory = originalFactory })
 
 	localNow := time.Now().In(shanghai())
 	cfg := WeatherConfig{
@@ -421,9 +423,9 @@ func TestSaveWeatherConfigPersistsDisabledState(t *testing.T) {
 	db := appDB
 	t.Setenv("QWEATHER_API_HOST", "https://weather.test")
 	t.Setenv("QWEATHER_API_KEY", "test-key")
-	originalFactory := weatherClientFactory
-	weatherClientFactory = func(string, string) *qweatherClient { return weatherTestClient(t) }
-	t.Cleanup(func() { weatherClientFactory = originalFactory })
+	originalFactory := weatherProviderFactory
+	weatherProviderFactory = func(string, string) core.WeatherProvider { return weatherTestClient(t) }
+	t.Cleanup(func() { weatherProviderFactory = originalFactory })
 
 	lat, lon := 30.27, 120.15
 	disabled := false

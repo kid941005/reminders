@@ -12,112 +12,29 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"smallgo/server/reminder/core"
 )
 
-// QWeather v1 response shapes. Only the fields the daily summary uses are
-// decoded; unknown fields are ignored on purpose so a provider addition does
-// not break delivery.
-type qweatherValue struct {
-	Value float64 `json:"value"`
-	Unit  string  `json:"unit"`
-}
-
-type qweatherCondition struct {
-	Text string `json:"text"`
-	Code string `json:"code"`
-}
-
-type qweatherWind struct {
-	Direction struct {
-		Degree  float64 `json:"degree"`
-		Compass string  `json:"compass"`
-	} `json:"direction"`
-	Speed qweatherValue `json:"speed"`
-	Scale float64       `json:"scale"`
-}
-
-type qweatherPrecipitation struct {
-	Amount      qweatherValue `json:"amount"`
-	Probability float64       `json:"probability"`
-	Type        string        `json:"type"`
-}
-
-type qweatherCurrent struct {
-	ValidTime     string                `json:"validTime"`
-	Condition     qweatherCondition     `json:"condition"`
-	Temperature   qweatherValue         `json:"temperature"`
-	FeelsLike     qweatherValue         `json:"feelsLike"`
-	Humidity      float64               `json:"humidity"`
-	Wind          qweatherWind          `json:"wind"`
-	Precipitation qweatherPrecipitation `json:"precipitation"`
-	Pressure      qweatherValue         `json:"pressure"`
-	Visibility    qweatherValue         `json:"visibility"`
-}
-
-type qweatherDayPart struct {
-	Condition      qweatherCondition     `json:"condition"`
-	TemperatureMax qweatherValue         `json:"temperatureMax"`
-	TemperatureMin qweatherValue         `json:"temperatureMin"`
-	Wind           qweatherWind          `json:"wind"`
-	Precipitation  qweatherPrecipitation `json:"precipitation"`
-	Humidity       float64               `json:"humidity"`
-}
-
-type qweatherDay struct {
-	ForecastStartTime string          `json:"forecastStartTime"`
-	TemperatureMax    qweatherValue   `json:"temperatureMax"`
-	TemperatureMin    qweatherValue   `json:"temperatureMin"`
-	Daytime           qweatherDayPart `json:"daytime"`
-	Nighttime         qweatherDayPart `json:"nighttime"`
-	Sunrise           string          `json:"sunrise"`
-	Sunset            string          `json:"sunset"`
-	// QWeather v1 returns solar events under "astro" while a few older
-	// deployments expose them at the day's top level. Keep both so the
-	// summary works with either response shape.
-	Astro struct {
-		Sunrise string `json:"sunrise"`
-		Sunset  string `json:"sunset"`
-	} `json:"astro"`
-}
-
-type qweatherAlert struct {
-	ID          string `json:"id"`
-	SenderName  string `json:"senderName"`
-	IssuedTime  string `json:"issuedTime"`
-	MessageType struct {
-		Code string `json:"code"`
-	} `json:"messageType"`
-	EventType struct {
-		Name string `json:"name"`
-		Code string `json:"code"`
-	} `json:"eventType"`
-	Severity string `json:"severity"`
-	Color    struct {
-		Code string `json:"code"`
-	} `json:"color"`
-	EffectiveTime string `json:"effectiveTime"`
-	OnsetTime     string `json:"onsetTime"`
-	ExpireTime    string `json:"expireTime"`
-	Headline      string `json:"headline"`
-	Description   string `json:"description"`
-	Instruction   string `json:"instruction"`
-}
+// QWeather DTOs alias the provider-neutral core types so the client satisfies
+// core.WeatherProvider without a second conversion layer.
+type (
+	qweatherValue         = core.WeatherValue
+	qweatherCondition     = core.WeatherCondition
+	qweatherWind          = core.WeatherWind
+	qweatherPrecipitation = core.WeatherPrecipitation
+	qweatherCurrent       = core.WeatherCurrent
+	qweatherDayPart       = core.WeatherDayPart
+	qweatherDay           = core.WeatherDay
+	qweatherAlert         = core.WeatherAlert
+	qweatherLocation      = core.WeatherLocation
+)
 
 type qweatherAlertsResponse struct {
 	Metadata struct {
 		ZeroResult bool `json:"zeroResult"`
 	} `json:"metadata"`
 	Alerts []qweatherAlert `json:"alerts"`
-}
-
-type qweatherLocation struct {
-	Name string `json:"name"`
-	ID   string `json:"id"`
-	Lat  string `json:"lat"`
-	Lon  string `json:"lon"`
-	Adm1 string `json:"adm1"`
-	Adm2 string `json:"adm2"`
-	Tz   string `json:"tz"`
 }
 
 type qweatherClient struct {
@@ -130,9 +47,48 @@ func newQWeatherClient(host, apiKey string) *qweatherClient {
 	return &qweatherClient{host: host, apiKey: apiKey, http: &http.Client{Timeout: 15 * time.Second}}
 }
 
-// weatherClientFactory is a test seam: service code goes through it so tests
-// can supply a stub transport instead of opening a real socket.
-var weatherClientFactory = newQWeatherClient
+func (c *qweatherClient) Name() string { return "qweather" }
+
+// Forecast resolves a city then fetches its current observation, three-day
+// outlook and active alerts. It backs the provider-neutral WeatherProvider
+// contract; scheduled pushes call the individual endpoints directly.
+func (c *qweatherClient) Forecast(ctx context.Context, city string) (core.WeatherForecast, error) {
+	locations, err := c.LookupCity(ctx, city)
+	if err != nil {
+		return core.WeatherForecast{}, err
+	}
+	if len(locations) == 0 {
+		return core.WeatherForecast{}, errors.New("未找到该城市")
+	}
+	loc := locations[0]
+	lat, err := strconv.ParseFloat(loc.Lat, 64)
+	if err != nil {
+		return core.WeatherForecast{}, errors.New("城市坐标无效")
+	}
+	lon, err := strconv.ParseFloat(loc.Lon, 64)
+	if err != nil {
+		return core.WeatherForecast{}, errors.New("城市坐标无效")
+	}
+	current, err := c.Current(ctx, lat, lon)
+	if err != nil {
+		return core.WeatherForecast{}, err
+	}
+	daily, err := c.Daily(ctx, lat, lon, 3)
+	if err != nil {
+		return core.WeatherForecast{}, err
+	}
+	alerts, _ := c.Alerts(ctx, lat, lon)
+	return core.WeatherForecast{City: loc, Current: current, Daily: daily, Alerts: alerts}, nil
+}
+
+// weatherProviderFactory resolves the configured weather backend through the
+// registry. Tests replace this seam with a stub provider.
+var weatherProviderFactory = func(host, apiKey string) core.WeatherProvider {
+	if provider := weatherRegistry.Resolve("qweather", apiKey, host); provider != nil {
+		return provider
+	}
+	return newQWeatherClient(host, apiKey)
+}
 
 // normalizeQWeatherHost accepts the console's dedicated API host with or
 // without a scheme. Plain HTTP is only allowed for loopback so httptest can

@@ -149,3 +149,13 @@ func TestQWeatherHTTPErrorMapping(t *testing.T) {
 		})
 	}
 }
+
+func TestWeatherProviderFactoryReturnsRegistryProvider(t *testing.T) {
+	provider := weatherProviderFactory("https://weather.test", "k")
+	if provider == nil {
+		t.Fatal("weatherProviderFactory returned nil")
+	}
+	if provider.Name() != "qweather" {
+		t.Fatalf("want qweather provider, got %q", provider.Name())
+	}
+}

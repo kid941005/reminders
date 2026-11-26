@@ -140,12 +140,12 @@ func Start() {
 
 	r := NewRouter(cfg, db, jwtSecret)
 
-	// 匿名使用统计心跳：本发行版默认关闭（DisableStats 默认 true），且
-	// stats.Start 在未配置 STATS_ENDPOINT 时直接返回，不会外发任何请求。
-	if !cfg.DisableStats {
-		stats.Start(db, version.AppID, version.Version, cfg.DeviceType, cfg.DataDir)
-		defer stats.Stop()
-	}
+	// 匿名使用统计心跳：DisableStats/-disable-stats 是硬关闭；未配置
+	// STATS_ENDPOINT 时不会外发。管理员在 Web UI 里开关的 stats_enabled
+	// 是运行时软开关，由 report() 每次上报前重新读取，因此即使启动时
+	// 处于关闭状态也要先把心跳循环挂起来。
+	stats.StartWithOptions(db, version.AppID, version.Version, cfg.DeviceType, cfg.DataDir, cfg.DisableStats)
+	defer stats.Stop()
 
 	// Start background jobs registered by the framework or apps.
 	sched := scheduler.Start()
@@ -346,10 +346,55 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 	authGroup := api.Group("")
 	authGroup.Use(middleware.RequireAuth(jwtSecret, db))
 	authGroup.Use(audit.MutationLogger(db))
+
+	// Registered apps expose their sidebar metadata here so the SPA no longer
+	// has to hard-code a list of every module. Authentication is required because
+	// the payload describes the signed-in user's available navigation.
+	authGroup.GET("/apps", func(c *gin.Context) {
+		response.Success(c, apps.Visible())
+	})
 	adminGroup := api.Group("")
 	adminGroup.Use(middleware.RequireAuth(jwtSecret, db))
 	adminGroup.Use(middleware.RequireAdmin())
 	adminGroup.Use(audit.MutationLogger(db))
+
+	// Runtime configuration report: the values below only take effect at process
+	// start (env/flag), so the Web UI cannot edit them. Exposing them read-only
+	// lets admins see the effective deployment and keeps the env-vs-UI boundary
+	// explicit instead of burying it in documentation.
+	adminGroup.GET("/runtime-config", func(c *gin.Context) {
+		systemKeys := make([]string, 0)
+		for _, def := range sysconfig.ListConfigs(sysconfig.ScopeSystem) {
+			// jwt_secret is managed internally and must never be surfaced, not
+			// even as a key name in a read-only report.
+			if def.Key == "jwt_secret" {
+				continue
+			}
+			systemKeys = append(systemKeys, def.Key)
+		}
+		userKeys := make([]string, 0)
+		for _, def := range sysconfig.ListConfigs(sysconfig.ScopeUser) {
+			userKeys = append(userKeys, def.Key)
+		}
+		response.Success(c, gin.H{
+			"env_only": gin.H{
+				"port":                cfg.Port,
+				"data_dir":            cfg.DataDir,
+				"db_path":             cfg.DBPath,
+				"log_dir":             cfg.LogDir,
+				"upload_dir":          cfg.UploadDir,
+				"env":                 cfg.LogMode,
+				"rate_limit":          cfg.RateLimit,
+				"cors_origin":         cfg.CORSOrigin,
+				"log_console":         cfg.LogConsole,
+				"device_type":         cfg.DeviceType,
+				"stats_hard_disabled": cfg.DisableStats,
+			},
+			"web_ui_system_keys": systemKeys,
+			"web_ui_user_keys":   userKeys,
+			"note":               "env_only 项只能通过环境变量/启动参数在重启前修改；web_ui_* 项在设置页即时生效。",
+		})
+	})
 
 	// Config: public read is rate-limited; user config read & write require
 	// auth; system config read & metadata require admin.
@@ -379,8 +424,9 @@ func NewRouter(cfg config.Config, db *gorm.DB, jwtSecret string) *gin.Engine {
 		logger.Warn("load holiday data: %v", err)
 	}
 
-	// Register apps from the registry. The bundled qrcode package is an example
-	// and is intentionally not blank-imported by main.go.
+	// Register apps from the registry. Bundled modules under server/examples/
+	// (for example qrcode) are samples and are intentionally not blank-imported
+	// by main.go, so they never ship in the production binary.
 	apps.SetupAll(publicGroup, db)
 	apps.SetupProtectedAll(authGroup, adminGroup, db)
 

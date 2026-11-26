@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"smallgo/server/database"
+	"smallgo/server/sysconfig"
 
 	"gorm.io/gorm"
 )
@@ -727,8 +728,8 @@ func TestAllDayAdvanceIsClampedToWholeDays(t *testing.T) {
 		First(&job).Error; err != nil {
 		t.Fatal(err)
 	}
-	if !job.RunAt.Equal(day.UTC()) {
-		t.Fatalf("全天提醒的分钟级提前量应被忽略，run_at=%s，期望 %s", job.RunAt, day.UTC())
+	if want := time.Date(2026, 11, 2, 9, 0, 0, 0, shanghai()).UTC(); !job.RunAt.Equal(want) {
+		t.Fatalf("全天提醒应按配置的 09:00 投递，run_at=%s，期望 %s", job.RunAt, want)
 	}
 
 	wholeDay := 1440
@@ -744,7 +745,91 @@ func TestAllDayAdvanceIsClampedToWholeDays(t *testing.T) {
 		First(&job2).Error; err != nil {
 		t.Fatal(err)
 	}
-	if want := day.Add(-24 * time.Hour).UTC(); !job2.RunAt.Equal(want) {
-		t.Fatalf("全天提醒提前一天应生效，run_at=%s，期望 %s", job2.RunAt, want)
+	if want := time.Date(2026, 11, 1, 9, 0, 0, 0, shanghai()).UTC(); !job2.RunAt.Equal(want) {
+		t.Fatalf("全天提醒提前一天应从 09:00 前移，run_at=%s，期望 %s", job2.RunAt, want)
+	}
+}
+
+func TestAllDayReminderUsesConfiguredTime(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	if err := sysconfig.UpdateConfig(appDB, "reminder_all_day_time", "07:30", 75); err != nil {
+		t.Fatal(err)
+	}
+	localDue := time.Date(2026, 11, 2, 0, 0, 0, 0, shanghai())
+	due := localDue.UTC()
+	created, err := createReminder(appDB, 75, SaveReminderInput{
+		Title: "全天 0730", DueAt: &due, AllDay: true, RepeatRule: "none",
+		Channels: []string{ChannelInApp},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var job DeliveryJob
+	if err := appDB.Where("reminder_id = ? AND channel = ? AND status = ?", created.ID, ChannelInApp, "pending").First(&job).Error; err != nil {
+		t.Fatal(err)
+	}
+	if want := time.Date(2026, 11, 2, 7, 30, 0, 0, shanghai()).UTC(); !job.RunAt.Equal(want) {
+		t.Fatalf("run_at=%s，期望 %s", job.RunAt, want)
+	}
+}
+
+func TestCreateReminderUsesDefaultChannels(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	if err := sysconfig.UpdateConfig(appDB, "reminder_default_channels", "inapp", 76); err != nil {
+		t.Fatal(err)
+	}
+	due := time.Now().Add(2 * time.Hour).Truncate(time.Second)
+	created, err := createReminder(appDB, 76, SaveReminderInput{Title: "默认渠道", DueAt: &due, RepeatRule: "none"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(created.Channels) != 1 || created.Channels[0] != ChannelInApp {
+		t.Fatalf("未传 channels 应使用默认渠道 inapp，实际 %v", created.Channels)
+	}
+
+	explicitEmpty, err := createReminder(appDB, 76, SaveReminderInput{
+		Title: "显式无渠道", DueAt: &due, RepeatRule: "none", Channels: []string{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(explicitEmpty.Channels) != 0 {
+		t.Fatalf("显式空 channels 不应回填默认渠道，实际 %v", explicitEmpty.Channels)
+	}
+}
+
+func TestUpdateReminderWithoutChannelsKeepsSelection(t *testing.T) {
+	cleanup := testDB(t)
+	defer cleanup()
+
+	due := time.Now().Add(2 * time.Hour).Truncate(time.Second)
+	created, err := createReminder(appDB, 77, SaveReminderInput{
+		Title: "保留渠道", DueAt: &due, RepeatRule: "none", Channels: []string{ChannelInApp},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := updateReminder(appDB, 77, created.ID, SaveReminderInput{
+		Title: "只改标题", DueAt: &due, RepeatRule: "none", Version: created.Version,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Channels) != 1 || updated.Channels[0] != ChannelInApp {
+		t.Fatalf("未传 channels 的更新应保留原渠道，实际 %v", updated.Channels)
+	}
+
+	cleared, err := updateReminder(appDB, 77, created.ID, SaveReminderInput{
+		Title: "清空渠道", DueAt: &due, RepeatRule: "none", Channels: []string{}, Version: updated.Version,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cleared.Channels) != 0 {
+		t.Fatalf("显式空 channels 应清空，实际 %v", cleared.Channels)
 	}
 }

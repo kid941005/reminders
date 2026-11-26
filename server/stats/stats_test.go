@@ -2,6 +2,7 @@ package stats
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"smallgo/server/database"
 	"smallgo/server/sysconfig"
@@ -78,6 +80,69 @@ func TestPersistentDeviceIDReused(t *testing.T) {
 	}
 	if second := persistentDeviceID(dir); second != first {
 		t.Fatalf("persistent id changed: %q vs %q", first, second)
+	}
+}
+
+func TestStatsRuntimeSwitchTakesEffectAfterBoot(t *testing.T) {
+	db := setupDB(t)
+	if err := sysconfig.UpdateConfig(db, "stats_enabled", "false", 0); err != nil {
+		t.Fatal(err)
+	}
+	var calls atomic.Int32
+	oldPost := postJSON
+	postJSON = func(string, string, io.Reader) (*http.Response, error) {
+		calls.Add(1)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+	}
+	t.Cleanup(func() { postJSON = oldPost })
+	t.Setenv("STATS_ENDPOINT", "http://stats.invalid/heartbeat")
+
+	old := heartbeatInterval
+	heartbeatInterval = 20 * time.Millisecond
+	t.Cleanup(func() {
+		Stop()
+		heartbeatInterval = old
+	})
+
+	StartWithOptions(db, "testapp", "v1.0.0", "", t.TempDir(), false)
+	time.Sleep(70 * time.Millisecond)
+	if calls.Load() != 0 {
+		t.Fatalf("stats_enabled=false 时不应上报，实际 %d 次", calls.Load())
+	}
+	if err := sysconfig.UpdateConfig(db, "stats_enabled", "true", 0); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(700 * time.Millisecond)
+	for calls.Load() == 0 && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if calls.Load() == 0 {
+		t.Fatal("运行时开启 stats_enabled 后心跳仍未上报")
+	}
+}
+
+func TestStatsHardDisableBeatsRuntimeSwitch(t *testing.T) {
+	db := setupDB(t)
+	var calls atomic.Int32
+	oldPost := postJSON
+	postJSON = func(string, string, io.Reader) (*http.Response, error) {
+		calls.Add(1)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}"))}, nil
+	}
+	t.Cleanup(func() { postJSON = oldPost })
+	t.Setenv("STATS_ENDPOINT", "http://stats.invalid/heartbeat")
+
+	old := heartbeatInterval
+	heartbeatInterval = 10 * time.Millisecond
+	t.Cleanup(func() {
+		Stop()
+		heartbeatInterval = old
+	})
+
+	StartWithOptions(db, "testapp", "v1.0.0", "", t.TempDir(), true)
+	time.Sleep(80 * time.Millisecond)
+	if calls.Load() != 0 {
+		t.Fatalf("DISABLE_STATS 硬关闭时不应上报，实际 %d 次", calls.Load())
 	}
 }
 

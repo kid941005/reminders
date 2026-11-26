@@ -40,3 +40,15 @@ export function updateConfig(key: string, value: string) {
 export function getVersion() {
   return request.get('/api/version')
 }
+
+export interface AppNavItem {
+  name: string
+  display_name: string
+  icon?: string
+  route_prefix: string
+  nav_position: number
+}
+
+export function getApps() {
+  return request.get('/api/apps')
+}

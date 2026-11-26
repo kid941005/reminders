@@ -35,7 +35,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("reminder-mcp")
 
-__version__ = "0.26.2"
+__version__ = "0.27.0"
 
 def _env(name: str, default: str) -> str:
     return (os.getenv(name) or "").strip() or default
@@ -405,6 +405,54 @@ def snooze_todo(query: str = "", todo_id: int = 0, until: str = "") -> dict:
         "item": _item_view(item),
         "speech": f"已推迟：{item.get('title')}，{_format_due(item.get('due_at'), bool(item.get('all_day')))}",
     }
+
+
+@mcp.tool()
+def get_status() -> dict:
+    """查看提醒服务是否健康、版本与调度器状态。用户问“服务正常吗/是什么版本”时调用。"""
+    url = f"{BASE}/api/health"
+    try:
+        resp = httpx.get(url, timeout=TIMEOUT)
+        payload = resp.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        return {"ok": False, "error": f"无法连接提醒服务：{exc}"}
+    if not isinstance(payload, dict) or payload.get("code") != 0:
+        return {"ok": False, "error": "提醒服务返回异常状态"}
+    data = payload.get("data") or {}
+    return {
+        "ok": True,
+        "status": data.get("status"),
+        "version": data.get("version"),
+        "uptime_s": data.get("uptime_s"),
+        "database": data.get("database"),
+        "scheduler": data.get("scheduler"),
+        "speech": f"服务状态 {data.get('status')}，版本 {data.get('version')}",
+    }
+
+
+@mcp.tool()
+def list_notifications(limit: int = 10, unread_only: bool = False) -> dict:
+    """列出站内通知（提醒实际送达后的消息）。用户问“有什么通知/未读消息”时调用。"""
+    limit = max(1, min(int(limit or 10), 50))
+    try:
+        data = _request("GET", "/notifications", params={"page": 1, "page_size": limit})
+    except ReminderAPIError as exc:
+        return {"ok": False, "error": str(exc)}
+    rows = (data or {}).get("items") or []
+    items = []
+    for row in rows:
+        if unread_only and row.get("read_at"):
+            continue
+        items.append({
+            "id": row.get("id"),
+            "type": row.get("type"),
+            "title": row.get("title"),
+            "body": row.get("body") or "",
+            "read": bool(row.get("read_at")),
+            "created_at": row.get("created_at"),
+        })
+    speech = "暂无通知" if not items else f"共 {len(items)} 条通知，最新：{items[0]['title']}"
+    return {"ok": True, "count": len(items), "items": items, "speech": speech}
 
 
 @mcp.tool()

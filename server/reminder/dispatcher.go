@@ -167,10 +167,13 @@ func processJob(db *gorm.DB, candidate DeliveryJob) {
 	started := time.Now().UTC()
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	targets := parseChannelTargets(link.Targets)
+	outbound := reminderOutbound(item)
 	sendRes, err := dispatcher.Dispatch(ctx, db, core.OutboundMessage{
 		UserID: job.UserID, ReminderID: job.ReminderID, Channel: job.Channel,
-		Title: item.Title, IdempotencyKey: job.IdempotencyKey, Targets: targets,
-		Payload: map[string]interface{}{"item": item, "targets": targets},
+		Title: outbound.Title, Body: outbound.Body, Notes: outbound.Notes,
+		Subject: outbound.Subject, Group: outbound.Group, Kind: outbound.Kind,
+		NotificationType: outbound.NotificationType, DueAt: outbound.DueAt,
+		IdempotencyKey: job.IdempotencyKey, Targets: targets,
 	})
 	cancel()
 	finished := time.Now().UTC()

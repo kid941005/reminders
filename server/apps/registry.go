@@ -26,6 +26,8 @@
 package apps
 
 import (
+	"sort"
+
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -128,4 +130,47 @@ func ShutdownAll() {
 			registered[i].Shutdown()
 		}
 	}
+}
+
+// PublicApp is the serialisable navigation metadata for one registered app.
+type PublicApp struct {
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+	Icon        string `json:"icon,omitempty"`
+	RoutePrefix string `json:"route_prefix"`
+	NavPosition int    `json:"nav_position"`
+}
+
+// Visible returns the apps that opted into sidebar navigation. Apps without a
+// display name or route prefix are backend-only and stay hidden. Ordering is
+// ascending NavPosition with 0 last (the documented "off the bottom" value),
+// then by name so equal priorities stay deterministic.
+func Visible() []PublicApp {
+	out := make([]PublicApp, 0, len(registered))
+	for _, a := range registered {
+		if a.DisplayName == "" || a.RoutePrefix == "" {
+			continue
+		}
+		out = append(out, PublicApp{
+			Name:        a.Name,
+			DisplayName: a.DisplayName,
+			Icon:        a.Icon,
+			RoutePrefix: a.RoutePrefix,
+			NavPosition: a.NavPosition,
+		})
+	}
+	sort.SliceStable(out, func(i, j int) bool {
+		pi, pj := out[i].NavPosition, out[j].NavPosition
+		if pi == 0 {
+			pi = int(^uint(0) >> 1)
+		}
+		if pj == 0 {
+			pj = int(^uint(0) >> 1)
+		}
+		if pi != pj {
+			return pi < pj
+		}
+		return out[i].Name < out[j].Name
+	})
+	return out
 }

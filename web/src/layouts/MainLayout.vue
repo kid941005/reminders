@@ -121,6 +121,13 @@
             </span>
             <span class="flex-1">偏好设置</span>
           </RouterLink>
+          <template v-if="appsNav.length">
+            <p class="nav-caption mt-3">扩展应用</p>
+            <a v-for="item in appsNav" :key="item.name" :href="item.route_prefix" class="nav-row">
+              <span class="nav-symbol" v-html="item.icon || ''"></span>
+              <span class="flex-1">{{ item.display_name }}</span>
+            </a>
+          </template>
           <template v-if="authStore.isAdmin">
             <p class="nav-caption mt-3">系统管理</p>
             <RouterLink v-for="item in adminNav" :key="item.to" :to="item.to" class="nav-row" :class="{ 'nav-row-active': isActive(item.to) }">
@@ -242,7 +249,7 @@ import {
   updateList,
   type ReminderList,
 } from '../api/reminder'
-import { getVersion } from '../api/config'
+import { getApps, getVersion, type AppNavItem } from '../api/config'
 import { connectReminderEvents, type RealtimeNotification, type ReminderRealtimeEvent } from '../services/reminderRealtime'
 
 const route = useRoute()
@@ -264,6 +271,7 @@ const realtimeToast = ref('')
 // 渠道投递失败是错误，不该用绿色成功样式提示。
 const realtimeToastType = ref<'success' | 'error'>('success')
 const appVersion = ref('')
+const appsNav = ref<AppNavItem[]>([])
 const appBuildTime = ref('')
 
 const icons = {
@@ -417,6 +425,15 @@ async function refreshNavigation() {
   } catch (err) {
     // 侧栏数字过期不影响主流程，但必须留痕，否则接口坏了完全无从排查。
     console.error('刷新侧栏清单/汇总失败', err)
+  }
+}
+async function loadApps() {
+  try {
+    const res = await getApps()
+    appsNav.value = res.data?.data || []
+  } catch (err) {
+    // 扩展应用是可选导航，接口失败不能影响主界面。
+    console.error('加载扩展应用失败', err)
   }
 }
 async function loadVersion() {
@@ -687,6 +704,7 @@ function syncKeyboardState() {
 
 onMounted(() => {
   refreshNavigation()
+  loadApps()
   loadVersion()
   window.visualViewport?.addEventListener('resize', syncKeyboardState)
   window.addEventListener('reminder-data-changed', refreshNavigation)

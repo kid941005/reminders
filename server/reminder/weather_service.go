@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"smallgo/server/logger"
+	"smallgo/server/reminder/core"
 
 	"gorm.io/gorm"
 )
@@ -138,7 +139,7 @@ func SaveWeatherConfig(db *gorm.DB, userID uint, in WeatherConfigInput) (Weather
 	if err != nil {
 		return WeatherConfig{}, err
 	}
-	client := weatherClientFactory(host, apiKey)
+	client := weatherProviderFactory(host, apiKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if _, err := client.Current(ctx, lat, lon); err != nil {
@@ -297,7 +298,7 @@ func weatherDetailLines(day qweatherDay, current qweatherCurrent) []string {
 	lines := make([]string, 0, 5)
 
 	temp := fmt.Sprintf("🌡 %.0f~%.0f℃", day.TemperatureMin.Value, day.TemperatureMax.Value)
-	if current.hasData() {
+	if currentHasData(current) {
 		live := make([]string, 0, 3)
 		if text := strings.TrimSpace(current.Condition.Text); text != "" {
 			live = append(live, text)
@@ -373,7 +374,7 @@ func weatherDetailLines(day qweatherDay, current qweatherCurrent) []string {
 	return lines
 }
 
-func (c qweatherCurrent) hasData() bool {
+func currentHasData(c qweatherCurrent) bool {
 	return strings.TrimSpace(c.Condition.Text) != "" || strings.TrimSpace(c.Temperature.Unit) != "" ||
 		c.Humidity > 0 || c.Wind.Scale > 0 || c.Wind.Speed.Value > 0
 }
@@ -802,7 +803,7 @@ const (
 // future days after its "tomorrow" target, even when the provider's "today"
 // has already rolled over. The current observation is optional: a provider
 // hiccup must not block the forecast that the user actually asked for.
-func weatherForecast(ctx context.Context, client *qweatherClient, cfg WeatherConfig) (qweatherCurrent, []qweatherDay, []qweatherAlert, error) {
+func weatherForecast(ctx context.Context, client core.WeatherProvider, cfg WeatherConfig) (qweatherCurrent, []qweatherDay, []qweatherAlert, error) {
 	daily, err := client.Daily(ctx, cfg.Latitude, cfg.Longitude, weatherForecastDays)
 	if err != nil {
 		return qweatherCurrent{}, nil, nil, err
@@ -862,7 +863,7 @@ func pushWeather(db *gorm.DB, cfg WeatherConfig, manual bool, slot weatherSlot) 
 	if err != nil {
 		return weatherMessage{}, err
 	}
-	client := weatherClientFactory(host, apiKey)
+	client := weatherProviderFactory(host, apiKey)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
